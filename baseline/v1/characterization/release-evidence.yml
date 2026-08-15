@@ -1,0 +1,7 @@
+artifact: dist/MaddPrestige-1.2.0.jar
+version: 1.2.0
+sha256: 1de0b772ef11de8dd1f70dfda71e65cb307cce5d47eeba4af26205eda36a3a08
+external-copy: baseline/v1/external/MaddPrestige-1.2.0-download.jar
+external-copy-sha256: 1de0b772ef11de8dd1f70dfda71e65cb307cce5d47eeba4af26205eda36a3a08
+baseline-tag: v1.2.0-baseline
+baseline-commit: e3e2444f428414182dcb7773064239e6c48ac0a1

@@ -1,0 +1,23 @@
+fixture-version: 1
+fixed-ranks:
+  - CURIOUS
+  - ODD
+  - MAD
+  - UNBOUND
+dotted-permission-corruption:
+  input-key: maddkraft.patron.knave
+  observed-parser-result: "{maddkraft=0}"
+legacy-season-conversion:
+  sql-expression: "tea_leaves / 10"
+  defect: non-idempotent-and-can-run-against-sql-and-cache
+operation-representations:
+  prestige-table: prestige_transactions
+  statuses: [PENDING, COMPLETED, NEEDS_RECOVERY]
+  snapshot-format: semicolon-delimited-key-value-text
+  rankup-operation-journal: absent
+quickshop:
+  default-progression-weight: 0.25
+  classification: player-to-player-volume
+luckperms:
+  missing-group-behavior: createAndLoadGroup
+  v2-classification: legacy-defect

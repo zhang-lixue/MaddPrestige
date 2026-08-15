@@ -1,0 +1,105 @@
+package net.maddkraft.maddprestige.persistence.sqlite;
+
+import java.util.List;
+import net.maddkraft.maddprestige.persistence.migration.Migration;
+
+public final class SqliteMigrations {
+    private SqliteMigrations() {
+    }
+
+    public static List<Migration> phaseOne() {
+        return List.of(Migration.of(1, "Phase 1 configuration, operation, currency, and audit foundations", List.of(
+                """
+                CREATE TABLE mp_config_revisions (
+                    revision_id TEXT PRIMARY KEY,
+                    content_hash TEXT NOT NULL UNIQUE,
+                    parent_revision_id TEXT NULL REFERENCES mp_config_revisions(revision_id),
+                    created_at TEXT NOT NULL,
+                    applied_at TEXT NULL,
+                    actor TEXT NOT NULL,
+                    source_surface TEXT NOT NULL,
+                    validation_summary TEXT NOT NULL,
+                    diff_summary TEXT NOT NULL,
+                    backup_checksum TEXT NULL,
+                    CHECK (length(content_hash) = 64),
+                    CHECK (backup_checksum IS NULL OR length(backup_checksum) = 64)
+                )
+                """,
+                """
+                CREATE TABLE mp_operations (
+                    operation_id TEXT PRIMARY KEY,
+                    operation_type TEXT NOT NULL,
+                    target_uuid TEXT NOT NULL,
+                    idempotency_key TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    expected_state_revision INTEGER NOT NULL,
+                    config_revision_id TEXT NOT NULL REFERENCES mp_config_revisions(revision_id),
+                    provider_generations TEXT NOT NULL,
+                    redacted_preview TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    CHECK (expected_state_revision >= 0),
+                    CHECK (state IN ('PLANNED','PREPARED','EXECUTING','STATE_COMMITTED','COMPLETED','COMPENSATING','COMPENSATED','FAILED','NEEDS_RECONCILIATION')),
+                    UNIQUE (operation_type, target_uuid, idempotency_key)
+                )
+                """,
+                """
+                CREATE TABLE mp_operation_actions (
+                    operation_id TEXT NOT NULL REFERENCES mp_operations(operation_id) ON DELETE CASCADE,
+                    action_index INTEGER NOT NULL,
+                    action_id TEXT NOT NULL,
+                    provider_id TEXT NOT NULL,
+                    action_type TEXT NOT NULL,
+                    state TEXT NOT NULL,
+                    redacted_description TEXT NOT NULL,
+                    reversible INTEGER NOT NULL,
+                    idempotent INTEGER NOT NULL,
+                    failure_reason TEXT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (operation_id, action_index),
+                    UNIQUE (operation_id, action_id),
+                    CHECK (action_index >= 0),
+                    CHECK (state IN ('PENDING','STARTED','SUCCEEDED','VERIFIED','FAILED','COMPENSATED','UNCERTAIN')),
+                    CHECK (reversible IN (0, 1)),
+                    CHECK (idempotent IN (0, 1))
+                )
+                """,
+                """
+                CREATE TABLE mp_currency_accounts (
+                    player_uuid TEXT NOT NULL,
+                    currency_id TEXT NOT NULL,
+                    balance_text TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (player_uuid, currency_id),
+                    CHECK (length(balance_text) BETWEEN 1 AND 512)
+                )
+                """,
+                """
+                CREATE TABLE mp_audit_log (
+                    audit_id TEXT PRIMARY KEY,
+                    actor_type TEXT NOT NULL,
+                    actor_uuid TEXT NULL,
+                    actor_name TEXT NOT NULL,
+                    target_uuid TEXT NULL,
+                    operation_id TEXT NULL REFERENCES mp_operations(operation_id),
+                    config_revision_id TEXT NULL REFERENCES mp_config_revisions(revision_id),
+                    provider_action TEXT NOT NULL,
+                    old_value TEXT NULL,
+                    new_value TEXT NULL,
+                    values_redacted INTEGER NOT NULL,
+                    source_surface TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    outcome TEXT NOT NULL,
+                    failure_uncertainty TEXT NULL,
+                    correlation_id TEXT NOT NULL,
+                    occurred_at TEXT NOT NULL,
+                    CHECK (values_redacted IN (0, 1))
+                )
+                """,
+                "CREATE INDEX mp_operations_state_idx ON mp_operations(state, updated_at)",
+                "CREATE INDEX mp_operations_target_idx ON mp_operations(target_uuid, created_at)",
+                "CREATE INDEX mp_operation_actions_state_idx ON mp_operation_actions(state, updated_at)",
+                "CREATE INDEX mp_audit_target_time_idx ON mp_audit_log(target_uuid, occurred_at)",
+                "CREATE INDEX mp_audit_correlation_idx ON mp_audit_log(correlation_id)")));
+    }
+}

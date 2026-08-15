@@ -1,6 +1,6 @@
 # MaddPrestige V2 Decision Log
 
-**Owner approval recorded:** 2026-08-15  
+**Owner approval recorded:** 2026-08-15
 **Status legend:** `Mandated` comes directly from the master specification; `Owner-approved` was explicitly approved by the owner; `Deferred` is intentionally unresolved until its named phase/evidence exists.
 
 | ID | Status | Decision | Rationale / consequence |
@@ -35,12 +35,17 @@
 | D-028 | Owner-approved | Retention is configurable; revisions/backups/migration artifacts referenced by active or pending work are protected from pruning; secrets are redacted from every output surface. | Phase 1 establishes policy/schema, with user-facing tuning later. |
 | D-029 | Owner-approved | Persistence must support documented player-data inventory, export, safe deletion/anonymization, and history/audit retention without breaking referential integrity. | Public-facing tooling is primarily Phase 8, but the storage model must enable it. |
 | D-030 | Owner-approved | Do not infer legacy rank mappings. If no production data exists, freeze available V1 artifacts and use synthetic edge-case migration fixtures; real data elsewhere remains untouched and must be backed up before later migration work. | Lack of a production fixture does not block Phase 1 foundations. |
+| D-031 | Phase 1 implementation | Select SnakeYAML Engine 3.0.1 for YAML 1.2 parsing/marks and a MaddPrestige-owned lossless source document for narrow scalar edits. Every edit reparses; block scalars, anchored scalars, and explicitly tagged scalars fail closed. | Hardened golden/regression tests prove comments, order, dotted/nested/unknown keys, CRLF, supplementary Unicode, safe quoting, scalar styles, and multiple documents without trusting a destructive whole-document emitter. |
+| D-032 | Phase 1 implementation | The root becomes the seven-module Maven parent; the distribution module compiles unchanged V1 sources/resources/tests from their original root paths and bundles inactive V2 foundations. | Establishes approved modules without a big-bang V1 move or activating V2 against live data. |
+| D-033 | Phase 1 implementation | SQLite is the only locally implemented/tested V2 backend. MySQL 8.4.10 and MariaDB 11.8.8 CI definitions are contract harness targets only and are not support claims. | Local Docker/services are absent; compilation or primitive CI probes cannot establish full repository/backend compatibility. |
+| D-034 | Phase 1 implementation | The verified byte-copy backup service is restricted to quiesced/disposable files. Live SQLite WAL backup requires a later coordinated online-backup/checkpoint implementation and remains fail-closed. | Avoids presenting a byte copy of an active WAL database as a production-safe backup. |
+| D-035 | Phase 1 correction | SQLite migration preflight is read-only; required verified backup precedes migration-history DDL. Only `APPLIED` versions are unique through a partial index, failed attempts remain repeatable, and applied history must be an exact prefix of the requested chain. | Preserves the backup-first invariant, auditability, safe retry, deterministic ordering, and protection against running an older missing migration after newer history. |
 
 ## Deferred choices
 
 | ID | Deferred choice | Phase/evidence needed | Binding constraint |
 |---|---|---|---|
-| O-004 | Comment-preserving YAML implementation library/strategy | early Phase 1 spike | no canonical writer is selected until round-trip golden tests pass |
+| O-004 | Comment-preserving YAML implementation library/strategy | Resolved by D-031 | selected only after the Phase 1 golden spike passed |
 | O-005 | Curious/Odd/Mad/Unbound migration mapping | Phase 2/9 plus fixtures and explicit owner decision | never infer or auto-create old groups |
 | O-007 | Supporter display names and entitlement mappings | later MaddKraft preset phase | must not block generic core or restore old patron ownership |
 | O-008 | MaddKraft costs, requirements, scaling, currency cadence, and milestones | Phase 9 tuning | derive from real data; do not freeze prototype values |
