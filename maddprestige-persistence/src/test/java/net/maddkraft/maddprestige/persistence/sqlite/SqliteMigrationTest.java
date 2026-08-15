@@ -192,12 +192,57 @@ class SqliteMigrationTest {
     }
 
     @Test
+    @DisplayName("[Phase1-Sonar] Successful history initialization surfaces restoration failure")
+    void surfacesRestorationFailureAfterSuccessfulHistoryInitialization() {
+        Path database = temporaryDirectory.resolve("history-restoration.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        AtomicInteger commits = new AtomicInteger();
+        ConnectionProvider provider = () -> restorationFailingConnection(sqlite.open(), commits, 1);
+        var backup = new FileBackupService(
+                database, temporaryDirectory.resolve("history-restoration-backups"), Clock.systemUTC());
+
+        PersistenceException failure = assertThrows(PersistenceException.class,
+                () -> new MigrationRunner(provider, backup, Clock.systemUTC())
+                        .migrate(List.of(simpleMigration(1))));
+
+        assertEquals("Migration infrastructure failed", failure.getMessage());
+        assertEquals("injected autocommit restoration failure", failure.getCause().getMessage());
+        assertEquals(0, failure.getCause().getSuppressed().length);
+        assertTrue(tableExists(sqlite, "mp_schema_migrations"));
+        assertEquals("0", scalar(sqlite,
+                "SELECT COUNT(*) FROM mp_schema_migrations WHERE result IN ('APPLIED', 'FAILED')"));
+        assertFalse(tableExists(sqlite, "mp_test_migration_1"));
+    }
+
+    @Test
+    @DisplayName("[Phase1-Sonar] Initialization failure stays primary when restoration also fails")
+    void preservesInitializationFailureWhenRestorationAlsoFails() {
+        Path database = temporaryDirectory.resolve("history-double-failure.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        ConnectionProvider provider = () -> historyInitializationFailingConnection(sqlite.open());
+        var backup = new FileBackupService(
+                database, temporaryDirectory.resolve("history-double-failure-backups"), Clock.systemUTC());
+
+        PersistenceException failure = assertThrows(PersistenceException.class,
+                () -> new MigrationRunner(provider, backup, Clock.systemUTC())
+                        .migrate(List.of(simpleMigration(1))));
+
+        assertEquals("Migration infrastructure failed", failure.getMessage());
+        assertEquals("injected history initialization failure", failure.getCause().getMessage());
+        assertEquals(1, failure.getCause().getSuppressed().length);
+        assertEquals("injected autocommit restoration failure",
+                failure.getCause().getSuppressed()[0].getMessage());
+        assertFalse(tableExists(sqlite, "mp_schema_migrations"));
+        assertFalse(tableExists(sqlite, "mp_test_migration_1"));
+    }
+
+    @Test
     @DisplayName("[A35-correction] Autocommit restoration failure never records committed work as FAILED")
     void doesNotMislabelCommittedMigrationWhenRestorationFails() {
         Path database = temporaryDirectory.resolve("restoration.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
         AtomicInteger commits = new AtomicInteger();
-        ConnectionProvider provider = () -> restorationFailingConnection(sqlite.open(), commits);
+        ConnectionProvider provider = () -> restorationFailingConnection(sqlite.open(), commits, 2);
         var backup = new FileBackupService(
                 database, temporaryDirectory.resolve("restoration-backups"), Clock.systemUTC());
 
@@ -246,7 +291,8 @@ class SqliteMigrationTest {
                 List.of("CREATE TABLE mp_test_migration_" + version + " (value TEXT)"));
     }
 
-    private static Connection restorationFailingConnection(Connection delegate, AtomicInteger commits) {
+    private static Connection restorationFailingConnection(
+            Connection delegate, AtomicInteger commits, int failAfterCommit) {
         return (Connection) Proxy.newProxyInstance(
                 SqliteMigrationTest.class.getClassLoader(),
                 new Class<?>[] {Connection.class},
@@ -254,13 +300,42 @@ class SqliteMigrationTest {
                     if (method.getName().equals("setAutoCommit")
                             && arguments != null
                             && Boolean.TRUE.equals(arguments[0])
-                            && commits.get() >= 2) {
+                            && commits.get() >= failAfterCommit) {
                         throw new SQLException("injected autocommit restoration failure");
                     }
                     try {
                         Object result = method.invoke(delegate, arguments);
                         if (method.getName().equals("commit")) {
                             commits.incrementAndGet();
+                        }
+                        return result;
+                    } catch (InvocationTargetException exception) {
+                        throw exception.getCause();
+                    }
+                });
+    }
+
+    private static Connection historyInitializationFailingConnection(Connection delegate) {
+        AtomicInteger initializationState = new AtomicInteger();
+        return (Connection) Proxy.newProxyInstance(
+                SqliteMigrationTest.class.getClassLoader(),
+                new Class<?>[] {Connection.class},
+                (proxy, method, arguments) -> {
+                    if (method.getName().equals("createStatement") && initializationState.get() == 1) {
+                        throw new SQLException("injected history initialization failure");
+                    }
+                    if (method.getName().equals("setAutoCommit")
+                            && arguments != null
+                            && Boolean.TRUE.equals(arguments[0])
+                            && initializationState.get() == 1) {
+                        throw new SQLException("injected autocommit restoration failure");
+                    }
+                    try {
+                        Object result = method.invoke(delegate, arguments);
+                        if (method.getName().equals("setAutoCommit")
+                                && arguments != null
+                                && Boolean.FALSE.equals(arguments[0])) {
+                            initializationState.set(1);
                         }
                         return result;
                     } catch (InvocationTargetException exception) {

@@ -248,6 +248,7 @@ public final class MigrationRunner {
     private static void initializeHistory(Connection connection) throws SQLException {
         boolean priorAutoCommit = connection.getAutoCommit();
         SQLException primaryFailure = null;
+        SQLException restorationFailure = null;
         try {
             connection.setAutoCommit(false);
             try (Statement statement = connection.createStatement()) {
@@ -263,17 +264,22 @@ public final class MigrationRunner {
             } catch (SQLException rollbackFailure) {
                 exception.addSuppressed(rollbackFailure);
             }
-            throw exception;
         } finally {
             try {
                 connection.setAutoCommit(priorAutoCommit);
-            } catch (SQLException restorationFailure) {
-                if (primaryFailure != null) {
-                    primaryFailure.addSuppressed(restorationFailure);
-                } else {
-                    throw restorationFailure;
-                }
+            } catch (SQLException exception) {
+                restorationFailure = exception;
             }
+        }
+
+        if (primaryFailure != null) {
+            if (restorationFailure != null) {
+                primaryFailure.addSuppressed(restorationFailure);
+            }
+            throw primaryFailure;
+        }
+        if (restorationFailure != null) {
+            throw restorationFailure;
         }
     }
 
