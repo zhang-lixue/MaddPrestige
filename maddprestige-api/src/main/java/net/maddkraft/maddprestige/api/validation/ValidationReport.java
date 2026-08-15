@@ -1,6 +1,7 @@
 package net.maddkraft.maddprestige.api.validation;
 
 import java.util.Collection;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -25,5 +26,12 @@ public record ValidationReport(List<ValidationFinding> findings) {
         return !hasErrors() && findings.stream()
                 .filter(finding -> finding.severity() == ValidationSeverity.ACKNOWLEDGEMENT_REQUIRED)
                 .allMatch(finding -> acknowledgedCodes.contains(finding.code()));
+    }
+
+    public ValidationReport combine(ValidationReport other) {
+        Objects.requireNonNull(other, "other validation report");
+        ArrayList<ValidationFinding> combined = new ArrayList<>(findings);
+        combined.addAll(other.findings());
+        return new ValidationReport(combined);
     }
 }

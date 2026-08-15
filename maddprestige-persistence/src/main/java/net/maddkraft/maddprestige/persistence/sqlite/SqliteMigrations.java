@@ -1,6 +1,7 @@
 package net.maddkraft.maddprestige.persistence.sqlite;
 
 import java.util.List;
+import java.util.ArrayList;
 import net.maddkraft.maddprestige.persistence.migration.Migration;
 
 public final class SqliteMigrations {
@@ -101,5 +102,30 @@ public final class SqliteMigrations {
                 "CREATE INDEX mp_operation_actions_state_idx ON mp_operation_actions(state, updated_at)",
                 "CREATE INDEX mp_audit_target_time_idx ON mp_audit_log(target_uuid, occurred_at)",
                 "CREATE INDEX mp_audit_correlation_idx ON mp_audit_log(correlation_id)")));
+    }
+
+    public static List<Migration> phaseTwo() {
+        ArrayList<Migration> migrations = new ArrayList<>(phaseOne());
+        migrations.add(Migration.of(2, "Phase 2 authoritative player stage state", List.of(
+                """
+                CREATE TABLE mp_player_stage_state (
+                    player_uuid TEXT PRIMARY KEY,
+                    stage_id TEXT NOT NULL,
+                    state_revision INTEGER NOT NULL,
+                    config_revision_id TEXT NOT NULL REFERENCES mp_config_revisions(revision_id),
+                    stage_entered_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    last_reconciled_at TEXT NULL,
+                    last_provider_generation INTEGER NULL,
+                    imported_at TEXT NULL,
+                    CHECK (state_revision >= 0),
+                    CHECK (length(stage_id) BETWEEN 1 AND 64),
+                    CHECK (last_provider_generation IS NULL OR last_provider_generation >= 1)
+                )
+                """,
+                "CREATE INDEX mp_player_stage_id_idx ON mp_player_stage_state(stage_id, player_uuid)",
+                "CREATE INDEX mp_player_stage_revision_idx ON mp_player_stage_state(config_revision_id, updated_at)")));
+        return List.copyOf(migrations);
     }
 }

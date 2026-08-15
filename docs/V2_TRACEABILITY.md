@@ -1,20 +1,20 @@
 # MaddPrestige V2 acceptance traceability
 
 **Imported matrix:** master specification A01–A76
-**Current classification:** Phase 1
-**Legend:** `Owned` means the final acceptance criterion itself is demonstrably satisfied in Phase 1; `Partial` means Phase 1 establishes a required contract, characterization, or tested foundation but later execution/integration evidence is still required; `Later` means no Phase 1 acceptance claim.
-**Corrected totals:** 1 Owned, 46 Partial, 29 Later.
+**Current classification:** Phase 2
+**Legend:** `Satisfied` means the final acceptance criterion itself is demonstrably satisfied through Phase 2; `Partial` means Phase 1/2 establishes a required contract, implementation, or focused test but later activation/qualification evidence is still required; `Later` means the criterion belongs wholly to a later phase.
+**Current totals:** 3 Satisfied, 46 Partial, 27 Later.
 
-| ID | Acceptance criterion (condensed from master specification) | Phase relationship | Phase 1 evidence / owner |
+| ID | Acceptance criterion (condensed from master specification) | Phase relationship | Current evidence / owner |
 |---|---|---|---|
-| A01 | Fresh Paper-only install starts safely with no active progression | Later | Phase 2/6 startup and setup flow; Phase 1 deliberately has no V2 bootstrap. |
+| A01 | Fresh Paper-only install starts safely with no active progression | Partial | Inactive empty default and `StageRuntimeBootstrap` inert-state tests pass; full Paper-only plugin bootstrap remains Phase 6 qualification. |
 | A02 | Setup wizard creates a simple active ladder | Later | Phase 6. |
-| A03 | Generic core contains no MaddKraft gameplay/rank names | Owned | New generic packages and module-boundary review; `IdentifierTest`; V1 branding stays outside generic modules. |
-| A04 | Display-name changes do not change stored stage ID | Partial | `StageId` is immutable and display-free; `IdentifierTest`. Player state arrives later. |
-| A05 | Missing LuckPerms group blocks apply and is never created | Partial | Read-only catalog and validation foundation; a real LuckPerms adapter/apply path is still required. |
-| A06 | Rank-up changes only managed progression membership | Partial | Isolation policy is tested; real LuckPerms rank mutation remains Phase 2. |
-| A07 | LP reconciliation follows configured policy | Partial | `ReconciliationPolicy` includes approved default; execution is Phase 2. |
-| A08 | Reordering stages shows impact before apply | Partial | Semantic diff contract exists; ordered stage engine/impact analysis is Phase 2/6. |
+| A03 | Generic core contains no MaddKraft gameplay/rank names | Satisfied | Generic production-source/resource scan plus arbitrary-stage compiler tests; fixed legacy names remain only in frozen V1/test evidence. |
+| A04 | Display-name changes do not change stored stage ID | Satisfied | UUID-first `PlayerStageState` persists immutable `StageId`; display/order/projection stay in configuration; SQLite round-trip/CAS tests pass. |
+| A05 | Missing LuckPerms group blocks apply and is never created | Partial | Real LuckPerms 5.5 API adapter uses read-only `loadGroup`; missing targets and invalid explicit projection types block validation, provider generation is pinned through apply, and proxy-backed API tests prove no user load/mutation or creation path. Live plugin qualification remains. |
+| A06 | Rank-up changes only managed progression membership | Partial | Real-API adapter tests prove exact managed-node isolation across permissions, unrelated groups, temporary/contextual nodes, cached/offline users, and repeats; live plugin qualification remains. |
+| A07 | LP reconciliation follows configured policy | Partial | All three policies, persistence coordination, ambiguity, import-once, repeated/idempotent behavior, immediate pre-insert configuration/provider rechecks, and uncertainty are tested; lifecycle wiring/live qualification remain. |
+| A08 | Reordering stages shows impact before apply | Satisfied | `StageChangeImpactAnalyzer` reports old/new order, high-risk semantic diff, stored-player counts, acknowledgement, and explicit remap gating before canonical apply. |
 | A09 | ALL requirements require every child | Later | Phase 3. |
 | A10 | ANY_X_OF_Y evaluates exact threshold | Later | Phase 3. |
 | A11 | Nested requirements evaluate/explain correctly | Partial | Recursive `ExplanationNode` foundation; requirement tree is Phase 3. |
@@ -41,9 +41,9 @@
 | A32 | Entitlement sum merge is exact | Later | Phase 4. |
 | A33 | Season archive preserves configured history | Later | Phase 4. |
 | A34 | Disabled competitions add no command/UI noise | Partial | Generic safe schema default is disabled; module/UI is later. |
-| A35 | Legacy schema upgrade creates backup first | Partial | Backup-first migration framework is now regression-tested before history DDL; actual legacy upgrade remains Phase 9. |
-| A36 | Ambiguous legacy rank mapping stops for explicit choice | Partial | Fixed ranks are characterized and no inference exists; the explicit-choice workflow remains Phase 2/9. |
-| A37 | Old progression/patron groups are never auto-created | Partial | No generic creation API exists; real adapter/migration behavior remains Phase 2/9. |
+| A35 | Legacy schema upgrade creates backup first | Partial | Backup-first migration framework remains regression-tested; Phase 2 non-dry legacy plans also require verified backup metadata, but mutation-capable production legacy upgrade remains Phase 9. |
+| A36 | Ambiguous legacy rank mapping stops for explicit choice | Partial | Explicit revisioned mapping rejects missing/conflicting opaque values and invalid targets; erroneous plans expose no planned player mappings and cannot proceed. Planner remains read-only; production migration UI/execution remain Phase 9. |
+| A37 | Old progression/patron groups are never auto-created | Partial | V2 rank API and real-API adapter have no creation capability; migration planner is read-only and no legacy names are embedded in production V2 code. Live qualification remains. |
 | A38 | Config edits preserve designed comments/order | Partial | Surgical scalar edits pass hardened golden tests; complete command/GUI editing and unsupported structural edits remain later. |
 | A39 | Draft edits do not affect production until apply | Partial | Immutable draft/active-reference behavior is tested without a production runtime apply path. |
 | A40 | Invalid provider metric/config cannot apply | Partial | Structured apply guards exist; real provider-specific semantic validation remains later. |
@@ -66,8 +66,8 @@
 | A57 | Manual prestige edit produces complete audit | Partial | Full audit/redaction contract + SQLite append test; player edit surface is Phase 6. |
 | A58 | Dirty cached progress survives restart | Later | Phase 4/8 cache/recovery implementation. |
 | A59 | Interrupted pending internal operation reconciles without duplicate reward | Partial | Operation/action states, persistence, transition tests, idempotency uniqueness; recovery coordinator later. |
-| A60 | External side-effect crash records uncertainty | Partial | `UNCERTAIN`/`NEEDS_RECONCILIATION` states and audit outcome; command executor later. |
-| A61 | Offline player rank/repair is safe or explicitly limited | Later | Phase 2 real rank provider. |
+| A60 | External side-effect crash records uncertainty | Partial | Persisted executor tests cover save uncertainty and successful LuckPerms save followed by failed after-state verification; both become `UNCERTAIN`/`NEEDS_RECONCILIATION` without internal commit. Broader action recovery remains later. |
+| A61 | Offline player rank/repair is safe or explicitly limited | Partial | Adapter uses asynchronous UUID load/save, preserves cached users, cleans up newly loaded users, and surfaces save uncertainty in proxy-backed real-API tests; live LuckPerms storage qualification remains. |
 | A62 | High-volume progress avoids per-event SQL/TPS harm | Partial | Paper thread/scheduler boundary and fake ingestion foundations; load/event engine later. |
 | A63 | SQLite upgrade preserves real data and reports migration | Partial | Disposable migration/report, prefix, retry, and backup-order tests pass; production-like data upgrade remains Phase 9. |
 | A64 | MySQL/MariaDB match SQLite progression semantics | Partial | CI container contract harness exists; no backend support claim and no progression engine yet. |
@@ -75,7 +75,7 @@
 | A66 | Rank/prestige API event ordering is documented/correct | Later | Phase 8 public event API after engines exist. |
 | A67 | One optional adapter failure leaves unrelated features working | Partial | Health evaluator/registry isolation is tested; a real optional-adapter fault test remains later. |
 | A68 | Unicode/MiniMessage language replacement renders correctly | Partial | UTF-8 build/YAML golden proof; language/UI rendering later. |
-| A69 | Deleting referenced stage requires migration/replacement | Partial | Validation/diff/migration metadata foundation; stage references/UI are Phase 2/6. |
+| A69 | Deleting referenced stage requires migration/replacement | Partial | Stored reference counts block removal/disablement even with a complete remap plan; persisted rows and active configuration remain unchanged. Atomic remap execution and UI remain later. |
 | A70 | Unbranded Member→Adventurer→Veteran loop works | Later | Phase 8 qualification. |
 | A71 | MaddKraft six-stage profile consumes existing groups | Later | Phase 7/9 preset and qualification only. |
 | A72 | `mad_hatter` supporter survives MaddKraft prestige | Partial | Generic isolation test proves unrelated memberships survive; real profile/LP is Phase 9. |
@@ -84,12 +84,19 @@
 | A75 | PvP/Court plugin remains provider-only | Later | Architectural boundary is retained; Phase 7/9 verification. |
 | A76 | Fresh admin succeeds using Quick Start only | Later | Phase 8 documentation/usability gate. |
 
-## Phase 1 hard-safety mapping
+## Phase 2 hard-safety mapping
 
 | Hard-safety gate | Evidence |
 |---|---|
-| Missing external rank group is an error; no creation path | `ManagedMembershipPolicyTest`, `ExternalGroupCatalog`, `RankProjectionValidator` |
-| Managed direct membership is isolated | `ManagedMembershipPolicyTest` |
+| Missing external rank group is an error; no creation path | `StageConfigurationValidator`, `LuckPermsRankAdapterTest`; V2 adapter exposes only `loadGroup` validation |
+| Managed direct membership is isolated | `ManagedMembershipPolicyTest`, `LuckPermsRankAdapterTest` |
+| Temporary/contextual managed nodes fail closed and survive | `LuckPermsRankAdapterTest` ambiguity cases |
+| Offline/cached users use explicit asynchronous lifecycle | `LuckPermsRankAdapterTest` load/save/cleanup and save-failure cases |
+| Stage identity is UUID + immutable ID, not ordinal/display | `SqlitePlayerStageRepositoryTest` and `StageChangeImpactAnalyzerTest` |
+| Reorder/removal impact is visible; a plan cannot substitute for remap execution | `StageChangeImpactAnalyzerTest`, canonical workflow and SQLite persisted-row tests |
+| Reconciliation policy cannot silently form a feedback loop | `RankReconcilerTest`, deterministic import worker race tests, `RankProjectionOperationExecutorTest` |
+| External uncertainty never becomes false success | adapter post-save verification test, persisted executor save/race tests, and action/operation journal assertions |
+| Legacy mapping is explicit, read-only, backup-gated, and exposes no plan on error | `LegacyStageMigrationPlannerTest` |
 | YAML lossless round trip | `LosslessYamlDocumentTest` + golden files |
 | Backup occurs before history/schema DDL | `SqliteMigrationTest.backupFailureLeavesPreexistingSchemaIntact` and applied-prefix variant |
 | Partial schema cannot be marked current | `SqliteMigrationTest.refusesPartialSchema` |
