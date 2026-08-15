@@ -1,0 +1,6 @@
+# Deterministic text bytes across development worktrees.
+* text=auto eol=lf
+
+# Immutable binary fixtures and release artifacts.
+*.jar binary
+*.db binary

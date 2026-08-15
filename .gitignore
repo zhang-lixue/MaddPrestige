@@ -1,0 +1,18 @@
+# Maven output
+/target/
+
+# Retained local Paper server (selected immutable evidence is tracked under baseline/)
+/runtime-test/
+
+# IDE and operating-system state
+/.idea/
+/.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Local/transient files
+*.tmp
+*.bak
+*.swp
+

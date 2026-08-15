@@ -1,0 +1,48 @@
+# MaddPrestige V2 Decision Log
+
+**Owner approval recorded:** 2026-08-15  
+**Status legend:** `Mandated` comes directly from the master specification; `Owner-approved` was explicitly approved by the owner; `Deferred` is intentionally unresolved until its named phase/evidence exists.
+
+| ID | Status | Decision | Rationale / consequence |
+|---|---|---|---|
+| D-001 | Mandated | `MaddPrestige_V2_Master_Spec.md` is authoritative; kickoff governs Phase 0 execution. | Resolves conflicts with V1 code/docs. |
+| D-002 | Mandated | Generic Java core; MaddKraft branding/ranks/balances/features live in an optional preset. | Enables public use and removes obsolete assumptions. |
+| D-003 | Mandated | LuckPerms groups are consumed, never created. MaddPrestige manages only direct memberships in explicitly configured progression groups. | Protects hierarchy, weights, prefixes, supporter/staff/specialist/event groups. |
+| D-004 | Owner-approved | Default LuckPerms reconciliation policy is `warn-only`. | Safest fresh migration posture; avoids feedback loops and silent external repair. |
+| D-005 | Owner-approved | Baseline/default stages may use `projection: none`; MaddKraft Wanderer/default uses `projection: none`. | Avoids treating LuckPerms `default` as owned membership. |
+| D-006 | Mandated | Old progression groups (`odd`, `mad`, `unbound`) and old patron groups are obsolete and never auto-created. | Legacy data requires explicit mapping/report. |
+| D-007 | Owner-approved | Modernize incrementally with a frozen V1 fixture, not a big-bang rewrite or piecemeal production patch. | Preserves useful behavior while establishing safe boundaries. |
+| D-008 | Owner-approved | Retain Maven and create modules `maddprestige-api`, `maddprestige-core`, `maddprestige-persistence`, `maddprestige-platform-paper`, `maddprestige-integrations`, `maddprestige-distribution`, and `maddprestige-testkit`. | Avoids needless Gradle migration and enables testable boundaries. |
+| D-009 | Owner-approved | Initial platform baseline is Java 25 and Paper 26.1.2. Do not claim broader compatibility until explicitly tested and qualified. | Matches the verified environment (current retained build 74) without overstating support. |
+| D-010 | Owner-approved | One schema registry drives YAML, commands, GUI, validation, help, diff, and docs. | Required for functional parity and prevents drift. |
+| D-011 | Owner-approved | YAML is edited through a comment/order/unknown-key-preserving document model and named draft/revision workflow; Bukkit `FileConfiguration` is not the canonical writer. The library choice is deferred until the Phase 1 spike and golden tests pass. | Prevents current comment/key corruption and makes the round-trip spike a hard gate. |
+| D-012 | Owner-approved | Runtime consumes one immutable compiled `ActiveConfiguration` pinned by revision/content hashes. | Makes apply/rollback and operation recovery coherent. |
+| D-013 | Owner-approved | Provider registry uses typed capabilities, health, provenance, and lazy activation; arbitrary YAML event reflection is removed. | Enables extension without silent class/method drift or spoofed progress. |
+| D-014 | Mandated | QuickShop and other P2P volume provide zero progression-income credit by default. | Prevents circular/collusive turnover exploits. |
+| D-015 | Owner-approved | Internal state uses immutable lowercase IDs limited to the conservative `a-z0-9._-` syntax, exact decimal currency storage, optimistic state revisions, and normalized history/baseline/operation records. | Decouples display/external IDs and protects integrity. |
+| D-016 | Owner-approved | Consequential changes use immutable operation plans with persisted per-action state, idempotency keys, verification, and reconciliation. | Provides crash recovery without falsely promising exactly-once external commands. |
+| D-017 | Owner-approved | SQLite is the default single-server backend and uses a serialized bounded write coordinator. MySQL and MariaDB may implement the same contracts, but each requires contract testing if publicly claimed. | Backend support does not imply multi-server/network-safe progression. |
+| D-018 | Owner-approved | Database migrations are ordered/checksummed, backup-gated, dry-runnable, and reported; schema versions are never overwritten opportunistically. | Fixes current version-4 false-current risk. |
+| D-019 | Owner-approved | Staff observation, draft edit, apply, rollback, player mutation, force, migration, recovery, and debug have separate permissions. | Removes GUI privilege escalation and supports least privilege. |
+| D-020 | Owner-approved | PAPI output is cache-only; PAPI input is a separately configured sampled/typed provider that fails closed. | Protects render performance and makes outages actionable. |
+| D-021 | Owner-approved | Generic command actions are disabled in the safe default, require explicitly allowlisted roots/templates, and expose uncertainty honestly. | A denylist cannot make arbitrary console commands safe; universal exactly-once behavior is not claimed. |
+| D-022 | Mandated | Rabbit Holes, decrees, bosses, resource-world lifecycle, Court drafting, and PvP scoring are not core mandatory progression systems. | They may be future optional providers only. |
+| D-023 | Owner-approved | Phase 1 builds foundations only and never touches production data or existing schema except disposable fixtures. | Preserves the Phase 0/1 safety gate. |
+| D-024 | Owner-approved | Maven group is `net.maddkraft`; Java root package is `net.maddkraft.maddprestige`. | The developer/product namespace may carry MaddKraft identity, but generic core gameplay remains unbranded and configuration-driven. |
+| D-025 | Owner-approved | Use the canonical file split proposed in Phase 0. | Avoids a monolithic configuration while preserving one canonical model. |
+| D-026 | Owner-approved | Network/proxy synchronization is outside V2 core unless separately designed and qualified. | MySQL/MariaDB availability must not be advertised as network-safe progression. |
+| D-027 | Owner-approved | Competitions are disabled in the generic default; a generic optional module may exist, while MaddKraft competition identity is deferred. | Removes hardcoded MaddHatter behavior from core. |
+| D-028 | Owner-approved | Retention is configurable; revisions/backups/migration artifacts referenced by active or pending work are protected from pruning; secrets are redacted from every output surface. | Phase 1 establishes policy/schema, with user-facing tuning later. |
+| D-029 | Owner-approved | Persistence must support documented player-data inventory, export, safe deletion/anonymization, and history/audit retention without breaking referential integrity. | Public-facing tooling is primarily Phase 8, but the storage model must enable it. |
+| D-030 | Owner-approved | Do not infer legacy rank mappings. If no production data exists, freeze available V1 artifacts and use synthetic edge-case migration fixtures; real data elsewhere remains untouched and must be backed up before later migration work. | Lack of a production fixture does not block Phase 1 foundations. |
+
+## Deferred choices
+
+| ID | Deferred choice | Phase/evidence needed | Binding constraint |
+|---|---|---|---|
+| O-004 | Comment-preserving YAML implementation library/strategy | early Phase 1 spike | no canonical writer is selected until round-trip golden tests pass |
+| O-005 | Curious/Odd/Mad/Unbound migration mapping | Phase 2/9 plus fixtures and explicit owner decision | never infer or auto-create old groups |
+| O-007 | Supporter display names and entitlement mappings | later MaddKraft preset phase | must not block generic core or restore old patron ownership |
+| O-008 | MaddKraft costs, requirements, scaling, currency cadence, and milestones | Phase 9 tuning | derive from real data; do not freeze prototype values |
+| O-009 | Exact MySQL/MariaDB versions and CI services | before either backend is publicly claimed | contract-test every publicly claimed backend/version family |
+| O-011 | User-facing retention durations/tuning | later administration/public-release work | Phase 1 must establish protection/redaction/schema invariants first |

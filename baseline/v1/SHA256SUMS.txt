@@ -1,0 +1,14 @@
+# SHA-256 values captured before dedicated-repository initialization on 2026-08-15.
+# Tree digests hash sorted lines of: repository-relative-path<TAB>file-sha256<LF>.
+
+f77b13ad6ad7197ac5cd591f33670d9bbe2452255dc6cdfd1d4cebc981c47537  TREE:v1-core:pom.xml,README.md,CHANGELOG.md,docs,src (61 files)
+e931a2d62d5cac183532ea3ad7666f19e2c038158703498ea989a9c3524fb9c5  TREE:v1-dist:dist (4 files)
+1de0b772ef11de8dd1f70dfda71e65cb307cce5d47eeba4af26205eda36a3a08  dist/MaddPrestige-1.2.0.jar
+5e471e20dce60312d19d7c49872b2c677533d5cb4c8464a5a47a81ea20c014b8  runtime/config.yml
+24af22d780cbd5cf55b3089090fd2e4c5158477851f9d80978923014a07d89a4  runtime/maddprestige.db
+5c3a5add5917d1eed84ea6ba03610750b79d40de4f546dbfa3ae6957c11401d8  ORIGINAL-LOCAL:runtime-test/logs/latest.log (not tracked raw; see runtime/RUNTIME_EVIDENCE.md)
+07073ac287e75a518c6ff7e0b221ef776dbe50ee0c41828d3bc5871ff1526417  external/config-download.yml
+1de0b772ef11de8dd1f70dfda71e65cb307cce5d47eeba4af26205eda36a3a08  external/MaddPrestige-1.2.0-download.jar
+c8be85a33b55d1d415c6d139cce0da2dd346bce89c197c97fcf0b368a517a718  docs/spec/MaddPrestige_V2_Master_Spec.md
+19a53e82632667be108adb2bc221eae6e736805203419014dc1db6f848f86f9c  docs/spec/MaddPrestige_V2_Codex_Kickoff_Prompt.md
+

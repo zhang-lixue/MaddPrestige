@@ -1,0 +1,515 @@
+database:
+  # SQLite is supported out of the box and is recommended for one Paper server.
+  file: maddprestige.db
+  flush-interval-seconds: 30
+
+integrations:
+  luckperms:
+    enabled: true
+    required: false
+    progression-groups:
+      CURIOUS: curious
+      ODD: odd
+      MAD: mad
+      UNBOUND: unbound
+  vault:
+    enabled: true
+    required-for-money-objectives: true
+  mcmmo:
+    enabled: true
+    # MaddPrestige dynamically hooks mcMMO XP events and does not pin one mcMMO build.
+  placeholderapi:
+    enabled: true
+  installed-stack:
+    # EconomyShopGUI sales are server-generated income and can count in full.
+    economyshopgui-earned-weight: 1.0
+    # QuickShop is player-to-player trading, so only a conservative portion counts.
+    quickshop-earned-weight: 0.25
+    # Mob Coins remain a separate currency by default.
+    ultimate-mobcoins-earned-weight: 0.0
+  compatibility:
+    # Every supplied plugin is optional. Set one to false to suppress MaddPrestige's
+    # direct hook for that plugin; coexistence-only entries are kept here for an
+    # explicit, auditable server-stack policy and the staff compatibility screen.
+    economyshopgui: { enabled: true }
+    fancyholograms: { enabled: true }
+    minimotd: { enabled: true }
+    purpurextras: { enabled: true }
+    ultimatemobcoins: { enabled: true }
+    veinminer: { enabled: true }
+    chunky: { enabled: true }
+    citizens: { enabled: true }
+    clickvillagers: { enabled: true }
+    coreprotect: { enabled: true }
+    discordsrv: { enabled: true }
+    drivebackupv2: { enabled: true }
+    essentials: { enabled: true }
+    essentialsspawn: { enabled: true }
+    ezatn: { enabled: true }
+    griefprevention: { enabled: true }
+    grimac: { enabled: true }
+    inventoryrollbackplus: { enabled: true }
+    litebans: { enabled: true }
+    luckperms: { enabled: true }
+    maintenance: { enabled: true }
+    maxcrates: { enabled: true }
+    mcmmo: { enabled: true }
+    multiverse-core: { enabled: true }
+    multiverse-inventories: { enabled: true }
+    multiverse-netherportals: { enabled: true }
+    multiverse-portals: { enabled: true }
+    placeholderapi: { enabled: true }
+    plan: { enabled: true }
+    playtimemanager: { enabled: true }
+    quickshop-hikari: { enabled: true }
+    silkspawners-v2: { enabled: true }
+    tab: { enabled: true }
+    treefeller: { enabled: true }
+    vault: { enabled: true }
+    voicechat: { enabled: true }
+    worldedit: { enabled: true }
+    worldguard: { enabled: true }
+
+# Config-driven relationships let any optional plugin consume MaddPrestige
+# lifecycle actions without adding a hard Java dependency. Every command runs
+# as console after the MaddPrestige transaction has saved successfully.
+# Supported triggers: player-join, progress, rank-up, prestige, perk-purchase,
+# patron-change, hatter-gained, hatter-lost, season-status, season-new,
+# contest-start, and contest-end.
+# Tokens include {player}, {uuid}, {rank}, {prestige}, {tea_leaves}, {season},
+# action-specific values, plus {provider} and {plugin}.
+relationships:
+  enabled: true
+  # Progress is intentionally opt-in because XP and economy events can fire
+  # many times per second. Tracking still works while this is false.
+  emit-progress-actions: false
+  max-commands-per-trigger: 50
+  max-trigger-depth: 3
+  log-dispatched-commands: false
+  skip-commands-with-unresolved-tokens: true
+  # Prevent relationship actions from gaining operator access or controlling
+  # the server process unless an owner explicitly removes a root here.
+  blocked-command-roots: [stop, restart, op, deop]
+  providers:
+    economyshopgui:
+      plugin: EconomyShopGUI
+      features: [weighted-server-earnings, lifecycle-commands]
+      commands: {}
+    fancyholograms:
+      plugin: FancyHolograms
+      features: [placeholderapi-display, lifecycle-commands]
+      commands: {}
+    minimotd:
+      plugin: MiniMOTD
+      features: [chapter-status-commands, lifecycle-commands]
+      commands: {}
+    purpurextras:
+      plugin: PurpurExtras
+      features: [coexistence, lifecycle-commands]
+      commands: {}
+    ultimatemobcoins:
+      plugin: UltimateMobCoins
+      features: [weighted-server-earnings, lifecycle-commands]
+      commands: {}
+    veinminer:
+      plugin: Veinminer
+      aliases: [All-In-One-VeinMiner-TreeFeller]
+      features: [public-api-progress-input, lifecycle-commands]
+      commands: {}
+    chunky:
+      plugin: Chunky
+      features: [chapter-reset-commands, lifecycle-commands]
+      commands: {}
+    citizens:
+      plugin: Citizens
+      features: [npc-command-actions, placeholderapi-display]
+      commands: {}
+    clickvillagers:
+      plugin: ClickVillagers
+      features: [villager-command-actions, public-api-progress-input]
+      commands: {}
+    coreprotect:
+      plugin: CoreProtect
+      features: [audit-command-actions, coexistence]
+      commands: {}
+    discordsrv:
+      plugin: DiscordSRV
+      features: [announcement-commands, placeholderapi-display]
+      commands:
+        # prestige:
+        #   - 'discord broadcast {player} reached Prestige {prestige}!'
+    drivebackupv2:
+      plugin: DriveBackupV2
+      features: [chapter-backup-commands, sqlite-safe-shutdown]
+      commands: {}
+    essentials:
+      plugin: Essentials
+      aliases: [EssentialsX]
+      features: [vault-economy, configurable-home-entitlements, lifecycle-commands]
+      entitlement-permissions:
+        homes:
+          minimum-value: 2
+          clear-nodes:
+            - essentials.sethome.multiple
+          clear-prefixes:
+            - essentials.sethome.multiple.maddkraft_
+          nodes:
+            - essentials.sethome.multiple
+            - essentials.sethome.multiple.maddkraft_{value}
+      commands: {}
+    essentialsspawn:
+      plugin: EssentialsSpawn
+      features: [spawn-command-actions, lifecycle-commands]
+      commands: {}
+    ezatn:
+      plugin: EzATN
+      features: [authentication-safe-join-actions, coexistence]
+      commands: {}
+    griefprevention:
+      plugin: GriefPrevention
+      features: [permanent-claim-block-api, lifecycle-commands]
+      commands: {}
+    grimac:
+      plugin: GrimAC
+      features: [anti-cheat-coexistence, lifecycle-commands]
+      commands: {}
+    inventoryrollbackplus:
+      plugin: InventoryRollbackPlus
+      features: [inventory-safe-prestige, lifecycle-commands]
+      commands: {}
+    litebans:
+      plugin: LiteBans
+      features: [punishment-safe-join-actions, lifecycle-commands]
+      commands: {}
+    luckperms:
+      plugin: LuckPerms
+      features: [progression-groups, patron-groups, dynamic-entitlements, hatter-metadata]
+      commands: {}
+    maintenance:
+      plugin: Maintenance
+      features: [chapter-maintenance-commands, lifecycle-commands]
+      commands: {}
+    maxcrates:
+      plugin: MaxCrates
+      features: [crate-command-rewards, public-api-progress-input]
+      commands: {}
+      # Generic inbound event example (replace paths with MaxCrates' actual API):
+      # event-hooks:
+      #   crate-open:
+      #     event-class: com.example.maxcrates.api.CrateOpenEvent
+      #     player-path: getPlayer
+      #     fixed-amount: 1
+      #     weight: 1.0
+      #     progress-type: DECREE_OBJECTIVE
+      #     source: MaxCrates
+      #     equals:
+      #       - 'getCrate.getName=PrestigeCrate'
+      #     ignore-cancelled: true
+    mcmmo:
+      plugin: mcMMO
+      features: [xp-event-progress, lifecycle-commands]
+      commands: {}
+    multiverse-core:
+      plugin: Multiverse-Core
+      features: [chapter-world-commands, world-safe-profiles]
+      commands: {}
+    multiverse-inventories:
+      plugin: Multiverse-Inventories
+      features: [cross-world-inventory-safety, lifecycle-commands]
+      commands: {}
+    multiverse-netherportals:
+      plugin: Multiverse-NetherPortals
+      features: [portal-coexistence, lifecycle-commands]
+      commands: {}
+    multiverse-portals:
+      plugin: Multiverse-Portals
+      features: [portal-command-actions, public-api-progress-input]
+      commands: {}
+    placeholderapi:
+      plugin: PlaceholderAPI
+      features: [maddprestige-expansion, external-placeholder-consumers]
+      commands: {}
+    plan:
+      plugin: Plan
+      features: [analytics-coexistence, placeholderapi-display]
+      commands: {}
+    playtimemanager:
+      plugin: PlayTimeManager
+      features: [playtime-command-actions, public-api-progress-input]
+      commands: {}
+    quickshop-hikari:
+      plugin: QuickShop-Hikari
+      features: [weighted-seller-earnings, configurable-listing-entitlements]
+      entitlement-permissions:
+        auction-listings:
+          minimum-value: 0
+          clear-prefixes:
+            - quickshop.maddkraft.limit.
+          nodes:
+            - quickshop.maddkraft.limit.{value}
+      commands: {}
+    silkspawners-v2:
+      plugin: SilkSpawners_v2
+      aliases: [SilkSpawners, SilkTouchSpawners]
+      features: [spawner-command-actions, public-api-progress-input]
+      commands: {}
+    tab:
+      plugin: TAB
+      features: [placeholderapi-title, rank-and-prestige-display]
+      commands: {}
+    treefeller:
+      plugin: TreeFeller
+      aliases: [All-In-One-VeinMiner-TreeFeller, TreeAssist]
+      features: [public-api-progress-input, lifecycle-commands]
+      commands: {}
+    vault:
+      plugin: Vault
+      aliases: [VaultUnlocked]
+      features: [economy-service, transactional-rank-fees]
+      commands: {}
+    voicechat:
+      plugin: voicechat
+      aliases: [SimpleVoiceChat]
+      features: [voice-state-coexistence, lifecycle-commands]
+      commands: {}
+    worldedit:
+      plugin: WorldEdit
+      features: [chapter-world-commands, edit-session-coexistence]
+      commands: {}
+    worldguard:
+      plugin: WorldGuard
+      features: [region-coexistence, lifecycle-commands]
+      commands: {}
+    # Add unlimited custom providers using this same schema. Set
+    # require-plugin: false for proxy commands or external console bridges.
+
+gui:
+  enabled: true
+  # Inventory sizes are rounded to a valid 3-6 row chest size. The supplied
+  # layout uses six rows so player and staff navigation never overlap content.
+  size: 54
+  player-settings-enabled: true
+  staff-menu-enabled: true
+  staff-permission: maddprestige.admin.gui
+  titles:
+    rank: '<dark_purple><bold>MaddKraft</bold></dark_purple> <gray>• Rank Up</gray>'
+    prestige: '<gold><bold>Through the Looking Glass</bold></gold>'
+    rewards: '<green><bold>The Tea Table</bold></green>'
+    season: '<aqua><bold>A New Chapter</bold></aqua>'
+    hatter: '<gradient:#e6b94e:#8060f2><bold>The MaddHatter</bold></gradient>'
+    settings: '<yellow><bold>My Prestige Settings</bold></yellow>'
+    staff: '<red><bold>MaddPrestige Staff</bold></red>'
+    integrations: '<aqua><bold>Plugin Compatibility</bold></aqua>'
+    players: '<gold><bold>Online Player Profiles</bold></gold>'
+    player-editor: '<red><bold>Staff Profile Editor</bold></red>'
+  # Any slot outside the configured inventory size is safely ignored.
+  slots:
+    rank-overview: 13
+    rank-objectives: 22
+    rank-action: 31
+    prestige-overview: 13
+    prestige-objectives: 22
+    prestige-action: 31
+    rewards-balance: 13
+    rewards-homes: 20
+    rewards-listings: 22
+    rewards-claims: 24
+    season-overview: 13
+    season-player: 22
+    hatter-holder: 13
+    hatter-contest: 22
+    hatter-claim: 31
+    settings-sounds: 20
+    settings-numbers: 22
+    settings-integrations: 24
+    settings-default-page: 31
+    nav-rank: 45
+    nav-prestige: 46
+    nav-rewards: 47
+    nav-season: 48
+    nav-hatter: 49
+    nav-settings: 51
+    nav-staff: 53
+    staff-status: 13
+    staff-players: 20
+    staff-integrations: 22
+    staff-reload: 24
+    staff-flush: 31
+  materials:
+    filler: BLACK_STAINED_GLASS_PANE
+    nav-rank: NAME_TAG
+    nav-prestige: NETHER_STAR
+    nav-rewards: FLOWER_BANNER_PATTERN
+    nav-season: WRITTEN_BOOK
+    nav-hatter: LEATHER_HELMET
+    nav-settings: COMPARATOR
+    nav-staff: COMMAND_BLOCK
+    enabled: LIME_DYE
+    disabled: GRAY_DYE
+    back: ARROW
+  staff-controls:
+    tea-step: 1
+    prestige-step: 1
+    server-earnings-step: 1000
+    mcmmo-xp-step: 1000
+    objective-step: 1
+
+progression:
+  # Requirements are cumulative within the current prestige run.
+  ranks:
+    CURIOUS:
+      display-name: Curious
+      cost: 0
+      server-earnings: 0
+      mcmmo-xp: 0
+      rabbit-holes: 0
+      decree-objectives: 0
+      bosses: 0
+    ODD:
+      display-name: Odd
+      cost: 250000
+      server-earnings: 500000
+      mcmmo-xp: 15000
+      rabbit-holes: 1
+      decree-objectives: 1
+      bosses: 0
+    MAD:
+      display-name: Mad
+      cost: 1500000
+      server-earnings: 3000000
+      mcmmo-xp: 75000
+      rabbit-holes: 3
+      decree-objectives: 3
+      bosses: 1
+    UNBOUND:
+      display-name: Unbound
+      cost: 7500000
+      server-earnings: 15000000
+      mcmmo-xp: 250000
+      rabbit-holes: 6
+      decree-objectives: 7
+      bosses: 2
+
+prestige:
+  base-fee: 25000000
+  base-server-earnings: 40000000
+  base-mcmmo-xp: 500000
+  base-rabbit-holes: 10
+  base-decree-objectives: 12
+  base-bosses: 3
+  linear-scale-per-prestige: 0.18
+  cooldown-seconds: 300
+  base-tea-leaves: 1
+  bonus-tea-leaf-every: 5
+  rankup-discount-per-prestige: 0.01
+  maximum-rankup-discount: 0.15
+  # Permission/utility rewards are applied through commands from this allowlisted map.
+  milestones:
+    '1':
+      messages:
+        - '<gold>You unlocked the Tea Leaf reward shop.</gold>'
+    '5':
+      messages:
+        - '<light_purple>Looking Glass Rabbit Holes are now available.</light_purple>'
+    '10':
+      messages:
+        - "<gold>You are now eligible for Hatter's Contests.</gold>"
+    '15':
+      messages:
+        - '<light_purple>You unlocked the advanced prestige cosmetic collection.</light_purple>'
+    '20':
+      messages:
+        - '<gold>You earned the Hatter Candidate milestone.</gold>'
+
+rewards:
+  # MaddPrestige calculates the maximum source entitlement; values never add together.
+  base:
+    homes: 1
+    auction-listings: 3
+    claim-blocks: 500
+  prestige-perks:
+    homes:
+      points-per-level: 2
+      maximum: 10
+    auction-listings:
+      points-per-level: 2
+      maximum: 15
+    claim-blocks:
+      # Permanent because GriefPrevention bonus claim blocks persist across chapter resets.
+      points-per-level: 1
+      amount-per-level: 250
+      maximum: 5000
+  patron-permissions:
+    # Permission nodes may be supplied by LuckPerms patron groups.
+    homes:
+      maddkraft.patron.knave: 3
+      maddkraft.patron.duchess: 6
+      maddkraft.patron.kingofhearts: 10
+      maddkraft.patron.whitequeen: 18
+      maddkraft.patron.queenofhearts: 25
+    auction-listings:
+      maddkraft.patron.knave: 3
+      maddkraft.patron.duchess: 8
+      maddkraft.patron.kingofhearts: 15
+      maddkraft.patron.whitequeen: 25
+      maddkraft.patron.queenofhearts: 40
+
+patron:
+  # Tebex packages call: maddprestige patron set {username} <tier>
+  # These are commercial ranks; MaddHatter is deliberately not purchasable.
+  tiers:
+    KNAVE:
+      display-name: Knave
+      priority: 10
+      luckperms-group: knave
+      entitlement-permission: maddkraft.patron.knave
+    DUCHESS:
+      display-name: Duchess
+      priority: 20
+      luckperms-group: duchess
+      entitlement-permission: maddkraft.patron.duchess
+    KING_OF_HEARTS:
+      display-name: King of Hearts
+      priority: 30
+      luckperms-group: kingofhearts
+      entitlement-permission: maddkraft.patron.kingofhearts
+    WHITE_QUEEN:
+      display-name: White Queen
+      priority: 40
+      luckperms-group: whitequeen
+      entitlement-permission: maddkraft.patron.whitequeen
+    QUEEN_OF_HEARTS:
+      display-name: Queen of Hearts
+      priority: 50
+      luckperms-group: queenofhearts
+      entitlement-permission: maddkraft.patron.queenofhearts
+
+season:
+  default-id: chapter-1
+  default-name: Chapter One
+  target-length-days: 150
+  legacy-star-every-prestiges: 5
+  late-join-catchup:
+    enabled: true
+    starts-after-day: 75
+    requirement-reduction-per-week: 0.025
+    maximum-reduction: 0.20
+  # World deletion/regeneration is intentionally handled during host maintenance.
+  # MaddPrestige owns player/season data and produces an archive before a chapter switch.
+
+maddhatter:
+  minimum-prestige: 10
+  inactivity-days: 14
+  title: '<gradient:#e6b94e:#8060f2><bold>THE MADDHATTER</bold></gradient>'
+  hat-material: LEATHER_HELMET
+  contest:
+    default-duration-days: 28
+    default-metric: MCMMO_XP
+  staff-permission: maddprestige.staff
+
+messages:
+  prefix: '<dark_purple><bold>MADD</bold></dark_purple><gold><bold>KRAFT</bold></gold> <dark_gray>»</dark_gray> '
+  no-permission: '<red>You do not have permission to do that.</red>'
+  player-only: '<red>This command can only be used by a player.</red>'
+  profile-loading: '<yellow>Your MaddKraft profile is still loading. Try again in a moment.</yellow>'
+  integration-unavailable: '<red>A required server integration is unavailable. Contact staff.</red>'
