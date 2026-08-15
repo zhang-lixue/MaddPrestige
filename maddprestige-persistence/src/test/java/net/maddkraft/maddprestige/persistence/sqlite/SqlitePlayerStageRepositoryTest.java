@@ -24,6 +24,7 @@ import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.core.stage.StageConfigurationWorkflow;
 import net.maddkraft.maddprestige.core.stage.StageRemapPlan;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
+import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.StalePlayerStageStateException;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
 import org.junit.jupiter.api.BeforeEach;
@@ -59,6 +60,9 @@ class SqlitePlayerStageRepositoryTest {
         assertEquals(revision, loaded.configRevision());
         assertEquals(1L, repository.countByStage().get(new StageId("second")));
 
+        PlayerStageState duplicate = state(state.playerId(), "first", false);
+        assertThrows(PersistenceException.class, () -> repository.insert(duplicate));
+
         // A display rename or order change has no column to rewrite and cannot affect the immutable stored ID.
         assertEquals(new StageId("second"), repository.find(state.playerId()).orElseThrow().stageId());
     }
@@ -80,8 +84,11 @@ class SqlitePlayerStageRepositoryTest {
     void importsOnlyOnce() {
         PlayerStageState imported = state(UUID.randomUUID(), "second", true);
         assertTrue(repository.importOnce(imported));
-        assertFalse(repository.importOnce(imported));
-        assertTrue(repository.find(imported.playerId()).orElseThrow().importedAt().isPresent());
+        PlayerStageState conflictingImport = state(imported.playerId(), "first", true);
+        assertFalse(repository.importOnce(conflictingImport));
+        PlayerStageState stored = repository.find(imported.playerId()).orElseThrow();
+        assertEquals(new StageId("second"), stored.stageId());
+        assertTrue(stored.importedAt().isPresent());
     }
 
     @Test

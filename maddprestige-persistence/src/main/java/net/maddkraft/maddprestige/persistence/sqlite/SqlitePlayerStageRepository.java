@@ -21,6 +21,19 @@ import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 public final class SqlitePlayerStageRepository implements PlayerStageRepository {
     private static final String COLUMNS = "player_uuid, stage_id, state_revision, config_revision_id, "
             + "stage_entered_at, created_at, updated_at, last_reconciled_at, last_provider_generation, imported_at";
+    private static final String INSERT_SQL = """
+            INSERT INTO mp_player_stage_state (
+                player_uuid, stage_id, state_revision, config_revision_id, stage_entered_at,
+                created_at, updated_at, last_reconciled_at, last_provider_generation, imported_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """;
+    private static final String IMPORT_ONCE_INSERT_SQL = """
+            INSERT INTO mp_player_stage_state (
+                player_uuid, stage_id, state_revision, config_revision_id, stage_entered_at,
+                created_at, updated_at, last_reconciled_at, last_provider_generation, imported_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(player_uuid) DO NOTHING
+            """;
     private final ConnectionProvider connections;
 
     public SqlitePlayerStageRepository(ConnectionProvider connections) {
@@ -101,9 +114,7 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
     }
 
     private boolean insertInternal(PlayerStageState state, boolean ignoreExisting) {
-        String conflict = ignoreExisting ? " ON CONFLICT(player_uuid) DO NOTHING" : "";
-        String sql = "INSERT INTO mp_player_stage_state (" + COLUMNS + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                + conflict;
+        String sql = ignoreExisting ? IMPORT_ONCE_INSERT_SQL : INSERT_SQL;
         try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
             bind(statement, state);
             return statement.executeUpdate() == 1;
