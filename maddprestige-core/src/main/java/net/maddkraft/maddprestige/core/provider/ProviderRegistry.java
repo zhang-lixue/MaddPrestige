@@ -53,6 +53,11 @@ public final class ProviderRegistry {
         return Optional.ofNullable(providers.get(id)).map(RegisteredProvider::snapshot);
     }
 
+    public synchronized Optional<Provider> provider(ProviderId id) {
+        Objects.requireNonNull(id, "provider ID");
+        return Optional.ofNullable(providers.get(id)).map(RegisteredProvider::provider);
+    }
+
     public synchronized Collection<ProviderSnapshot> snapshots() {
         return providers.values().stream().map(RegisteredProvider::snapshot).toList();
     }

@@ -1,0 +1,6 @@
+# MaddPrestige V2 progression remains inactive until a validated draft is explicitly applied.
+schema-version: 2
+active: false
+reconciliation-policy: warn-only
+stages: {}
+order: []

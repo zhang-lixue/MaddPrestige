@@ -1,84 +1,85 @@
 # MaddPrestige V2 Status
 
-**Current phase:** Phase 1 generic foundations implemented and locally verified; Phase 2 not started
+**Current phase:** Phase 2 generic stage/rank architecture owner-review correction pass implemented and locally verified
 **Last updated:** 2026-08-15
-**Implementation status:** Phase 1 owner-review correction pass complete locally, pending owner acceptance and the first observed green CI run for both external-backend harness jobs
+**Implementation status:** correction pass complete in the `v2/phase-2` worktree, intentionally uncommitted and disconnected from production bootstrap/data
 
 ## Outcome
 
-Phase 1 established the approved seven-module V2 foundation alongside the frozen V1 baseline. The V2 code is isolated under Maven group `net.maddkraft` and Java root package `net.maddkraft.maddprestige`; it is not wired into the production plugin bootstrap, real player progression, production configuration, production databases, or LuckPerms.
+Phase 2 adds arbitrary immutable stages, ordered-ladder compilation, change-impact/remap gating, UUID-first player stage persistence, an asynchronous generic rank adapter, a LuckPerms 5.5 implementation, reconciliation policies, persisted rank operations, and explicit read-only legacy mapping plans.
 
-The principal handoff documents are:
+The V2 runtime remains safe and inactive by default. The canonical default has `active: false`, no stages, no order, and `warn-only` reconciliation. Frozen V1 still provides the distribution bootstrap; no production configuration, player data, database, or LuckPerms state was accessed or changed.
+
+Principal handoff documents:
 
 - [docs/V2_ARCHITECTURE.md](docs/V2_ARCHITECTURE.md);
-- [docs/V2_PHASE1_IMPLEMENTATION.md](docs/V2_PHASE1_IMPLEMENTATION.md);
+- [docs/V2_PHASE2_IMPLEMENTATION.md](docs/V2_PHASE2_IMPLEMENTATION.md);
+- [docs/V2_PHASE2_FILE_MANIFEST.md](docs/V2_PHASE2_FILE_MANIFEST.md);
 - [docs/V2_TRACEABILITY.md](docs/V2_TRACEABILITY.md);
 - [DECISIONS.md](DECISIONS.md).
 
-## Implemented foundations
+## Implemented in Phase 2
 
-- reproducible Java 25 Maven reactor and wrapper for `maddprestige-api`, `maddprestige-core`, `maddprestige-persistence`, `maddprestige-platform-paper`, `maddprestige-integrations`, `maddprestige-testkit`, and `maddprestige-distribution`;
-- Maven Enforcer dependency convergence, Checkstyle, JaCoCo, aggregate CycloneDX SBOM, optional OWASP audit profile, CI, and deterministic distribution output;
-- immutable generic IDs, exact decimals, structured results/errors, validation levels, explanation trees, provider descriptors/health, operation/action states, and redaction-aware audit values;
-- schema registry plus representative safe-default fields;
-- lossless YAML document foundation selected only after golden-file proof;
-- immutable configuration drafts, compiled candidates, semantic diffs, revisions, hashes, backup metadata, active references, and new-revision rollback;
-- read-only external-group validation, managed-membership isolation, safe rank projection defaults, provider registry generation checks, and fake providers;
-- operation/action state-transition validation and persistence contracts;
-- deterministic SQLite migrations, repository implementations, verified-backup gate, exact-text decimals, UTC timestamps, constraints, indexes, and append-only redacted audits;
-- MySQL and MariaDB contract harness jobs without a support claim;
-- V1 behavior/defect fixtures and characterization tests;
-- A01-A76 traceability classification.
+- immutable arbitrary stage definitions, display metadata, enabled order, explicit baseline, and `projection: none` or one provider/group projection;
+- `progression.yml` compilation through the existing lossless draft/revision/apply workflow rather than a second configuration system;
+- structured validation for order/baseline/projection/provider targets, plus explicit rejection of active Phase 3+ fields;
+- semantic impact reporting for order, add/remove, enable/disable, projection changes, stored-player references, acknowledgements, and revisioned remap plans;
+- inert runtime status when configuration is absent, inactive, or empty;
+- UUID-first player stage schema/repository with optimistic revisions, import-once, reconciliation metadata, and reference counts;
+- async rank-adapter API with a caller-pinned managed set, target validation, ambiguity reporting, and no group-creation capability;
+- LuckPerms 5.5 adapter using public API types, asynchronous UUID load/save, cached/offline lifecycle handling, exact permanent/context-free node ownership, unrelated-node preservation, fail-closed ambiguity, and uncertainty reporting;
+- pure `warn-only`, `maddprestige-authoritative`, and `import-once` reconciliation decisions with a rate gate;
+- persisted projection/reconciliation coordination with idempotency, configuration/provider-generation checks, optimistic internal commit, action journaling, audit, and `NEEDS_RECONCILIATION` recovery state;
+- structural legacy detection and explicit mapping manifests/plans with no inference, no mutation executor, and a verified-backup gate for non-dry planning.
 
 ## Owner-review correction pass
 
-- migration preflight now inspects pending/applied state without mutation and obtains the required verified backup before any history DDL;
-- SQLite history uniqueness applies only to successful versions, while repeated failed attempts remain independently auditable and retryable;
-- applied history must be an exact ordered prefix; gaps, newer-without-older history, unknown versions, and checksum mismatches fail before SQL executes;
-- successful commit and autocommit restoration are separated so a post-commit restoration error cannot create a false `FAILED` record;
-- all YAML scalar replacement methods reject block scalars; code-point mark conversion, CRLF, emoji, ambiguous strings, anchors, and tags are regression-tested;
-- final A01-A76 classification now distinguishes fully satisfied final criteria from Phase 1 foundations;
-- MySQL/MariaDB CI jobs require an unskipped, successful Failsafe XML result for `ExternalBackendContractIT`.
+- a complete remap plan now records operator intent only: activation remains blocked while persisted references to removed or disabled stages are nonzero, because Phase 2 has no bulk remap executor;
+- import-once rechecks the active configuration revision and provider identity, generation, activation, and health immediately before its insert; either deterministic race returns `STALE_GENERATION`, writes a failed audit record, and inserts nothing;
+- explicit `projection.type` accepts only `none` or `group`, rejects blank, unknown, and non-scalar values, and retains the documented omitted-type shorthand;
+- a LuckPerms snapshot failure after a successful save is classified as `UNCERTAIN`; operation state remains `NEEDS_RECONCILIATION`, the internal stage does not advance, and cleanup cannot downgrade that result;
+- invalid or conflicting legacy mappings produce an error report with an empty planned-mapping set, so they cannot be mistaken for executable-looking work.
 
 ## Verification completed
 
-- `mvn --no-transfer-progress clean verify`: **passed**;
-- reactor tests: **50 run, 0 failures, 0 errors, 0 skipped**;
-- Maven Enforcer and dependency convergence: **passed**;
+- `./mvnw --no-transfer-progress clean verify`: **passed** on the Windows wrapper equivalent;
+- reactor tests: **94 run, 0 failures, 0 errors, 0 skipped** across 30 suites;
+- Maven Enforcer, dependency convergence, duplicate dependency-version checks: **passed**;
 - Checkstyle: **0 violations**;
 - JaCoCo reports and aggregate CycloneDX SBOM: **generated**;
-- Maven Wrapper: **Maven 3.9.16 on Java 25 confirmed**;
-- two clean corrected builds produced the same distribution SHA-256: `d98f34a782751bece418fabb94cd527bc0350a073abe3758037c9eac1a23c79a`;
-- protected-path comparison against `v1.2.0-baseline`: **clean** for `src`, `dist`, `baseline/v1/runtime`, and `baseline/v1/external`;
-- generic V2 source scan for fixed legacy ranks/MaddKraft gameplay terms: **clean**.
+- focused stage workflow, LuckPerms, persistence, and provider/configuration race regression reruns: **passed**;
+- two clean correction-pass builds produced the same distribution SHA-256: `ee6689defc1b5410d711e9912402958ddc0398f8daadb2d34bb04e571956b9ce`;
+- protected-path comparison against accepted Phase 1 merge `5aab340554afcf7abe43fd36f6b835175550acc1`: **0 changes** in `src`, `dist`, `baseline/v1/runtime`, and `baseline/v1/external`;
+- prohibited fixed legacy gameplay/rank-name scan over generic V2 production modules/resources: **0 hits**;
+- executable V2 group-creation call scan: **0 hits** (four broad textual matches are capability/remediation strings saying groups are not created);
+- generic API/core external-plugin import scan: **0 hits**;
+- Phase 3+ implementation/package leak scan: **0 hits**; deferred YAML fields exist only as fail-closed rejection keys;
+- `git diff --check`: **passed**.
 
-MySQL and MariaDB containers were not available in the local environment. The repository contains CI service-container jobs that invoke the Failsafe profile with every required property and then assert the exact integration-test report ran one test with zero skips/failures/errors. No backend-support claim is made until both jobs are observed passing and the repository contract suite is complete.
+## What the LuckPerms tests establish
 
-## YAML hard-gate decision
+The integration module compiles and tests against the actual LuckPerms 5.5 API artifact and public interfaces. Its proxy-backed in-memory API fixture proves call ordering and adapter invariants, including missing-target blocking, no create call, exact managed-node isolation, cached/offline user load-save-cleanup, ambiguity, repeat behavior, outage, disablement during projection, save uncertainty, and post-save verification uncertainty that cleanup cannot downgrade.
 
-The selected Phase 1 strategy is SnakeYAML Engine `3.0.1` for YAML 1.2 parsing, comments, node styles, and source marks, combined with a MaddPrestige source-range editor that retains the original UTF-8 document and changes only a selected scalar token. Golden/regression tests prove exact no-op round trips and preservation of comments, ordering, dotted keys, nested structures, unknown compatible keys, UTF-8/emoji, CRLF, safe quoting, scalar semantics, and multiple documents.
-
-Every replacement method rejects block scalars. Anchored and explicitly tagged scalar edits also fail closed to preserve alias/tag semantics and presentation. Whole-document serializer approaches were not accepted as canonical writers. The candidate matrix and limitations are documented in [docs/V2_PHASE1_IMPLEMENTATION.md](docs/V2_PHASE1_IMPLEMENTATION.md).
+A running Paper server, LuckPerms plugin, LuckPerms storage backend, and production player corpus were not used. This is API-level implementation evidence, not live-server qualification. A later lifecycle/qualification phase must run the adapter in a disposable real server stack before support is claimed.
 
 ## Remaining risks and gates
 
-1. The MySQL `8.4.10` and MariaDB `11.8.8` CI jobs have not yet been observed in this workspace; neither backend is supported or network-safe by implication.
-2. `FileBackupService` is suitable only for quiesced/disposable SQLite files. Live WAL-mode production backup needs a coordinated checkpoint/online-backup implementation before activation.
-3. The V2 API is foundational and not yet declared stable for third-party publication.
-4. The distribution intentionally continues to bootstrap frozen V1 behavior; it is migration/build evidence, not a production V2 release.
-5. Real Paper lifecycle, provider adapters, serialized write coordination, recovery execution, and player-domain repositories remain later-phase work.
-6. Existing V1 compiler/dependency warnings remain characterization evidence and were not changed to make Phase 1 pass.
+1. V2 is not wired into the Paper plugin lifecycle, commands, setup wizard, or event ingestion. A full fresh Paper-only startup criterion is therefore only partially satisfied.
+2. Live Paper/LuckPerms lifecycle, classloader, disable/reload, storage, and offline-player behavior remain unqualified outside the proxy-backed API tests.
+3. `NEEDS_RECONCILIATION` is persisted honestly, but automated recovery/replay and operator tooling are later work; uncertain external effects must not be blindly replayed.
+4. Phase 2 validates revisioned remap plans but does not execute bulk stored-player remapping. Consequently, any removal or disablement with nonzero stored-player references remains intentionally blocked even when the operator supplies a complete plan; activation can proceed only after a separately authorized future executor has atomically remapped the rows and the reference counts reach zero.
+5. Legacy planning is synthetic/read-only. Actual production legacy migration, mapping approval, backup, and mutation remain Phase 9 work.
+6. MySQL and MariaDB containers were not run locally. Existing service-container jobs remain contract harnesses, not support claims.
+7. Live WAL-mode SQLite backup remains outside the byte-copy fixture service and requires the previously documented coordinated online-backup/checkpoint implementation.
+8. Requirements, costs, rewards, actions, prestige, currencies, seasons, competitions, commands, GUI, and branded presets remain later phases and are neither activated nor claimed.
+9. Existing frozen V1 compiler/deprecation warnings remain characterization evidence and were not changed for Phase 2.
 
-## Deviations
+## Decisions and deviations
 
-No approved safety or architecture requirement was weakened. Correction decisions D-031 and D-035 document the fail-closed YAML boundary and backup-first/retryable SQLite migration-history design. The distribution still compiles frozen V1 in place rather than moving it. External database jobs remain harness-only and intentionally carry no support claim.
+Phase 2 decisions D-036 through D-040 record the canonical stage workflow, single-adapter ladder boundary, exact LuckPerms node ownership, persisted reconciliation/uncertainty design, and the rule that remap intent cannot stand in for remap execution.
 
-## Phase 2 recommendation and stop point
+No approved safety or architecture requirement was weakened. No Phase 3+ work was implemented. The only explicit qualification limitation is environmental: real Paper/LuckPerms and MySQL/MariaDB service instances were not available or used locally, so the traceability matrix retains partial classifications for those runtime criteria.
 
-The code-level Phase 1 entry criteria for a later Phase 2 are satisfied. Proceed to Phase 2 only after:
+## Stop point
 
-1. owner acceptance of this Phase 1 handoff;
-2. one green CI run, including both external-backend harness jobs; and
-3. explicit Phase 2 authorization.
-
-Phase 2 has not begun. No production player data, production database, production configuration, production server, or LuckPerms state was accessed or modified.
+The Phase 2 owner-review correction pass and local verification are complete. Stop here for a second owner review. Do not commit, push, open a PR, merge, activate V2, touch production data, or begin Phase 3 without separate authorization.
