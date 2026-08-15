@@ -57,7 +57,7 @@ jobs:
           cmp /tmp/MaddPrestige-first.jar maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar
 
   dependency-review:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
     runs-on: ubuntu-latest
     permissions:
       contents: read

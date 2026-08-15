@@ -30,7 +30,7 @@ The default build runs unit tests, real disposable SQLite tests, V1 characteriza
 ./mvnw verify -Psecurity-audit
 ```
 
-That profile needs current vulnerability feeds and can fail independently of normal offline development. The CycloneDX SBOM includes dependency/license metadata. CI also rejects any diff to the frozen V1 `src`, `dist`, runtime fixture, or external evidence paths.
+That profile needs current vulnerability feeds and can fail independently of normal offline development. The CycloneDX SBOM includes dependency/license metadata. GitHub dependency review runs for pull requests only when the repository is public and the feature is supported. This private personal repository intentionally skips that optional GitHub-specific check; Phase 1 does not require GitHub Advanced Security. CycloneDX SBOM generation and the optional OWASP audit remain available independently. CI also rejects any diff to the frozen V1 `src`, `dist`, runtime fixture, or external evidence paths.
 
 ## YAML hard-gate evaluation
 
