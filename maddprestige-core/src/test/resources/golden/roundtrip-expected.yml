@@ -1,0 +1,14 @@
+# Primary progression document — comments and UTF-8 must survive.
+schema-version: 1
+permissions:
+  maddkraft.homes.1: false # dotted key stays one key
+stages:
+  - id: member
+    display-name: "Veteran \"Elite\""
+unknown-plugin:
+  untouched: 'keep me'
+---
+# A second MaddPrestige document in the same stream.
+locale: en_US
+message: "Hello, 世界"
+weight: 0
