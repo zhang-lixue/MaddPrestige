@@ -128,4 +128,64 @@ public final class SqliteMigrations {
                 "CREATE INDEX mp_player_stage_revision_idx ON mp_player_stage_state(config_revision_id, updated_at)")));
         return List.copyOf(migrations);
     }
+
+    public static List<Migration> phaseThree() {
+        ArrayList<Migration> migrations = new ArrayList<>(phaseTwo());
+        migrations.add(Migration.of(3, "Phase 3 requirement state and batched manual progress", List.of(
+                """
+                CREATE TABLE mp_requirement_baselines (
+                    player_uuid TEXT NOT NULL,
+                    requirement_id TEXT NOT NULL,
+                    measurement_scope TEXT NOT NULL,
+                    scope_instance TEXT NOT NULL,
+                    semantic_fingerprint TEXT NOT NULL,
+                    value_type TEXT NOT NULL,
+                    value_text TEXT NOT NULL,
+                    provider_generation INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    PRIMARY KEY (player_uuid, requirement_id, measurement_scope, scope_instance, semantic_fingerprint),
+                    CHECK (length(requirement_id) BETWEEN 1 AND 64),
+                    CHECK (length(scope_instance) BETWEEN 1 AND 64),
+                    CHECK (length(semantic_fingerprint) = 64 OR
+                           (length(semantic_fingerprint) = 69 AND semantic_fingerprint GLOB 'rsf[0-9]:[0-9a-f]*')),
+                    CHECK (provider_generation >= 1)
+                )
+                """,
+                """
+                CREATE TABLE mp_requirement_latches (
+                    player_uuid TEXT NOT NULL,
+                    requirement_id TEXT NOT NULL,
+                    measurement_scope TEXT NOT NULL,
+                    scope_instance TEXT NOT NULL,
+                    semantic_fingerprint TEXT NOT NULL,
+                    completed_at TEXT NOT NULL,
+                    PRIMARY KEY (player_uuid, requirement_id, measurement_scope, scope_instance, semantic_fingerprint),
+                    CHECK (length(requirement_id) BETWEEN 1 AND 64),
+                    CHECK (length(scope_instance) BETWEEN 1 AND 64),
+                    CHECK (length(semantic_fingerprint) = 64 OR
+                           (length(semantic_fingerprint) = 69 AND semantic_fingerprint GLOB 'rsf[0-9]:[0-9a-f]*'))
+                )
+                """,
+                """
+                CREATE TABLE mp_manual_progress (
+                    provider_id TEXT NOT NULL,
+                    metric_id TEXT NOT NULL,
+                    player_uuid TEXT NOT NULL,
+                    value_type TEXT NOT NULL,
+                    value_text TEXT NOT NULL,
+                    update_version INTEGER NOT NULL,
+                    provenance TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (provider_id, metric_id, player_uuid),
+                    CHECK (length(provider_id) BETWEEN 1 AND 64),
+                    CHECK (length(metric_id) BETWEEN 1 AND 64),
+                    CHECK (length(value_text) BETWEEN 1 AND 512),
+                    CHECK (update_version >= 0)
+                )
+                """,
+                "CREATE INDEX mp_requirement_baseline_scope_idx ON mp_requirement_baselines(player_uuid, measurement_scope, scope_instance)",
+                "CREATE INDEX mp_requirement_latch_scope_idx ON mp_requirement_latches(player_uuid, measurement_scope, scope_instance)",
+                "CREATE INDEX mp_manual_progress_player_idx ON mp_manual_progress(player_uuid, provider_id)")));
+        return List.copyOf(migrations);
+    }
 }

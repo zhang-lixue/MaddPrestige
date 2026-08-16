@@ -1,6 +1,7 @@
 package net.maddkraft.maddprestige.core.stage;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -89,6 +90,60 @@ class StageConfigurationWorkflowTest {
     }
 
     @Test
+    @DisplayName("[A05][A49] Synchronous and exceptional rank target failures become validation findings")
+    void normalizesBothRankTargetFailureShapes() {
+        for (FailureMode mode : List.of(FailureMode.SYNCHRONOUS, FailureMode.ASYNCHRONOUS)) {
+            ProviderRegistry providers = new ProviderRegistry();
+            var registration = providers.register("test-owner", new CatalogAdapter(Set.of("existing"), mode));
+            providers.activate(registration);
+
+            var candidate = new StageConfigurationWorkflow(new ConfigurationService())
+                    .prepare(draft("existing"), Map.of(), Optional.empty(), providers)
+                    .toCompletableFuture().join();
+
+            assertTrue(candidate.validation().findings().stream().anyMatch(finding ->
+                    finding.code().equals("stage.rank_targets.unavailable")), mode.name());
+        }
+    }
+
+    @Test
+    @DisplayName("[D-047] Atomic active snapshots retain exact pins and failed replacement leaves them unchanged")
+    void activeSnapshotRetainsExactProviderPins() {
+        ProviderRegistry providers = new ProviderRegistry();
+        CatalogAdapter first = new CatalogAdapter(Set.of("existing"));
+        var firstRegistration = providers.register("test-owner", first);
+        providers.activate(firstRegistration);
+        StageConfigurationWorkflow workflow = new StageConfigurationWorkflow(new ConfigurationService());
+        var candidate = workflow.prepare(draft("existing"), Map.of(), Optional.empty(), providers)
+                .toCompletableFuture().join();
+        long validatedGeneration = candidate.providerGenerations().get(new ProviderId("rank_provider"));
+        workflow.apply(new ConfigRevisionId("revision_1"), candidate, acknowledgements(candidate), backup(),
+                providers);
+        ActiveStageConfiguration active = workflow.activeCanonical().orElseThrow();
+        assertEquals(validatedGeneration,
+                active.phaseThree().providerGenerations().get(new ProviderId("rank_provider")));
+        assertEquals(active.stages().revisionId(), active.phaseThree().revisionId());
+
+        providers.unregister(firstRegistration);
+        var replacement = providers.register("test-owner", new CatalogAdapter(Set.of("existing")));
+        providers.activate(replacement);
+        assertEquals(validatedGeneration, workflow.activePhaseThree().orElseThrow().providerGenerations()
+                .get(new ProviderId("rank_provider")), "active pins cannot follow the mutable registry");
+
+        var staleCandidate = workflow.prepare(draft("existing"), Map.of(), Optional.empty(), providers)
+                .toCompletableFuture().join();
+        providers.deactivate(replacement);
+        assertThrows(IllegalStateException.class, () -> workflow.apply(new ConfigRevisionId("revision_2"),
+                staleCandidate, acknowledgements(staleCandidate), backup(), providers));
+        assertEquals(active, workflow.activeCanonical().orElseThrow(),
+                "failed apply must preserve the prior atomic stage/Phase 3 snapshot and pins");
+        assertThrows(IllegalArgumentException.class, () -> new ActiveStageConfiguration(active.stages(),
+                new net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot(
+                        new ConfigRevisionId("mixed"), active.phaseThree().configuration(),
+                        active.phaseThree().providerGenerations())));
+    }
+
+    @Test
     @DisplayName("[A69] Zero-reference removal proceeds only after normal semantic acknowledgement")
     void zeroReferenceRemovalUsesNormalApplyRules() {
         ProviderRegistry providers = new ProviderRegistry();
@@ -151,9 +206,15 @@ class StageConfigurationWorkflowTest {
 
     private static final class CatalogAdapter implements RankAdapter {
         private final Set<String> groups;
+        private final FailureMode failureMode;
 
         private CatalogAdapter(Set<String> groups) {
+            this(groups, FailureMode.NONE);
+        }
+
+        private CatalogAdapter(Set<String> groups, FailureMode failureMode) {
             this.groups = groups;
+            this.failureMode = failureMode;
         }
 
         @Override
@@ -169,6 +230,12 @@ class StageConfigurationWorkflowTest {
 
         @Override
         public java.util.concurrent.CompletionStage<Result<Set<String>>> validateTargets(Set<String> groupNames) {
+            if (failureMode == FailureMode.SYNCHRONOUS) {
+                throw new IllegalStateException("synchronous target outage");
+            }
+            if (failureMode == FailureMode.ASYNCHRONOUS) {
+                return CompletableFuture.failedFuture(new IllegalStateException("asynchronous target outage"));
+            }
             return CompletableFuture.completedFuture(Result.success(groups));
         }
 
@@ -182,5 +249,11 @@ class StageConfigurationWorkflowTest {
         public java.util.concurrent.CompletionStage<Result<RankProjectionResult>> project(RankProjectionRequest request) {
             throw new UnsupportedOperationException();
         }
+    }
+
+    private enum FailureMode {
+        NONE,
+        SYNCHRONOUS,
+        ASYNCHRONOUS
     }
 }

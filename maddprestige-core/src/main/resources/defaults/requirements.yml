@@ -1,0 +1,6 @@
+# Phase 3 generic requirement/cost definitions. Empty defaults keep progression inert.
+schema-version: 3
+maximum-depth: 16
+requirements: {}
+trees: {}
+costs: {}
