@@ -1,0 +1,265 @@
+MaddPrestige V2 Phase 5 — THIRD OWNER REVIEW SUMMARY
+Correction Pass 2
+Generated: 2026-08-16 (America/Los_Angeles)
+
+REPOSITORY STATE
+Accepted starting baseline: 38cde9a084712a3f8c06edb0e77dc31333204374
+Branch: v2/phase-5
+Current HEAD: 38cde9a084712a3f8c06edb0e77dc31333204374
+Main HEAD: 38cde9a084712a3f8c06edb0e77dc31333204374
+Main status: clean
+Index/staged paths: 0
+All Phase 5 implementation and both correction passes remain unstaged and uncommitted.
+No commit, push, PR, merge, main modification, Phase 6 work, or Phase 7 work occurred.
+
+CORRECTION PASS 2 EXACT FILE DELTA AGAINST THE SECOND OWNER-REVIEW BUNDLE (20)
+Modified (17):
+- DECISIONS.md
+- STATUS.md
+- docs/V2_ARCHITECTURE.md
+- docs/V2_PHASE5_FILE_MANIFEST.md
+- docs/V2_PHASE5_IMPLEMENTATION.md
+- docs/V2_TRACEABILITY.md
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/IntegrationProviderLifecycle.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/MutableProviderHealth.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoAdjustedXpListener.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoMetricProvider.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/PlaceholderInputMetricProvider.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyBinding.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/McMmoAndPlaceholderProviderTest.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveConfigurationAndLifecycleTest.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveCorrectionPassTest.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/ShopAndMcMmoEventContractTest.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/VaultEconomyProviderTest.java
+Added (3):
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/ProviderRegistrationGate.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveOutageHardeningTest.java
+- PHASE5_THIRD_OWNER_REVIEW_SUMMARY.txt
+
+AUTHORITATIVE PROVIDER ACTIVATION / HEALTH MODEL
+Registry ActivationState and operational ProviderHealthState are independent:
+1. dependency acquisition/probe establishes the initial operational health;
+2. discover registers the provider INACTIVE and binds its exact registration gate,
+   but never rewrites operational health;
+3. configuration reconciliation changes only registry activation to the exact desired
+   set; it never changes MutableProviderHealth;
+4. config disable/re-enable therefore preserves NOT_INSTALLED, INACTIVE, DEGRADED,
+   UNSUPPORTED, UNAVAILABLE, or UNHEALTHY without fabricated recovery;
+5. only AVAILABLE and ACTIVE are usable by Phase 5 provider-local gates, matching the
+   canonical Phase 3/4 rule;
+6. an explicit successful probe may call dependencyRecovered for the exact current
+   ProviderRegistration and transition that binding to AVAILABLE;
+7. dependency unregister transitions the old binding to UNAVAILABLE and removes its
+   exact token/generation; stale recovery and stale gates reject;
+8. successful reacquisition supplies a newly healthy provider/gate and registration.
+
+Configuration remove/add and unchanged desired reconciliation retain the same registry
+token and generation. Exact same-binding recovery also retains generation. Only actual
+unregister/rebind advances generation. The regression matrix proves AVAILABLE/ACTIVE
+normal activation, every unusable state remaining unchanged through desired and off/on
+transitions, explicit recovery, unchanged generation, unregister/rebind generation +1,
+stale rejection, dormant outage isolation, and compiled config -> plan -> lifecycle ->
+canonical RequirementMetricCollector blocking with zero provider reads while unhealthy.
+
+CANONICAL USABLE-HEALTH PREDICATE
+MutableProviderHealth.isUsable is the single Phase 5 provider-local allowlist:
+- AVAILABLE: usable
+- ACTIVE: usable
+- NOT_INSTALLED: blocked
+- INACTIVE: blocked
+- DEGRADED: blocked
+- UNSUPPORTED: blocked
+- UNAVAILABLE: blocked
+- UNHEALTHY: blocked
+
+Vault, mcMMO and Placeholder input use this predicate. Canonical core consumption still
+independently requires exact generation plus ACTIVE registry activation and AVAILABLE or
+ACTIVE health. No provider-local blacklist remains in the new Phase 5 providers.
+
+PLACEHOLDER REFRESH OUTAGE GATE
+PlaceholderInputMetricProvider requires a health-bound gate for provider ID
+placeholder_input. ProviderRegistrationGate binds exactly once to the registry token and
+generation returned by registration. The scheduled refresh task itself calls allowsUse
+before each PlaceholderAPI resolver call and again before caching the returned value; the
+check is not only performed before scheduling.
+Tests prove:
+- healthy refresh: exactly one resolver call;
+- unhealthy before scheduling: zero resolver calls;
+- healthy when scheduled, unhealthy before deferred execution: zero resolver calls;
+- unavailable: zero resolver calls;
+- unregistered/rebound old task: zero resolver calls;
+- outage during a multi-input resolver call: returned value discarded and remaining
+  resolver calls suppressed;
+- new valid generation: refresh resumes;
+- failed/gated refresh does not mutate requirement state or replace cache;
+- prior cache remains deterministic and becomes readable after legitimate recovery if
+  still fresh.
+
+MCMO EXACT-REGISTRATION EVENT GATE
+McMmoAdjustedXpListener no longer accepts BooleanSupplier. Its constructor requires a
+ProviderRegistrationGate and rejects a gate for any provider other than mcmmo. For every
+event, the gate requires the exact bound token/generation to remain current, registry
+activation ACTIVE, and operational health AVAILABLE/ACTIVE before the authenticated
+ManualMetricHandle can increment.
+
+Generation-1 healthy events credit exactly once. UNHEALTHY, UNAVAILABLE, DEGRADED,
+config deactivation and dependency unregister reject with zero additional progression.
+After generation-2 rebind, the old listener still rejects and the new current listener
+accepts. Explicit same-binding recovery resumes only after its successful probe. Existing
+cancelled-event protection remains and the separate manual adjusted-XP descriptor remains
+monotonic.
+
+MCMO CURRENT METRIC METADATA
+skill_level and power_level are authoritative external CURRENT absolute observations.
+Both descriptors now use MetricMonotonicity.NON_MONOTONIC and
+MetricResetPolicy.NOT_APPLICABLE. Tests read higher skill/power values followed by lower
+valid values and accept both as AVAILABLE current samples. No false monotonic reset or
+reconciliation claim remains. This change does not affect official ExperienceAPI reads or
+the distinct monotonic accumulated adjusted-XP manual metric.
+
+ADDITIONAL NARROW-AUDIT FINDING
+VaultEconomyBinding previously evaluated Economy.isEnabled() before operational health.
+The order is corrected: non-usable health short-circuits before any Vault API call. The
+complete health-state matrix proves all six unusable states make zero provider calls,
+while AVAILABLE and ACTIVE retain exact one-call execution behavior. No other Phase 5
+correctness defect was found in the mandatory lifecycle/provider/config/listener/cache/
+Maven/documentation audit.
+
+ACCEPTANCE / TRACEABILITY
+A48 Satisfied — official current mcMMO values accept decreases and truthfully advertise
+                 NON_MONOTONIC / NOT_APPLICABLE metadata.
+A49 Satisfied — adjusted-XP persistent mutation requires the exact current active healthy
+                 registration; stale, outage, config-off and cancelled paths are zero.
+A50 Satisfied — activation cannot heal health; full state/toggle/canonical-consumer,
+                 explicit recovery, stable generation and rebind generation proofs pass.
+A51 Satisfied — Vault complete health allowlist blocks before API calls; coherent/mixed
+                 preflight, exact decimal and uncertainty behavior remain proven.
+A52 Satisfied — PAPI output remains bounded immutable cache-only per render.
+A53 Satisfied — scheduled-task exact registration/health checks block outage races and
+                 stale generations before resolver calls; cache and recursion proofs pass.
+A54 Satisfied — QuickShop remains public-event compatibility with no progression handle
+                 and hard zero credit; EconomyShopGUI remains diagnostics-only zero credit.
+A24 remains Satisfied. Canonical totals remain 35 Satisfied, 33 Partial, and 8 Later.
+Phase 0–4 classifications did not change and no acceptance count was inflated.
+
+REAL API CONTRACT RESULTS
+- VaultAPI 1.7.1 / VaultUnlocked 2.20.2: PASS; real Economy signatures compile.
+- mcMMO 2.2.053: PASS; real ExperienceAPI and final XP event signatures compile.
+- PlaceholderAPI 2.12.2 (2.12.3 surface checked): PASS; resolver/expansion compile.
+- EconomyShopGUI API 1.10.1 / runtime 7.2.0 surface: PASS; event contract compiles.
+- QuickShop API/runtime 6.2.0.11: PASS; post-success event contract compiles.
+Focused integration contract module: 53 tests, 0 failures/errors/skips.
+Focused Paper boundary: 8 tests, 0 failures/errors/skips.
+
+FULL VERIFICATION — TWO CONSECUTIVE CLEAN RUNS
+Command: .\mvnw.cmd --no-transfer-progress clean verify
+Reactor: 8/8 modules SUCCESS on both runs
+Tests: 263
+Suites: 61
+Failures: 0
+Errors: 0
+Skips: 0
+New Phase 5 tests: 49 (46 integration, 3 Paper PlaceholderAPI)
+Correction pass 2 regressions added: 12 in one new suite
+Checkstyle: 7 reports, 0 violations
+Maven Enforcer Java/Maven version rules: PASS
+Dependency convergence: PASS
+Duplicate dependency-version rule: PASS
+JaCoCo: 7 XML reports generated
+CycloneDX: aggregate spec 1.6, 67 components, all five API coordinates present
+Optional plugin API classes shaded into distribution: 0
+Distribution SHA-256, identical both runs:
+  E8F91C7DA78000849D5CD291108680ACCA1B281D948858FA9A10882393D612DA
+Aggregate SBOM SHA-256, identical both runs:
+  9A0CD953432F5682AE723B2ABA954A93B4D4B6DA0197E1742E5A89F20496FFEE
+Reproducibility: PASS for distribution and aggregate SBOM across both clean runs.
+
+STATIC / SECURITY / ARCHITECTURE AUDITS
+git diff --check: clean
+Untracked trailing whitespace: 0
+Protected V1 tracked/untracked changes under src, baseline/v1, dist: 0
+Plugin-specific imports in generic API/core/persistence/testkit: 0
+Reflection in Phase 5 production: 0
+Process execution in Phase 5 production: 0
+Command-scraping pseudo-API in Phase 5 production: 0
+Direct third-party DB/file access in Phase 5 production: 0
+Dynamic SQL introduced by Phase 5: 0
+Unsafe public authorization routes introduced by Phase 5: 0
+LuckPerms group-creation paths: 0
+TODO/FIXME/HACK in Phase 5 scope: 0
+TeaLeaf/MADDHATTER in V2 modules: 0
+Phase 6 production leakage: 0
+Phase 7/deferred integration production leakage: 0
+MaddKraft literal findings: 1 expected Placeholder expansion author metadata, 0 gameplay coupling
+EconomyShopGUI/QuickShop progression handles or mutation paths: 0
+Optional plugin API package entries in shaded artifact: 0
+Main remains clean and exact at the accepted SHA.
+
+MANIFEST / THIRD REVIEW BUNDLE
+Declared changed/new repository paths: 47
+Actual changed/new repository paths: 47
+Manifest missing paths: 0
+Manifest extra paths: 0
+Relevant unchanged review contracts: 22
+Bundle includes all 47 changed/new files, all 22 contracts, the aggregate SBOM,
+verified distribution, 61 Surefire XML reports, 7 JaCoCo XML reports, and 7
+Checkstyle reports. Bundle declared/actual inventory: 146 / 146 files; missing,
+extra, and duplicate counts: 0 / 0 / 0.
+Bundle: target\MaddPrestige_Phase5_Third_Owner_Review.zip
+
+EXACT FINAL GIT STATUS / CHANGED PATHS (47)
+ M DECISIONS.md
+ M STATUS.md
+ M docs/V2_ARCHITECTURE.md
+ M docs/V2_TRACEABILITY.md
+ M maddprestige-distribution/pom.xml
+ M maddprestige-integrations/pom.xml
+ M maddprestige-platform-paper/pom.xml
+ M pom.xml
+?? PHASE5_OWNER_REVIEW_SUMMARY.txt
+?? PHASE5_SECOND_OWNER_REVIEW_SUMMARY.txt
+?? PHASE5_THIRD_OWNER_REVIEW_SUMMARY.txt
+?? docs/V2_PHASE5_FILE_MANIFEST.md
+?? docs/V2_PHASE5_IMPLEMENTATION.md
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/IntegrationProviderLifecycle.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/IntegrationTaskScheduler.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/MutableProviderHealth.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/ProviderRegistrationGate.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationCompilation.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationCompiler.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationConfiguration.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationPlan.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationSchema.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/economyshopgui/EconomyShopGuiCompatibilityListener.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoAdjustedXpListener.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoExperienceAccess.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoMetricProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/OfficialMcMmoExperienceAccess.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/OfficialPlaceholderResolver.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/PlaceholderInputMetricProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/PlaceholderResolver.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/quickshop/QuickShopCompatibilityListener.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultBalanceMetricProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyBinding.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyCostProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyRewardProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultProviderDescriptors.java
+?? maddprestige-integrations/src/main/resources/integrations.yml
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/McMmoAndPlaceholderProviderTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveConfigurationAndLifecycleTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveCorrectionPassTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveOutageHardeningTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/ShopAndMcMmoEventContractTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/VaultEconomyProviderTest.java
+?? maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderCache.java
+?? maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderExpansion.java
+?? maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderSnapshot.java
+?? maddprestige-platform-paper/src/test/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderExpansionTest.java
+
+LIMITATION DISCLOSURE
+No live Paper server or installed plugin implementation was mutated or started. Real
+published API artifacts and contract tests prove MaddPrestige's public-boundary usage.
+V2 runtime composition remains deliberately disconnected from protected V1 until its
+authorized later composition phase. This is not represented as live-server qualification.
+
+PHASE 5 CORRECTION PASS 2 COMPLETE — STOPPED FOR THIRD OWNER REVIEW

@@ -1,88 +1,94 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 4 correction pass 2 implemented; third owner review pending
+**Current phase:** Phase 5 correction pass 2 complete; stopped for third owner review
+
 **Last updated:** 2026-08-16
-**Branch:** `v2/phase-4`
-**Starting baseline:** `64b568b7c8da6e9c750003bbcb4b6950aa58b1fe`
-**Worktree:** intentionally uncommitted
+
+**Branch:** `v2/phase-5`
+
+**Starting baseline/current HEAD:** `38cde9a084712a3f8c06edb0e77dc31333204374`
+
+**Worktree:** intentionally unstaged and uncommitted
 
 ## Outcome
 
-Phase 4 implements the generic Prestige lifecycle, exact internal currency ledger and cost/reward adapters, deterministic entitlement merge engine, transaction-bound Prestige milestones, one-active archived season lifecycle, complete normal/Prestige stage-history writes, and bounded operation recovery. Canonical `lifecycle.yml` compilation/schema/semantic/provider validation and same-revision Phase 4 snapshots extend the accepted configuration machinery. Season policy exposes only truthful `season-progress` RESET/PRESERVE semantics; unrelated components and invalid values fail closed.
+Phase 5 implements optional real public-API boundaries for Vault, mcMMO, PlaceholderAPI, EconomyShopGUI and QuickShop-Hikari while preserving the generic Phase 2–4 provider registry, health, activation, generation and canonical authorization architecture. `integrations.yml` schema 5 is strict and dormant by default: every present configuration object must be a mapping, primitives retain their declared YAML types, Placeholder input keys use canonical `MetricId`, and malformed paths fail actionably rather than becoming disabled defaults. Registry activation is now strictly configuration reachability and mutable health is strictly operational truth. Discovery/config reconciliation never promote health; removal/re-addition preserves every outage state and unchanged bindings keep their generation. Exact successful recovery restores only the current binding, while unregister/rebind advances generation. Only `AVAILABLE` and `ACTIVE` are usable. Unrelated dormant integrations remain isolated.
 
-Prestige authorization is intent-only and returns an exact zero-mutation confirmation model. Opaque authority binds every consequential field. Reachable required providers must be active, healthy, and generation-pinned. Execution is journal-first and orders costs → full post-cost binding recheck → managed external rank projection → atomic internal state/scope/currency/milestone/history commit → rewards. Native effects use sealed configuration provenance plus SQLite transaction/CAS/idempotency. Exact persisted native actions can recover safely; mixed native/external recovery may compensate known native effects but cannot terminally claim `COMPENSATED` while any external cost remains uncertain.
+Vault supplies separate cost/reward/balance providers over one immutable service binding, controlled server-thread scheduling, exact decimal representability, coherent player/operation/revision/generation aggregate zero-mutation preflight and truthful external uncertainty. Mixed batches and non-usable health fail before any Vault call. mcMMO public current skill/power metrics are truthfully non-monotonic and externally owned. Final-event cumulative XP still uses the existing authenticated/batched monotonic manual provider, but every mutation now requires an exact active healthy registration generation. PlaceholderAPI output remains a bounded immutable cache-only expansion; input refresh rechecks exact registration/activation/health inside the scheduled task, so outage races and stale generations make zero PAPI calls. Requirement reads never invoke PAPI. Every Placeholder token is checked against the `maddprestige` expansion identifier case-insensitively.
 
-The frozen V1 distribution bootstrap remains active; V2 Phase 4 remains deliberately inactive and disconnected from production configuration/player data. Defaults enable neither Prestige nor competition and define no currencies, entitlements, milestones or seasons. No Phase 5 integration, Phase 6 UI/command administration, Phase 7 server feature, or Phase 8 public SDK was started.
+EconomyShopGUI progression is intentionally deferred because its scalar/multi-price events can represent incomparable Vault money, XP, levels, items, points and custom economies. Its verified official post-event remains optional diagnostics-only with no progression handle and hard zero credit. QuickShop is likewise compatibility-only: it owns no progression provider/handle and every observed transaction receives hard zero credit. Configuration attempting to enable either shop progression path is rejected. PlayTimeManager remains deferred because its tested artifact offers no needed dedicated public service and the existing Paper statistic provider is more authoritative.
+
+The frozen V1 production bootstrap/plugin descriptor remains active and unchanged. V2 adapters remain implementation-ready/testable but disconnected from runtime composition. No Phase 6 command/UI/bootstrap administration or Phase 7 plugin scope was started.
 
 ## Acceptance classification
 
 | Acceptance | Classification | Evidence summary |
 |---|---|---|
-| A27 | Satisfied | Exact structured reset/preserve confirmation matches accepted execution; zero mutation, opaque authority, tamper rejection |
-| A28 | Satisfied | Arbitrary required/reset stage IDs; unknown/disabled/ineligible fails closed |
-| A29 | Satisfied | Finite/unlimited/off-by-one plus all counter/revision overflow gates before async mutation and persisted stale-concurrent CAS |
-| A30 | Satisfied | Stable-ID exact currency, plan-bound provenance, cross-instance SQLite serialization/retry, and semantic replay identity binding actor UUID/name/source/reason |
-| A31 | Satisfied | Deterministic typed `MAX`: 1, 15, 8 → exactly 15 |
-| A32 | Satisfied | Exact bounded deterministic `SUM`; overflow/type/duplicate rejection |
-| A33 | Satisfied | Truthful season-only policy, transactional ACTIVE entry, immutable archived progress, RESET/PRESERVE, race/fault/restart proofs |
-| A34 | Satisfied | Disabled/default-off boundary exposes no service/command/UI; enabled unsupported config fails |
-| A58 | Satisfied | Phase 4 state, ledger, milestone, immutable season history/baselines and both stage-history sources with actor UUID reload |
-| A59 | Satisfied | Exact native replay/compensation plus mixed-cost restart recovery avoid duplicate effects and terminal overclaim |
-| A60 | Satisfied | External reward and mixed pre-commit cost uncertainty remain reconcilable and are never blindly replayed |
-| A16 | Partial | Engine + persistence lifecycle semantics are implemented and restart-tested; production runtime composition remains later |
-| A17 | Partial | Engine + persistence lifecycle semantics are implemented and restart-tested; production runtime composition remains later |
+| A24 | Satisfied | Real Vault coherent aggregate preflight is zero-write and mixed batches make zero calls; one authorized execute makes one exact debit; generic journal blocks duplicate authority |
+| A48 | Satisfied | Real mcMMO 2.2.053 current values accept decreases; metadata is `NON_MONOTONIC`/`NOT_APPLICABLE` |
+| A49 | Satisfied | Official final XP event requires exact active healthy registration; stale/outage/config-off listeners cannot mutate |
+| A50 | Satisfied | Config activation cannot heal outages; full state/toggle/canonical-consumer/recovery/rebind matrix passes |
+| A51 | Satisfied | Complete Vault health allowlist blocks before API calls; coherent/mixed preflight and uncertainty remain truthful |
+| A52 | Satisfied | Official persistent expansion performs immutable bounded cache lookup only; repeated-render proof |
+| A53 | Satisfied | Scheduled-task registration/health gate blocks outage races and stale generations before resolver calls; cache/recursion semantics retained |
+| A54 | Satisfied | Real QuickShop success event compatibility with no progression capability and compiler-enforced zero default credit |
 
-A14/A15/A16/A17 remain Partial because the tested V2 lifecycle services are not composed into the frozen production runtime. A24 remains Partial pending real Vault work in Phase 5. A34 does not claim the full optional competition engine.
+Canonical traceability totals are 35 Satisfied, 33 Partial and 8 Later. Earlier accepted classifications remain unchanged except A24 and A48–A54, whose new evidence is described in `docs/V2_TRACEABILITY.md`.
 
-## Persistence and safety
+## Public artifacts and supported roles
 
-Migration 4 adds:
+- VaultAPI 1.7.1 against VaultUnlocked 2.20.2: `CostProvider`, `RewardProvider`, balance `MetricProvider`;
+- mcMMO 2.2.053: skill/power `MetricProvider`, adjusted-XP manual event source;
+- PlaceholderAPI 2.12.2 (2.12.3 surface checked): output expansion, optional generic input `MetricProvider`;
+- EconomyShopGUI API 1.10.1, binary-checked against runtime 7.2.0: compatibility diagnostics only; progression deferred;
+- QuickShop API/runtime 6.2.0.11: compatibility/self-transaction diagnostics only;
+- PlayTimeManager 3.6.5: explicitly deferred/unnecessary.
 
-- `mp_player_prestige_state` and `mp_prestige_operation_details`;
-- `mp_currency_ledger` over the existing exact account table;
-- `mp_stage_history` and `mp_prestige_history`;
-- `mp_milestone_awards`;
-- `mp_seasons`, `mp_player_season_state`, and `mp_season_history`;
-- `mp_prestige_recovery_costs` and `mp_prestige_recovery_rewards`;
-- `mp_recovery_events`;
-- player/history/recovery/season indexes and a one-active-season partial unique index.
-
-Migration 5 adds nullable `mp_stage_history.actor_uuid`; normal rank-up and Prestige-reset history preserve the complete optional actor identity across reopen while legacy UUID-less rows remain valid.
-
-Every new SQL value is bound through prepared statements. Query text is static; the only fragments composed are compile-time column constants. History and recovery reads are bounded to 1–1000. No world/PvP/Court ownership, filesystem/process execution, reflection, direct mutable global player state, or generic command reset was added.
-
-## Competition decision
-
-The broader generic competition framework is Later. Phase 4 implements only the safely disabled A34 boundary. Unsupported enabled configuration is rejected, and disabled configuration exposes no active competition behavior. No named legacy competition concept exists in V2 production code.
+All external dependencies are `provided`; wildcard transitive exclusions are used for implementation-heavy API graphs. The shaded distribution contains zero classes under the Vault, mcMMO, PlaceholderAPI, EconomyShopGUI or QuickShop package prefixes.
 
 ## Verification
 
-Two consecutive stabilized `.\mvnw.cmd --no-transfer-progress clean verify` runs completed successfully after Correction Pass 2 and the final test-surface audit.
+Two consecutive `.\mvnw.cmd --no-transfer-progress clean verify` runs completed successfully after correction pass 2 stabilization.
 
-- 214 tests in 54 suites; 0 failures, 0 errors, 0 skipped;
+- 263 tests in 61 suites; 0 failures, 0 errors, 0 skipped;
+- 49 new Phase 5 tests: 46 integration tests and 3 Paper PlaceholderAPI tests;
+- correction pass 2 adds 12 focused regression tests in one new suite;
+- focused integration contract module: 53 tests, 0 failures/errors/skips;
+- real artifact contracts compiled/tested for VaultAPI 1.7.1, mcMMO 2.2.053, PlaceholderAPI 2.12.2, EconomyShopGUI API 1.10.1 and QuickShop API 6.2.0.11;
 - Checkstyle: 7 reports, 0 violations;
-- Maven Enforcer, Java/Maven version rules, dependency convergence, and duplicate dependency-version rules passed in both full reactor runs;
-- 7 JaCoCo XML module reports generated;
-- aggregate CycloneDX 1.6 `target/bom.json` generated with 74 components;
-- distribution SHA-256 was identical across both clean runs: `583707DB22B011070E5C2859A2D12660CCC82D9AA3776903E7C0D070FB5A6E31`;
-- aggregate SBOM SHA-256 was identical across both clean runs: `E3511E94784E0E7793920A530A0D391ED815C8D9483B5C57D1F1CD80ABFDE296`;
-- `git diff --check`: clean; untracked trailing-whitespace scan: clean;
-- protected V1 comparison against `64b568b7c8da6e9c750003bbcb4b6950aa58b1fe`: 0 tracked or untracked changed paths;
-- 98 changed Phase 4 production files scanned: 0 hardcoded MaddKraft gameplay names, TeaLeaf/MADDHATTER concepts, LuckPerms group-creation paths, Phase 5 imports, world/PvP/Court ownership, reflection/process execution, TODO/FIXME/HACK markers, or mutable static player-state fields;
-- 22 changed persistence production files: 60 prepared-statement call sites, 0 `createStatement` calls, 0 JDBC execute methods receiving caller SQL; three query declarations concatenate only private compile-time `COLUMNS` constants;
-- unsafe authorization route audit: executor and direct Prestige persistence boundary both require the exact opaque canonical seal before journal insertion; tampered direct insertion has a zero-row regression;
-- performance/storage review: bounded 1–1000 history/recovery reads, indexed recovery/history shapes, no SQL-per-progress-event path, unbounded cache/queue, hot full-table leaderboard scan, or O(all players) Prestige work;
-- Phase 4 manifest: 121 actual paths, 121 declared paths, delta 0;
-- branch/HEAD: `v2/phase-4` at `64b568b7c8da6e9c750003bbcb4b6950aa58b1fe`; all Phase 4 work remains unstaged and uncommitted.
+- Maven Enforcer Java/Maven version, dependency convergence and duplicate dependency-version rules: PASS;
+- JaCoCo: 7 XML module reports generated;
+- aggregate CycloneDX 1.6: `target/bom.json`, 67 components including every Phase 5 API coordinate;
+- distribution SHA-256, identical on both final clean runs: `E8F91C7DA78000849D5CD291108680ACCA1B281D948858FA9A10882393D612DA`;
+- aggregate SBOM SHA-256, identical on both clean runs: `9A0CD953432F5682AE723B2ABA954A93B4D4B6DA0197E1742E5A89F20496FFEE`;
+- optional API package entries in shaded distribution: 0.
+
+## Static/security audit
+
+- `git diff --check`: clean after final documentation normalization;
+- protected V1 comparison against `38cde9a084712a3f8c06edb0e77dc31333204374`: 0 tracked/untracked changed paths under `src`, `baseline/v1` or `dist`;
+- concrete plugin imports in generic API/core/persistence/testkit: 0;
+- integration production reflection, process execution, command scraping, direct plugin SQL/file access: 0;
+- TeaLeaf/MADDHATTER names, LuckPerms group-creation calls, TODO/FIXME/HACK markers: 0;
+- Phase 6 and Phase 7/deferred integration production leakage: 0;
+- MaddKraft-name scan: one expected PlaceholderAPI expansion author metadata value, no gameplay/rank coupling;
+- EconomyShopGUI and QuickShop progression mutation/provider/handle paths: 0; hard returned credits: 0;
+- malformed mapping/type coercion paths silently accepted: 0 across the required root/nested regression matrix;
+- lifecycle outage states fabricated healthy by config activation/toggle: 0 across the complete state matrix;
+- stale/outage Placeholder resolver calls and stale/outage mcMMO event mutations: 0;
+- simulation/preflight external mutations: 0; mixed Vault batches also make 0 provider calls;
+- unsafe public authorization route and dynamic SQL: unchanged accepted Phase 4 boundaries; Phase 5 adds neither persistence nor an authorization issuer.
 
 ## Owner handoff
 
+- `docs/V2_PHASE5_IMPLEMENTATION.md`
+- `docs/V2_PHASE5_FILE_MANIFEST.md`
 - `docs/V2_ARCHITECTURE.md`
-- `docs/V2_PHASE4_IMPLEMENTATION.md`
 - `docs/V2_TRACEABILITY.md`
-- `docs/V2_PHASE4_FILE_MANIFEST.md`
 - `DECISIONS.md`
-- `target/PHASE4_THIRD_OWNER_REVIEW_SUMMARY.txt`
-- `target/MaddPrestige_Phase4_Third_Owner_Review.zip` (created after final verification)
+- `PHASE5_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE5_SECOND_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE5_THIRD_OWNER_REVIEW_SUMMARY.txt`
+- `target/MaddPrestige_Phase5_Third_Owner_Review.zip`
 
-No file has been staged, committed, pushed or submitted as a PR.
+No file has been staged, committed, pushed or submitted as a PR. Main remains clean at the accepted SHA.

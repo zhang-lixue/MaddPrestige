@@ -1,0 +1,17 @@
+schema-version: 5
+vault:
+  enabled: false
+mcmmo:
+  enabled: false
+placeholderapi:
+  output:
+    enabled: false
+  inputs: {}
+economyshopgui:
+  compatibility-enabled: false
+  progression-credit:
+    enabled: false
+quickshop:
+  compatibility-enabled: false
+  progression-credit:
+    enabled: false
