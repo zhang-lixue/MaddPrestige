@@ -16,6 +16,7 @@ import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.PlayerStageRepository;
 import net.maddkraft.maddprestige.persistence.StalePlayerStageStateException;
+import net.maddkraft.maddprestige.persistence.StageHistoryRecord;
 import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 
 public final class SqlitePlayerStageRepository implements PlayerStageRepository {
@@ -99,6 +100,65 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
     }
 
     @Override
+    public void updateAndAppendHistory(
+            PlayerStageState replacement,
+            long expectedRevision,
+            StageHistoryRecord history) {
+        if (!history.playerId().equals(replacement.playerId())
+                || !history.stageId().equals(replacement.stageId())
+                || !history.configRevision().equals(replacement.configRevision())
+                || !history.enteredAt().equals(replacement.stageEnteredAt())) {
+            throw new IllegalArgumentException("Stage history must describe the exact replacement state");
+        }
+        if (replacement.stateRevision() != Math.addExact(expectedRevision, 1)) {
+            throw new IllegalArgumentException("Replacement revision must increment expected revision exactly once");
+        }
+        try (Connection connection = connections.open()) {
+            connection.setAutoCommit(false);
+            try {
+                update(connection, replacement, expectedRevision);
+                insertHistory(connection, history);
+                connection.commit();
+            } catch (SQLException | RuntimeException exception) {
+                connection.rollback();
+                throw exception;
+            }
+        } catch (StalePlayerStageStateException exception) {
+            throw exception;
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not atomically update stage and append history", exception);
+        }
+    }
+
+    @Override
+    public java.util.List<StageHistoryRecord> history(UUID playerId, int limit) {
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("Stage history limit must be 1-1000");
+        }
+        String sql = "SELECT stage_id, entered_at, operation_id, actor_type, actor_uuid, actor_name, reason, "
+                + "config_revision_id FROM mp_stage_history WHERE player_uuid = ? "
+                + "ORDER BY entered_at DESC, history_id LIMIT ?";
+        java.util.ArrayList<StageHistoryRecord> result = new java.util.ArrayList<>();
+        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setInt(2, limit);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    result.add(new StageHistoryRecord(playerId, new StageId(rows.getString(1)),
+                            Instant.parse(rows.getString(2)),
+                            new net.maddkraft.maddprestige.api.id.OperationId(UUID.fromString(rows.getString(3))),
+                            new net.maddkraft.maddprestige.api.operation.Actor(rows.getString(4),
+                                    Optional.ofNullable(rows.getString(5)).map(UUID::fromString), rows.getString(6)),
+                            rows.getString(7), new ConfigRevisionId(rows.getString(8))));
+                }
+            }
+            return java.util.List.copyOf(result);
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load stage history", exception);
+        }
+    }
+
+    @Override
     public Map<StageId, Long> countByStage() {
         String sql = "SELECT stage_id, COUNT(*) FROM mp_player_stage_state GROUP BY stage_id ORDER BY stage_id";
         LinkedHashMap<StageId, Long> counts = new LinkedHashMap<>();
@@ -120,6 +180,54 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
             return statement.executeUpdate() == 1;
         } catch (SQLException exception) {
             throw new PersistenceException("Could not insert player stage state", exception);
+        }
+    }
+
+    private static void update(
+            Connection connection,
+            PlayerStageState replacement,
+            long expectedRevision) throws SQLException {
+        String sql = "UPDATE mp_player_stage_state SET stage_id = ?, state_revision = ?, config_revision_id = ?, "
+                + "stage_entered_at = ?, updated_at = ?, last_reconciled_at = ?, last_provider_generation = ?, "
+                + "imported_at = ? WHERE player_uuid = ? AND state_revision = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, replacement.stageId().value());
+            statement.setLong(2, replacement.stateRevision());
+            statement.setString(3, replacement.configRevision().value());
+            statement.setString(4, replacement.stageEnteredAt().toString());
+            statement.setString(5, replacement.updatedAt().toString());
+            setOptionalInstant(statement, 6, replacement.lastReconciledAt());
+            setOptionalLong(statement, 7, replacement.lastProviderGeneration());
+            setOptionalInstant(statement, 8, replacement.importedAt());
+            statement.setString(9, replacement.playerId().toString());
+            statement.setLong(10, expectedRevision);
+            if (statement.executeUpdate() != 1) {
+                throw new StalePlayerStageStateException(
+                        "Player stage compare-and-set failed for " + replacement.playerId());
+            }
+        }
+    }
+
+    private static void insertHistory(Connection connection, StageHistoryRecord history) throws SQLException {
+        String sql = "INSERT INTO mp_stage_history (history_id, player_uuid, stage_id, entered_at, operation_id, "
+                + "actor_type, actor_uuid, actor_name, reason, config_revision_id) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, UUID.randomUUID().toString());
+            statement.setString(2, history.playerId().toString());
+            statement.setString(3, history.stageId().value());
+            statement.setString(4, history.enteredAt().toString());
+            statement.setString(5, history.operationId().toString());
+            statement.setString(6, history.actor().type());
+            if (history.actor().uuid().isPresent()) {
+                statement.setString(7, history.actor().uuid().orElseThrow().toString());
+            } else {
+                statement.setNull(7, Types.VARCHAR);
+            }
+            statement.setString(8, history.actor().displayName());
+            statement.setString(9, history.reason());
+            statement.setString(10, history.configRevision().value());
+            statement.executeUpdate();
         }
     }
 

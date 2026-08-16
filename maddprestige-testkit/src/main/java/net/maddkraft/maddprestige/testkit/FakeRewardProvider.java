@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.maddkraft.maddprestige.api.action.ActionCharacteristics;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
 import net.maddkraft.maddprestige.api.id.ProviderId;
@@ -23,6 +24,7 @@ public final class FakeRewardProvider extends FakeProvider implements RewardProv
     private volatile ActionExecutionResult nextExecution;
     private volatile RuntimeException nextFailure;
     private volatile Supplier<CompletionStage<RewardPreflight>> nextPreflight;
+    private final AtomicInteger executionAttempts = new AtomicInteger();
 
     public FakeRewardProvider(ProviderId providerId) {
         super(providerId, "reward", List.of(new CapabilityDescriptor("fake-reward", "reward",
@@ -31,6 +33,10 @@ public final class FakeRewardProvider extends FakeProvider implements RewardProv
 
     public int executionCount() {
         return applied.size();
+    }
+
+    public int executionAttempts() {
+        return executionAttempts.get();
     }
 
     public void nextExecution(ActionExecutionResult result) {
@@ -76,6 +82,7 @@ public final class FakeRewardProvider extends FakeProvider implements RewardProv
 
     @Override
     public CompletionStage<ActionExecutionResult> execute(PlannedReward plannedReward) {
+        executionAttempts.incrementAndGet();
         RuntimeException failure = nextFailure;
         nextFailure = null;
         if (failure != null) {

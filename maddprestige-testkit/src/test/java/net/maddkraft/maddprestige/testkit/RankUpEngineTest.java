@@ -513,6 +513,10 @@ class RankUpEngineTest {
             assertEquals(SECOND, advanced.stageId());
             assertEquals(REVISION, advanced.configRevision(),
                     "successful advancement records the active operation revision");
+            SqlitePlayerStageRepository restartedStages = new SqlitePlayerStageRepository(fixture.foundation());
+            assertEquals(1, restartedStages.history(player, 10).size());
+            assertEquals(SECOND, restartedStages.history(player, 10).getFirst().stageId());
+            assertEquals("Normal rank-up", restartedStages.history(player, 10).getFirst().reason());
         }
 
         try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
@@ -530,6 +534,7 @@ class RankUpEngineTest {
             assertEquals(ActionExecutionStatus.FAILED, outcome.status());
             assertEquals(1, stages.find(player).orElseThrow().stateRevision());
             assertEquals(FIRST, stages.find(player).orElseThrow().stageId());
+            assertTrue(stages.history(player, 10).isEmpty(), "failed stage CAS must not orphan history");
         }
     }
 
@@ -618,6 +623,7 @@ class RankUpEngineTest {
             assertEquals(RankUpExecutionStatus.COMPLETED,
                     executor.execute(plan).toCompletableFuture().join().status());
             assertEquals(SECOND, stages.find(player).orElseThrow().stageId());
+            assertEquals(1, stages.history(player, 10).size());
             assertEquals(new BigDecimal("75"), costProvider.balance(player));
             assertEquals(1, rewardProvider.executionCount());
             assertEquals(RankUpExecutionStatus.DUPLICATE,

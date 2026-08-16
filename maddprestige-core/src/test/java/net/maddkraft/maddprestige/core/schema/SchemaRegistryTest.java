@@ -34,6 +34,22 @@ class SchemaRegistryTest {
         assertThrows(IllegalArgumentException.class, () -> registry.register(node("two", "path.one")));
     }
 
+    @Test
+    @DisplayName("[Phase4-config] Canonical schema exposes lifecycle fields and safe feature defaults")
+    void exposesPhaseFourLifecycleSchema() {
+        SchemaRegistry registry = PhaseFourSchema.create();
+
+        assertEquals("false", registry.find("prestige.enabled").orElseThrow().defaultValue().orElseThrow());
+        assertEquals("unlimited", registry.find("prestige.maximum").orElseThrow()
+                .defaultValue().orElseThrow());
+        assertEquals("false", registry.find("competition.enabled").orElseThrow()
+                .defaultValue().orElseThrow());
+        assertEquals(RiskLevel.CRITICAL, registry.find("prestige.reset-policy").orElseThrow().risk());
+        assertEquals(List.of("PRESERVE", "RESET"), registry.find("seasons.*.reset-policy.season-progress")
+                .orElseThrow().allowedValues().staticValues().stream().sorted().toList());
+        assertTrue(registry.find("seasons.*.reset-policy.progression-stage").isEmpty());
+    }
+
     private static SchemaNode node(String id, String path) {
         return new SchemaNode(new FieldId(id), path, SchemaValueType.STRING, Optional.empty(), "description",
                 List.of(), List.of(), AllowedValues.unrestricted(), false, RiskLevel.LOW,

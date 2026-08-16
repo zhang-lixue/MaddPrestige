@@ -7,6 +7,8 @@ import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
 import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.OperationId;
@@ -91,7 +93,8 @@ public final class SqliteOperationRepository implements OperationRepository {
 
     @Override
     public Optional<StoredOperationAction> findAction(OperationId operationId, String actionId) {
-        String sql = "SELECT state, failure_reason, updated_at FROM mp_operation_actions "
+        String sql = "SELECT provider_id, action_type, reversible, idempotent, state, failure_reason, updated_at "
+                + "FROM mp_operation_actions "
                 + "WHERE operation_id = ? AND action_id = ?";
         try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
             statement.setString(1, operationId.toString());
@@ -100,12 +103,61 @@ public final class SqliteOperationRepository implements OperationRepository {
                 if (!row.next()) {
                     return Optional.empty();
                 }
-                return Optional.of(new StoredOperationAction(operationId, actionId,
-                        ActionState.valueOf(row.getString(1)), Optional.ofNullable(row.getString(2)),
-                        Instant.parse(row.getString(3))));
+                return Optional.of(new StoredOperationAction(operationId, actionId, new net.maddkraft.maddprestige.api.id.ProviderId(
+                        row.getString(1)), row.getString(2), row.getInt(3) != 0, row.getInt(4) != 0,
+                        ActionState.valueOf(row.getString(5)), Optional.ofNullable(row.getString(6)),
+                        Instant.parse(row.getString(7))));
             }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load operation action", exception);
+        }
+    }
+
+    @Override
+    public List<StoredOperationAction> findActions(OperationId operationId) {
+        String sql = "SELECT action_id, provider_id, action_type, reversible, idempotent, state, failure_reason, "
+                + "updated_at FROM mp_operation_actions "
+                + "WHERE operation_id = ? ORDER BY action_index";
+        ArrayList<StoredOperationAction> result = new ArrayList<>();
+        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, operationId.toString());
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    result.add(new StoredOperationAction(operationId, rows.getString(1),
+                            new net.maddkraft.maddprestige.api.id.ProviderId(rows.getString(2)), rows.getString(3),
+                            rows.getInt(4) != 0, rows.getInt(5) != 0, ActionState.valueOf(rows.getString(6)),
+                            Optional.ofNullable(rows.getString(7)), Instant.parse(rows.getString(8))));
+                }
+            }
+            return List.copyOf(result);
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load operation actions", exception);
+        }
+    }
+
+    @Override
+    public List<StoredOperation> findIncomplete(int limit) {
+        if (limit < 1 || limit > 1000) {
+            throw new IllegalArgumentException("Recovery scan limit must be 1-1000");
+        }
+        String sql = "SELECT operation_id, operation_type, target_uuid, idempotency_key, state, created_at, "
+                + "updated_at FROM mp_operations WHERE state IN "
+                + "('PREPARED','EXECUTING','STATE_COMMITTED','COMPENSATING','NEEDS_RECONCILIATION') "
+                + "ORDER BY updated_at, operation_id LIMIT ?";
+        ArrayList<StoredOperation> result = new ArrayList<>();
+        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setInt(1, limit);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    result.add(new StoredOperation(new OperationId(UUID.fromString(rows.getString(1))),
+                            rows.getString(2), UUID.fromString(rows.getString(3)), rows.getString(4),
+                            OperationState.valueOf(rows.getString(5)), Instant.parse(rows.getString(6)),
+                            Instant.parse(rows.getString(7))));
+                }
+            }
+            return List.copyOf(result);
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not scan incomplete operations", exception);
         }
     }
 
