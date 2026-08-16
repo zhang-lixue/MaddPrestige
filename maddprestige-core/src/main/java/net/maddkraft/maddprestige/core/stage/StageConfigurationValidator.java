@@ -43,7 +43,13 @@ public final class StageConfigurationValidator {
                     "Restore the provider before applying this active ladder."))));
         }
         Set<String> groups = configuration.managedGroups(providerId.orElseThrow());
-        return adapter.validateTargets(groups).handle((result, failure) -> {
+        CompletionStage<net.maddkraft.maddprestige.api.result.Result<Set<String>>> validation;
+        try {
+            validation = adapter.validateTargets(groups);
+        } catch (RuntimeException exception) {
+            validation = CompletableFuture.failedFuture(exception);
+        }
+        return validation.handle((result, failure) -> {
             if (failure != null) {
                 return ValidationReport.of(List.of(finding(
                         "stage.rank_targets.unavailable", "progression.stages",

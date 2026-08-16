@@ -1,0 +1,12 @@
+# Generic command actions are an external side effect and remain disabled by default.
+schema-version: 3
+rewards: {}
+command-actions:
+  enabled: false
+  allowed-roots: []
+  blocked-roots: [stop, restart, op, deop]
+  allowed-tokens: []
+  templates: {}
+  maximum-commands: 5
+  maximum-length: 256
+  maximum-depth: 0

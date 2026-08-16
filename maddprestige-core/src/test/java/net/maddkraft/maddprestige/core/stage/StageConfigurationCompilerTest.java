@@ -56,8 +56,8 @@ class StageConfigurationCompilerTest {
     }
 
     @Test
-    @DisplayName("[A03] Duplicate YAML stage IDs and active later-phase fields never pretend to work")
-    void rejectsDuplicatesAndDeferredFeatures() {
+    @DisplayName("[A03] Duplicate IDs and malformed Phase 3 references never pretend to work")
+    void rejectsDuplicatesAndMalformedReferences() {
         String duplicate = """
                 active: true
                 stages:
@@ -79,7 +79,31 @@ class StageConfigurationCompilerTest {
                 order: [first]
                 baseline: first
                 """;
-        assertTrue(codes(compile(unsupported).validation()).contains("stage.feature.unsupported_phase2"));
+        assertTrue(codes(compile(unsupported).validation()).contains("stage.requirements.reference"));
+    }
+
+    @Test
+    @DisplayName("[A09-A26] Stages reference stable requirement, cost, and reward IDs")
+    void compilesPhaseThreeReferences() {
+        var compilation = compile("""
+                schema-version: 3
+                active: true
+                stages:
+                  first:
+                    enabled: true
+                    display-name: First
+                    projection: none
+                    requirements: eligibility
+                    costs: [payment]
+                    rewards: [grant]
+                order: [first]
+                baseline: first
+                """);
+        assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
+        StageDefinition stage = compilation.configuration().orElseThrow().stages().get(new StageId("first"));
+        assertEquals("eligibility", stage.requirementTreeId().orElseThrow().value());
+        assertEquals("payment", stage.costIds().getFirst().value());
+        assertEquals("grant", stage.rewardIds().getFirst().value());
     }
 
     @Test

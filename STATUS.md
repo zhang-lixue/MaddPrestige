@@ -1,85 +1,94 @@
 # MaddPrestige V2 Status
 
-**Current phase:** Phase 2 generic stage/rank architecture owner-review correction pass implemented and locally verified
+**Current phase:** Phase 3 final owner-review correction pass implemented and fully verified
 **Last updated:** 2026-08-15
-**Implementation status:** correction pass complete in the `v2/phase-2` worktree, intentionally uncommitted and disconnected from production bootstrap/data
+**Implementation status:** Phase 3 correction scope complete in the `v2/phase-3` worktree, intentionally uncommitted and disconnected from production bootstrap/data
 
 ## Outcome
 
-Phase 2 adds arbitrary immutable stages, ordered-ladder compilation, change-impact/remap gating, UUID-first player stage persistence, an asynchronous generic rank adapter, a LuckPerms 5.5 implementation, reconciliation policies, persisted rank operations, and explicit read-only legacy mapping plans.
+Phase 3 adds typed provider metrics, recursive authorization trees, explicit measurement scopes/baselines/latches, exact scaling and catch-up, generic provider-batched costs/rewards, a production safe command reward provider, actual Bukkit vanilla-statistics adaptation, owner-bound batched manual progress, SQLite migration 3, and immutable rank-up planning/simulation/execution. Final owner corrections make rank-up input intent-only, source progress/scope/state through trusted injected services, separate stored-player provenance from the active plan revision, make configured rank projection health/contract a planning and simulation dependency, deny reusable authority to blocked previews, and completely seal executable public plans against reconstruction/tampering.
 
-The V2 runtime remains safe and inactive by default. The canonical default has `active: false`, no stages, no order, and `warn-only` reconciliation. Frozen V1 still provides the distribution bootstrap; no production configuration, player data, database, or LuckPerms state was accessed or changed.
+The V2 runtime remains safe and inactive by default. `progression.yml`, `requirements.yml`, and `rewards.yml` contain no active ladder/actions; command rewards are disabled. Frozen V1 still supplies the production distribution bootstrap. No production configuration, player data, database, economy, Paper server, or external provider state was accessed or changed.
 
 Principal handoff documents:
 
 - [docs/V2_ARCHITECTURE.md](docs/V2_ARCHITECTURE.md);
-- [docs/V2_PHASE2_IMPLEMENTATION.md](docs/V2_PHASE2_IMPLEMENTATION.md);
-- [docs/V2_PHASE2_FILE_MANIFEST.md](docs/V2_PHASE2_FILE_MANIFEST.md);
+- [docs/V2_PHASE3_IMPLEMENTATION.md](docs/V2_PHASE3_IMPLEMENTATION.md);
+- [docs/V2_PHASE3_FILE_MANIFEST.md](docs/V2_PHASE3_FILE_MANIFEST.md);
 - [docs/V2_TRACEABILITY.md](docs/V2_TRACEABILITY.md);
 - [DECISIONS.md](DECISIONS.md).
 
-## Implemented in Phase 2
+## Implemented in Phase 3
 
-- immutable arbitrary stage definitions, display metadata, enabled order, explicit baseline, and `projection: none` or one provider/group projection;
-- `progression.yml` compilation through the existing lossless draft/revision/apply workflow rather than a second configuration system;
-- structured validation for order/baseline/projection/provider targets, plus explicit rejection of active Phase 3+ fields;
-- semantic impact reporting for order, add/remove, enable/disable, projection changes, stored-player references, acknowledgements, and revisioned remap plans;
-- inert runtime status when configuration is absent, inactive, or empty;
-- UUID-first player stage schema/repository with optimistic revisions, import-once, reconciliation metadata, and reference counts;
-- async rank-adapter API with a caller-pinned managed set, target validation, ambiguity reporting, and no group-creation capability;
-- LuckPerms 5.5 adapter using public API types, asynchronous UUID load/save, cached/offline lifecycle handling, exact permanent/context-free node ownership, unrelated-node preservation, fail-closed ambiguity, and uncertainty reporting;
-- pure `warn-only`, `maddprestige-authoritative`, and `import-once` reconciliation decisions with a rate gate;
-- persisted projection/reconciliation coordination with idempotency, configuration/provider-generation checks, optimistic internal commit, action journaling, audit, and `NEEDS_RECONCILIATION` recovery state;
-- structural legacy detection and explicit mapping manifests/plans with no inference, no mutation executor, and a verified-backup gate for non-dry planning.
-
-## Owner-review correction pass
-
-- a complete remap plan now records operator intent only: activation remains blocked while persisted references to removed or disabled stages are nonzero, because Phase 2 has no bulk remap executor;
-- import-once rechecks the active configuration revision and provider identity, generation, activation, and health immediately before its insert; either deterministic race returns `STALE_GENERATION`, writes a failed audit record, and inserts nothing;
-- explicit `projection.type` accepts only `none` or `group`, rejects blank, unknown, and non-scalar values, and retains the documented omitted-type shorthand;
-- a LuckPerms snapshot failure after a successful save is classified as `UNCERTAIN`; operation state remains `NEEDS_RECONCILIATION`, the internal stage does not advance, and cleanup cannot downgrade that result;
-- invalid or conflicting legacy mappings produce an error report with an empty planned-mapping set, so they cannot be mistaken for executable-looking work.
+- integer, exact-decimal, count, duration, boolean, string, enum, and currency metric values with type-safe operators/ranges and provider capability metadata;
+- pure bounded `ALL`, `ANY`, `ANY_X_OF_Y`, `WEIGHTED`, and nested evaluation with deterministic explanations and decision-aware outage propagation;
+- absolute/current, lifetime, stage-delta, synthetic prestige-delta, and synthetic season-delta scopes with explicit lifecycle IDs, versioned unambiguous `rsf2:` semantic fingerprints, idempotent baselines, and isolated latches;
+- exact none/linear/exponential/stepped scaling, then opt-in capped/floored/rounded local catch-up;
+- one generation-pinned batch read per provider with identical-query coalescing and structured missing/stale/outage results;
+- canonical schema-3 `progression.yml` references plus `requirements.yml` and `rewards.yml`, active/reference-aware provider validation, and atomic same-revision Stage/Phase 3 snapshots retaining exact validated provider-generation pins;
+- intent-only canonical rank-up authorization from authoritative player state plus injected trusted progress/scope/state sources, exact returned baseline/latch-key enforcement, exact active stage/tree/cost/reward/projection definitions, complete requirement-result/provenance sealing, denied authority for blocked previews, full executable-plan sealing across both projection representations and execution gates, provider-batched preflight, optional reward omission, and same-path zero-mutation simulation;
+- distinct stored-player configuration provenance and active plan revision, permitting safe R1→R2 progression while preserving unknown/disabled/terminal source rejection, structural/remap guards, and optimistic compare-and-set;
+- role-local configured projection preflight requiring the retained exact generation to remain active, healthy, and a `RankAdapter`, while `projection: none` has no rank dependency and an optional reward remains independently omittable;
+- journaled cost → external rank projection when configured → concrete optimistic internal stage commit → reward execution, separate per-cost compensation actions, duplicate suppression, stale binding checks, managed membership isolation, and explicit divergence/uncertainty reconciliation;
+- production `CommandRewardProvider` with default-disabled exact templates, normalized allow/block roots, mandatory critical roots, structured tokens, operation-wide count/length bounds, trusted runtime correlation/depth context, injection rejection, audit preview, and honest external uncertainty;
+- real Bukkit `Statistic` discovery and one Paper-thread batch read with separately authoritative block/item/entity dimensions and no invented identifiers;
+- opaque-capability-owned manual counter registration/provenance, atomic registration bounds under close/final-slot races, typed increments/sets, bounded aggregation/backpressure, versioned batch writes, and flush/shutdown barriers;
+- SQLite migration 3 and prepared repositories for semantic baselines, latches, and manual progress.
 
 ## Verification completed
 
-- `./mvnw --no-transfer-progress clean verify`: **passed** on the Windows wrapper equivalent;
-- reactor tests: **94 run, 0 failures, 0 errors, 0 skipped** across 30 suites;
-- Maven Enforcer, dependency convergence, duplicate dependency-version checks: **passed**;
+- `.\mvnw.cmd --no-transfer-progress clean verify`: **passed twice**;
+- reactor tests: **167 run, 0 failures, 0 errors, 0 skipped** across **43 suites**;
+- Maven Enforcer, Java/Maven version rules, dependency convergence, and duplicate dependency-version checks: **passed**;
 - Checkstyle: **0 violations**;
-- JaCoCo reports and aggregate CycloneDX SBOM: **generated**;
-- focused stage workflow, LuckPerms, persistence, and provider/configuration race regression reruns: **passed**;
-- two clean correction-pass builds produced the same distribution SHA-256: `ee6689defc1b5410d711e9912402958ddc0398f8daadb2d34bb04e571956b9ce`;
-- protected-path comparison against accepted Phase 1 merge `5aab340554afcf7abe43fd36f6b835175550acc1`: **0 changes** in `src`, `dist`, `baseline/v1/runtime`, and `baseline/v1/external`;
-- prohibited fixed legacy gameplay/rank-name scan over generic V2 production modules/resources: **0 hits**;
-- executable V2 group-creation call scan: **0 hits** (four broad textual matches are capability/remediation strings saying groups are not created);
-- generic API/core external-plugin import scan: **0 hits**;
-- Phase 3+ implementation/package leak scan: **0 hits**; deferred YAML fields exist only as fail-closed rejection keys;
+- JaCoCo module reports and aggregate CycloneDX SBOM: **generated**;
+- two clean builds produced the same distribution SHA-256: `c997dfc7538198856f69e9b6d0318081ed0f1ef978c7212304c2fce2b98ec37c`;
+- protected comparison against accepted Phase 2 merge `ca13fa4eec0820e21aee8615bfd607748323c74a`: **0 changes** in `src`, `dist`, `baseline/v1/runtime`, and `baseline/v1/external`;
+- generic API/core external-plugin, Paper, and SQL import scan: **0 hits**;
+- command process/reflection/filesystem/script primitive scan: **0 hits**;
+- new persistence SQL: **static prepared statements only**; dynamic statement-concatenation scan: **0 hits**;
+- production LuckPerms group-creation call scan: **0 hits** (the test proxy retains a sentinel branch that would expose any forbidden call);
+- spoofable-manual-authority, declarative trigger-depth, ambiguous semantic serialization, and unbounded Phase 3 package/resource scans: **0 unsafe hits** after focused test and source review;
+- prohibited fixed gameplay/rank-name scan over V2 production/testkit production code: **0 hits**;
+- Phase 4+ package/implementation leak scan: **0 hits**;
+- TODO/FIXME/HACK scan over affected modules: **0 hits**;
 - `git diff --check`: **passed**.
 
-## What the LuckPerms tests establish
+The clean build retains known frozen V1 compiler/deprecation warnings, SQLite native-access future warnings, CycloneDX schema-keyword warnings, and Maven Shade overlap/module-info warnings. They predate or are tooling-level observations and did not weaken a Phase 3 safety gate.
 
-The integration module compiles and tests against the actual LuckPerms 5.5 API artifact and public interfaces. Its proxy-backed in-memory API fixture proves call ordering and adapter invariants, including missing-target blocking, no create call, exact managed-node isolation, cached/offline user load-save-cleanup, ambiguity, repeat behavior, outage, disablement during projection, save uncertainty, and post-save verification uncertainty that cleanup cannot downgrade.
+## Real versus fake evidence
 
-A running Paper server, LuckPerms plugin, LuckPerms storage backend, and production player corpus were not used. This is API-level implementation evidence, not live-server qualification. A later lifecycle/qualification phase must run the adapter in a disposable real server stack before support is claimed.
+Production implementation and tests exercise the real Paper/Bukkit `Statistic` enum and public `Player#getStatistic` signatures, the production command reward adapter, canonical YAML compiler/workflow, provider registry/generation model, SQLite JDBC migrations/repositories, manual provider, rank-up planner, and persisted executor.
+
+The Bukkit tests use real API types with a proxy `Player` and injected scheduler/thread guard; no live Paper server was started. Cost and generic reward business behavior use purpose-built test providers because real Vault and later external reward integrations are explicitly not Phase 3 work. The persistence matrix uses disposable SQLite databases only. Consequently A24 remains partial until Phase 5 Vault execution/qualification.
+
+## Acceptance status
+
+- **Satisfied in Phase 3:** A09, A10, A11, A12, A13, A18, A19, A20, A21, A22, A23, A25, and A26.
+- **Partial by explicit later ownership:** A14/A15 have implemented and tested transition/baseline services and persistence semantics but no production Phase 3 stage-completion/entry lifecycle invocation; A16 and A17 prove synthetic scope/baseline semantics but not Prestige/season lifecycle; A24 proves the generic cost engine but not Vault; A55 has real provider-boundary runtime depth propagation but no production command-triggered rank-up ingress before Phase 6.
+- A26 is engine-level simulation only. No Phase 6 simulation command or UI is claimed.
+- The full matrix is now **16 Satisfied, 44 Partial, 16 Later**; earlier criteria changed only where Phase 3 added legitimate evidence or final review corrected lifecycle overclaims.
 
 ## Remaining risks and gates
 
-1. V2 is not wired into the Paper plugin lifecycle, commands, setup wizard, or event ingestion. A full fresh Paper-only startup criterion is therefore only partially satisfied.
-2. Live Paper/LuckPerms lifecycle, classloader, disable/reload, storage, and offline-player behavior remain unqualified outside the proxy-backed API tests.
-3. `NEEDS_RECONCILIATION` is persisted honestly, but automated recovery/replay and operator tooling are later work; uncertain external effects must not be blindly replayed.
-4. Phase 2 validates revisioned remap plans but does not execute bulk stored-player remapping. Consequently, any removal or disablement with nonzero stored-player references remains intentionally blocked even when the operator supplies a complete plan; activation can proceed only after a separately authorized future executor has atomically remapped the rows and the reference counts reach zero.
-5. Legacy planning is synthetic/read-only. Actual production legacy migration, mapping approval, backup, and mutation remain Phase 9 work.
-6. MySQL and MariaDB containers were not run locally. Existing service-container jobs remain contract harnesses, not support claims.
-7. Live WAL-mode SQLite backup remains outside the byte-copy fixture service and requires the previously documented coordinated online-backup/checkpoint implementation.
-8. Requirements, costs, rewards, actions, prestige, currencies, seasons, competitions, commands, GUI, and branded presets remain later phases and are neither activated nor claimed.
-9. Existing frozen V1 compiler/deprecation warnings remain characterization evidence and were not changed for Phase 2.
+1. V2 is not wired into the production Paper lifecycle, events, commands, setup wizard, GUI, `/doctor`, or `/why`; inactive defaults and engine services are not live-server qualification.
+2. A14/A15 require a future production stage-completion/entry lifecycle owner to invoke the implemented transition/baseline services; Phase 3 simulation deliberately has no hidden writes.
+3. A16/A17 require actual Phase 4 Prestige/season lifecycle ownership to create and transition real scope instances.
+4. A24 requires a real Vault provider and disposable live integration qualification in Phase 5; fake providers are not a substitute.
+5. Paper statistics have API-level/proxy evidence, not a running-server lifecycle/classloader/offline-player qualification.
+6. `NEEDS_RECONCILIATION` and sufficient journal state exist, but restart recovery/operator tooling remains later work; uncertain external actions must not be blindly replayed.
+7. SQLite is locally implemented. MySQL/MariaDB remain CI contract targets and no network-safe support is claimed.
+8. Live WAL-mode SQLite backup, production-like legacy migration/remap, and real data upgrade remain later gated work.
+9. Command actions are intentionally non-idempotent/non-reversible external effects even after safe validation; uncertainty remains an operational reconciliation concern, and production nested ingress is not wired until Phase 6.
+10. Manual progress bounds are fixed constructor policies in Phase 3; later runtime integration must choose/load-test appropriate limits and executors.
+11. Existing frozen V1/tooling warnings remain visible and were not changed in this phase.
 
 ## Decisions and deviations
 
-Phase 2 decisions D-036 through D-040 record the canonical stage workflow, single-adapter ladder boundary, exact LuckPerms node ownership, persisted reconciliation/uncertainty design, and the rule that remap intent cannot stand in for remap execution.
+Phase 3 decisions D-041 through D-047 now describe versioned semantic identity, pure evaluation/explicit lifecycle writes, resource-bounded exact scaling, canonical authorization with cost/projection/internal/reward ordering, per-action compensation, runtime command context, capability-owned manual progress, accurate statistic dimensions, active/reference validation, and retained atomic snapshot pins.
 
-No approved safety or architecture requirement was weakened. No Phase 3+ work was implemented. The only explicit qualification limitation is environmental: real Paper/LuckPerms and MySQL/MariaDB service instances were not available or used locally, so the traceability matrix retains partial classifications for those runtime criteria.
+No approved safety or architecture requirement was weakened. Synchronous provider failures normalize with failed futures, and exceptional post-start effects remain journaled as uncertainty. No Phase 4+ engine or Phase 5 integration was pulled forward.
 
 ## Stop point
 
-The Phase 2 owner-review correction pass and local verification are complete. Stop here for a second owner review. Do not commit, push, open a PR, merge, activate V2, touch production data, or begin Phase 3 without separate authorization.
+Phase 3 final owner-review correction implementation is complete; after the recorded final verification it is ready for final owner acceptance. Stop here. Do not commit, push, open a PR, merge, activate V2, touch production data, or begin Phase 4 without separate authorization.

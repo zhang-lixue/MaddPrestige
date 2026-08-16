@@ -7,6 +7,10 @@ import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.StageId;
 
+/**
+ * Authoritative player progression state. {@code configRevision} is historical provenance: the active
+ * configuration revision that last wrote this stage row, not a requirement that every later safe apply rewrite it.
+ */
 public record PlayerStageState(
         UUID playerId,
         StageId stageId,
@@ -43,7 +47,15 @@ public record PlayerStageState(
             ConfigRevisionId targetConfigRevision,
             long providerGeneration,
             Instant now) {
+        return advanceTo(targetStage, targetConfigRevision, Optional.of(providerGeneration), now);
+    }
+
+    public PlayerStageState advanceTo(
+            StageId targetStage,
+            ConfigRevisionId targetConfigRevision,
+            Optional<Long> providerGeneration,
+            Instant now) {
         return new PlayerStageState(playerId, targetStage, Math.addExact(stateRevision, 1), targetConfigRevision,
-                now, createdAt, now, Optional.of(now), Optional.of(providerGeneration), importedAt);
+                now, createdAt, now, Optional.of(now), providerGeneration, importedAt);
     }
 }

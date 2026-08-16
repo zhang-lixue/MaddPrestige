@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.LinkedHashMap;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.id.StageId;
@@ -20,6 +21,11 @@ import net.maddkraft.maddprestige.core.config.ConfigCompiler;
 import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.ConfigurationService;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
+import net.maddkraft.maddprestige.api.metric.MetricProvider;
+import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationCompiler;
+import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationValidator;
+import net.maddkraft.maddprestige.core.requirement.MetricBinding;
 
 public final class StageConfigurationWorkflow {
     private final ConfigCompiler canonicalCompiler;
@@ -27,7 +33,9 @@ public final class StageConfigurationWorkflow {
     private final StageConfigurationCompiler stageCompiler;
     private final StageConfigurationValidator validator;
     private final StageChangeImpactAnalyzer impactAnalyzer;
-    private final AtomicReference<StageConfigurationSnapshot> active = new AtomicReference<>();
+    private final PhaseThreeConfigurationCompiler phaseThreeCompiler;
+    private final PhaseThreeConfigurationValidator phaseThreeValidator;
+    private final AtomicReference<ActiveStageConfiguration> activeSnapshots = new AtomicReference<>();
 
     public StageConfigurationWorkflow(ConfigurationService canonicalService) {
         this.canonicalCompiler = new ConfigCompiler();
@@ -35,10 +43,20 @@ public final class StageConfigurationWorkflow {
         this.stageCompiler = new StageConfigurationCompiler();
         this.validator = new StageConfigurationValidator();
         this.impactAnalyzer = new StageChangeImpactAnalyzer();
+        this.phaseThreeCompiler = new PhaseThreeConfigurationCompiler();
+        this.phaseThreeValidator = new PhaseThreeConfigurationValidator();
+    }
+
+    public Optional<PhaseThreeConfigurationSnapshot> activePhaseThree() {
+        return Optional.ofNullable(activeSnapshots.get()).map(ActiveStageConfiguration::phaseThree);
     }
 
     public Optional<StageConfigurationSnapshot> active() {
-        return Optional.ofNullable(active.get());
+        return Optional.ofNullable(activeSnapshots.get()).map(ActiveStageConfiguration::stages);
+    }
+
+    public Optional<ActiveStageConfiguration> activeCanonical() {
+        return Optional.ofNullable(activeSnapshots.get());
     }
 
     public CompletionStage<StageConfigurationCandidate> prepare(
@@ -52,14 +70,31 @@ public final class StageConfigurationWorkflow {
         Objects.requireNonNull(providers, "provider registry");
         var compiled = canonicalCompiler.compile(draft);
         var stageCompilation = stageCompiler.compile(compiled);
+        LinkedHashMap<MetricBinding, net.maddkraft.maddprestige.api.metric.MetricDescriptor> descriptors =
+                new LinkedHashMap<>();
+        providers.snapshots().forEach(snapshot -> providers.provider(snapshot.descriptor().id())
+                .filter(MetricProvider.class::isInstance).map(MetricProvider.class::cast)
+                .ifPresent(provider -> {
+                    try {
+                        provider.metrics().forEach(metric -> descriptors.put(
+                                new MetricBinding(metric.providerId(), metric.metricId()), metric));
+                    } catch (RuntimeException ignored) {
+                        // A broken capability boundary becomes an unknown/unavailable metric finding below.
+                    }
+                }));
+        var phaseThreeCompilation = phaseThreeCompiler.compile(compiled, descriptors);
         StageConfiguration configuration = stageCompilation.configuration().orElse(StageConfiguration.inactive());
         StageConfiguration prior = active().map(StageConfigurationSnapshot::configuration)
                 .orElse(StageConfiguration.inactive());
         StageChangeImpact impact = impactAnalyzer.analyze(prior, configuration, playerReferences, remapPlan);
-        var localValidation = stageCompilation.validation().combine(impact.validation());
+        var phaseThreeProviderValidation = phaseThreeValidator.validate(
+                phaseThreeCompilation.configuration(), configuration, providers);
+        var localValidation = stageCompilation.validation().combine(impact.validation())
+                .combine(phaseThreeCompilation.validation()).combine(phaseThreeProviderValidation.report());
         if (stageCompilation.configuration().isEmpty() || localValidation.hasErrors()) {
             return CompletableFuture.completedFuture(new StageConfigurationCandidate(
-                    compiled, configuration, impact, localValidation, Map.of()));
+                    compiled, configuration, phaseThreeCompilation.configuration(), impact, localValidation,
+                    phaseThreeProviderValidation.providerGenerations()));
         }
         Optional<ProviderId> requiredProvider = configuration.active()
                 ? configuration.rankProvider() : Optional.empty();
@@ -68,7 +103,7 @@ public final class StageConfigurationWorkflow {
         return validator.validateExternalTargets(configuration, providers)
                 .thenApply(external -> {
                     ValidationReport combined = localValidation.combine(external);
-                    Map<ProviderId, Long> generations = Map.of();
+                    Map<ProviderId, Long> generations = phaseThreeProviderValidation.providerGenerations();
                     if (requiredProvider.isPresent() && beforeGeneration.isPresent()) {
                         ProviderId providerId = requiredProvider.orElseThrow();
                         var after = providers.find(providerId);
@@ -80,11 +115,14 @@ public final class StageConfigurationWorkflow {
                                     "stage.rank_provider.changed_during_validation",
                                     "Rank adapter binding changed while external targets were validated."))));
                         } else {
-                            generations = Map.of(providerId, beforeGeneration.orElseThrow());
+                            LinkedHashMap<ProviderId, Long> combinedGenerations = new LinkedHashMap<>(generations);
+                            combinedGenerations.put(providerId, beforeGeneration.orElseThrow());
+                            generations = Map.copyOf(combinedGenerations);
                         }
                     }
                     return new StageConfigurationCandidate(
-                            compiled, configuration, impact, combined, generations);
+                            compiled, configuration, phaseThreeCompilation.configuration(), impact, combined,
+                            generations);
                 });
     }
 
@@ -98,27 +136,22 @@ public final class StageConfigurationWorkflow {
         canonicalService.apply(revisionId, candidate.compiled(), candidate.validation(), acknowledgements, backup);
         StageConfigurationSnapshot replacement = new StageConfigurationSnapshot(
                 revisionId, candidate.stageConfiguration());
-        active.set(replacement);
+        activeSnapshots.set(new ActiveStageConfiguration(replacement, new PhaseThreeConfigurationSnapshot(revisionId,
+                candidate.phaseThreeConfiguration(), candidate.providerGenerations())));
         return replacement;
     }
 
     private static void validatePinnedProviders(
             StageConfigurationCandidate candidate,
             ProviderRegistry providers) {
-        Optional<ProviderId> requiredProvider = candidate.stageConfiguration().active()
-                ? candidate.stageConfiguration().rankProvider() : Optional.empty();
-        if (requiredProvider.isEmpty()) {
-            return;
-        }
-        ProviderId providerId = requiredProvider.orElseThrow();
-        Long generation = candidate.providerGenerations().get(providerId);
-        var current = providers.find(providerId);
-        if (generation == null || current.isEmpty()
-                || current.orElseThrow().generation() != generation
-                || current.orElseThrow().activation() != ActivationState.ACTIVE
-                || !healthy(current.orElseThrow().health().state())) {
-            throw new IllegalStateException(
-                    "Pinned rank adapter binding changed after candidate validation; prepare the draft again");
+        for (var pinned : candidate.providerGenerations().entrySet()) {
+            var current = providers.find(pinned.getKey());
+            if (current.isEmpty() || current.orElseThrow().generation() != pinned.getValue()
+                    || current.orElseThrow().activation() != ActivationState.ACTIVE
+                    || !healthy(current.orElseThrow().health().state())) {
+                throw new IllegalStateException(
+                        "Pinned provider binding changed after candidate validation; prepare the draft again");
+            }
         }
     }
 

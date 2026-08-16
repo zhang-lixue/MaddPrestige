@@ -56,6 +56,7 @@ public final class OperationStateMachine {
                 EnumSet.of(ActionState.SUCCEEDED, ActionState.FAILED, ActionState.UNCERTAIN));
         transitions.put(ActionState.SUCCEEDED,
                 EnumSet.of(ActionState.VERIFIED, ActionState.FAILED, ActionState.UNCERTAIN, ActionState.COMPENSATED));
+        transitions.put(ActionState.VERIFIED, EnumSet.of(ActionState.COMPENSATED));
         transitions.put(ActionState.FAILED, EnumSet.of(ActionState.COMPENSATED));
         transitions.put(ActionState.UNCERTAIN, EnumSet.of(ActionState.VERIFIED, ActionState.COMPENSATED));
         return Map.copyOf(transitions);

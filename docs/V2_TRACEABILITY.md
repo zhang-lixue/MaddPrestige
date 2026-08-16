@@ -1,9 +1,9 @@
 # MaddPrestige V2 acceptance traceability
 
 **Imported matrix:** master specification A01–A76
-**Current classification:** Phase 2
-**Legend:** `Satisfied` means the final acceptance criterion itself is demonstrably satisfied through Phase 2; `Partial` means Phase 1/2 establishes a required contract, implementation, or focused test but later activation/qualification evidence is still required; `Later` means the criterion belongs wholly to a later phase.
-**Current totals:** 3 Satisfied, 46 Partial, 27 Later.
+**Current classification:** Phase 3
+**Legend:** `Satisfied` means the Phase 3 acceptance criterion itself is demonstrably satisfied at its authorized engine/provider boundary; `Partial` means a required contract or focused implementation exists but a named later lifecycle/integration/qualification surface remains; `Later` means the criterion belongs wholly to a later phase.
+**Current totals:** 16 Satisfied, 44 Partial, 16 Later.
 
 | ID | Acceptance criterion (condensed from master specification) | Phase relationship | Current evidence / owner |
 |---|---|---|---|
@@ -15,24 +15,24 @@
 | A06 | Rank-up changes only managed progression membership | Partial | Real-API adapter tests prove exact managed-node isolation across permissions, unrelated groups, temporary/contextual nodes, cached/offline users, and repeats; live plugin qualification remains. |
 | A07 | LP reconciliation follows configured policy | Partial | All three policies, persistence coordination, ambiguity, import-once, repeated/idempotent behavior, immediate pre-insert configuration/provider rechecks, and uncertainty are tested; lifecycle wiring/live qualification remain. |
 | A08 | Reordering stages shows impact before apply | Satisfied | `StageChangeImpactAnalyzer` reports old/new order, high-risk semantic diff, stored-player counts, acknowledgement, and explicit remap gating before canonical apply. |
-| A09 | ALL requirements require every child | Later | Phase 3. |
-| A10 | ANY_X_OF_Y evaluates exact threshold | Later | Phase 3. |
-| A11 | Nested requirements evaluate/explain correctly | Partial | Recursive `ExplanationNode` foundation; requirement tree is Phase 3. |
-| A12 | Weighted requirement threshold evaluates correctly | Later | Phase 3. |
-| A13 | Live completion can become incomplete | Later | Phase 3. |
-| A14 | Latched completion remains complete in scope | Later | Phase 3. |
-| A15 | Stage-scope baseline counts only post-entry delta | Partial | `ScopeId` foundation; baselines are Phase 3/4. |
-| A16 | Prestige-scope baseline excludes prior lifetime value | Partial | `ScopeId` foundation; Phase 3/4. |
-| A17 | Season-scope baseline uses current season delta | Partial | `ScopeId` foundation; Phase 3/4. |
-| A18 | Linear scaling matches formula | Later | Phase 3. |
-| A19 | Exponential scaling matches formula | Later | Phase 3. |
-| A20 | Stepped scaling selects correct threshold | Later | Phase 3. |
-| A21 | Disabled catch-up does not reduce target | Later | Phase 3. |
-| A22 | Enabled catch-up is local and respects floor/rounding | Later | Phase 3. |
-| A23 | Insufficient cost blocks without consumption | Partial | Immutable operation planning and fail-closed result contracts; cost engine is Phase 3. |
-| A24 | Vault cost withdraws exactly once in normal execution | Partial | Idempotency/action persistence foundation; Vault adapter is Phase 5. |
-| A25 | Reward applies after committed state | Partial | `STATE_COMMITTED` ordering model; reward engine is Phase 3. |
-| A26 | Simulation shows exact plan without mutation | Partial | Immutable/redacted `OperationPlan`; simulation surface is Phase 3/6. |
+| A09 | ALL requirements require every child | Satisfied | Pure recursive evaluator tests complete/incomplete ALL and the mixed `UNSATISFIED + UNAVAILABLE → UNSATISFIED` decision-aware truth table while retaining every child explanation. |
+| A10 | ANY_X_OF_Y evaluates exact threshold | Satisfied | Exact below/equal threshold, impossible/non-integral validation, and outage-can-decide cases are tested. |
+| A11 | Nested requirements evaluate/explain correctly | Satisfied | Arbitrarily nested bounded trees produce deterministic recursive `ExplanationNode` evidence without mutation. |
+| A12 | Weighted requirement threshold evaluates correctly | Satisfied | Below/equal/above points, explicit positive weights, impossible threshold, catch-up threshold, and outage propagation are tested. |
+| A13 | Live completion can become incomplete | Satisfied | A previously satisfied live metric becomes unsatisfied when the supplied authoritative value drops. |
+| A14 | Latched completion remains complete in scope | Partial | Explicit latch-transition service/persistence semantics are implemented and tested by UUID/scope-instance/semantic fingerprint, including isolation across scopes and semantic changes. No production Phase 3 stage-completion lifecycle invokes the service outside tests; future runtime composition owns that call. |
+| A15 | Stage-scope baseline counts only post-entry delta | Partial | Explicit stage-boundary baseline service/persistence semantics are implemented and tested, including idempotency and monotonic-reset safety. No production Phase 3 stage-entry lifecycle invokes the service outside tests; future runtime composition owns that call, and simulation never writes it. |
+| A16 | Prestige-scope baseline excludes prior lifetime value | Partial | Synthetic explicit prestige scope/baseline delta semantics are implemented/tested; actual Prestige lifecycle creation/transition remains Phase 4. |
+| A17 | Season-scope baseline uses current season delta | Partial | Synthetic explicit season scope/baseline delta semantics are implemented/tested; actual season lifecycle remains Phase 4. |
+| A18 | Linear scaling matches formula | Satisfied | Exact `base × (1 + rate × index)` with discrete/duration rounding and bounds is tested. |
+| A19 | Exponential scaling matches formula | Satisfied | Exact `base × factor^index` plus factor precision/scale, index, predicted precision-work/magnitude, and final magnitude bounds are tested before pathological power computation. |
+| A20 | Stepped scaling selects correct threshold | Satisfied | Greatest-threshold selection before/at boundaries is exact and validated. |
+| A21 | Disabled catch-up does not reduce target | Satisfied | Disabled profile remains a no-op regardless of catch-up position. |
+| A22 | Enabled catch-up is local and respects floor/rounding | Satisfied | Start, rate, cap, floor, quantum/rounding, isolation, and scaling-before-catch-up order are implemented/tested. |
+| A23 | Insufficient cost blocks without consumption | Satisfied | Provider-batch preflight catches individual and aggregate insufficiency; unavailable/stale/unsatisfied/simulation paths consume nothing. |
+| A24 | Vault cost withdraws exactly once in normal execution | Partial | Generic exact cost contracts, aggregate preflight, journaling, normal exactly-once test path, duplicate suppression, compensation, and uncertainty exist; real Vault execution/qualification remains Phase 5. |
+| A25 | Reward applies after committed state | Satisfied | Intent-only canonical authorization obtains progress/scope/state from injected trusted sources, resolves the exact legal stage/tree/cost/reward/projection set, and binds both observed source-row provenance and current active revision. Blocked plans carry denied authority; executable seals bind the complete requirement outcome, both projection representations, execution gate, actions, and operation plan and are checked before persistence. Planning requires configured rank projection's exact healthy `RankAdapter` pin; immutable execution journals costs → optional external rank projection → concrete optimistic internal commit → rewards. Separate compensation evidence, stale pins, divergence, and uncertainty cannot become success. Live Paper/LuckPerms qualification remains outside this engine-level criterion. |
+| A26 | Simulation shows exact plan without mutation | Satisfied | Engine-level simulation invokes the same trusted authorization/evaluation/preflight path, including role-local projection health/contract checks. Executable previews carry a complete seal, while blocked previews carry denied authority and cannot be escalated by record reconstruction. Neither path performs cost, projection, reward, stage, operation, latch, or baseline mutation; Phase 6 owns command/UI presentation. |
 | A27 | Destructive prestige requires clear confirmation | Later | Phase 4/6. |
 | A28 | Prestige required/reset stage is not hardcoded | Partial | Generic IDs contain no special stage; prestige engine is Phase 4. |
 | A29 | Finite and unlimited prestige caps work | Later | Phase 4. |
@@ -61,17 +61,17 @@
 | A52 | PAPI output is cached and does not query DB per render | Later | Phase 5. |
 | A53 | Missing/unparseable PAPI input is unavailable/actionable | Partial | Structured provider failure contract; PAPI provider is Phase 5. |
 | A54 | QuickShop P2P cycling gives zero default credit | Partial | Safe policy/schema defaults are tested; the actual QuickShop adapter and cycling test remain Phase 5. |
-| A55 | Blocked command actions are refused | Partial | External commands disabled/high-risk in schema; action validator/executor is Phase 3. |
+| A55 | Blocked command actions are refused | Partial | Production command reward policy is disabled by default; mandatory normalized roots, exact structured tokens, controls/chaining, unresolved input, count/length limits, preview, and uncertainty fail closed. Trusted runtime context preserves correlation, increments nested depth, and blocks before over-limit dispatch in deterministic provider-boundary tests; production command-triggered rank-up ingress remains Phase 6. |
 | A56 | View-only staff cannot apply | Partial | Separate schema edit/apply permissions; command/GUI enforcement is Phase 6. |
 | A57 | Manual prestige edit produces complete audit | Partial | Full audit/redaction contract + SQLite append test; player edit surface is Phase 6. |
-| A58 | Dirty cached progress survives restart | Later | Phase 4/8 cache/recovery implementation. |
-| A59 | Interrupted pending internal operation reconciles without duplicate reward | Partial | Operation/action states, persistence, transition tests, idempotency uniqueness; recovery coordinator later. |
-| A60 | External side-effect crash records uncertainty | Partial | Persisted executor tests cover save uncertainty and successful LuckPerms save followed by failed after-state verification; both become `UNCERTAIN`/`NEEDS_RECONCILIATION` without internal commit. Broader action recovery remains later. |
+| A58 | Dirty cached progress survives restart | Partial | Manual progress has explicit async shutdown flush plus SQLite reload proof; broader Phase 4 cached engine/recovery ownership remains. |
+| A59 | Interrupted pending internal operation reconciles without duplicate reward | Partial | Phase 3 rank-up journals every action, suppresses duplicate idempotency tuples, and records exceptional/uncertain effects; restart recovery coordinator/operator tooling remains later. |
+| A60 | External side-effect crash records uncertainty | Partial | Rank projection plus Phase 3 cost/stage/reward exceptional futures and explicit uncertain results become journaled `UNCERTAIN`/`NEEDS_RECONCILIATION`; broader recovery remains later. |
 | A61 | Offline player rank/repair is safe or explicitly limited | Partial | Adapter uses asynchronous UUID load/save, preserves cached users, cleans up newly loaded users, and surfaces save uncertainty in proxy-backed real-API tests; live LuckPerms storage qualification remains. |
-| A62 | High-volume progress avoids per-event SQL/TPS harm | Partial | Paper thread/scheduler boundary and fake ingestion foundations; load/event engine later. |
-| A63 | SQLite upgrade preserves real data and reports migration | Partial | Disposable migration/report, prefix, retry, and backup-order tests pass; production-like data upgrade remains Phase 9. |
+| A62 | High-volume progress avoids per-event SQL/TPS harm | Partial | Ten thousand trusted manual increments aggregate to one versioned player/metric batch record; provider reads batch/coalesce and Paper statistics use one server-thread task. Live load qualification remains later. |
+| A63 | SQLite upgrade preserves real data and reports migration | Partial | Deterministic migration 3 adds baseline/latch/manual tables with prepared repositories; disposable migration/report/prefix/retry/backup-order tests pass, while production-like upgrade remains Phase 9. |
 | A64 | MySQL/MariaDB match SQLite progression semantics | Partial | CI container contract harness exists; no backend support claim and no progression engine yet. |
-| A65 | Third-party provider registers and appears dynamically | Partial | Owner-bound registry/capabilities/generations and fake providers; UI/evaluation later. |
+| A65 | Third-party provider registers and appears dynamically | Partial | Owner-bound registry/capabilities/generations drive typed metric evaluation, configuration validation, and cost/reward planning dynamically; user-facing discovery/completion remains Phase 6. |
 | A66 | Rank/prestige API event ordering is documented/correct | Later | Phase 8 public event API after engines exist. |
 | A67 | One optional adapter failure leaves unrelated features working | Partial | Health evaluator/registry isolation is tested; a real optional-adapter fault test remains later. |
 | A68 | Unicode/MiniMessage language replacement renders correctly | Partial | UTF-8 build/YAML golden proof; language/UI rendering later. |
@@ -84,7 +84,7 @@
 | A75 | PvP/Court plugin remains provider-only | Later | Architectural boundary is retained; Phase 7/9 verification. |
 | A76 | Fresh admin succeeds using Quick Start only | Later | Phase 8 documentation/usability gate. |
 
-## Phase 2 hard-safety mapping
+## Phase 3 hard-safety mapping
 
 | Hard-safety gate | Evidence |
 |---|---|
@@ -109,3 +109,22 @@
 | Provider failure is unavailable, not zero | `TestkitTest.simulatesProviders` |
 | Sensitive schema/audit values redact | schema test, `AuditValueTest`, SQLite audit test |
 | V1 frozen evidence unchanged | release checksum/characterization tests plus CI `git diff` gate |
+| Typed values/operators/scopes fail closed | `MetricValueTest`, `RequirementMetricMatrixTest`, `RequirementTreeValidator` tests |
+| Evaluation/simulation does not mutate | `RequirementEngineTest`, `RankUpEngineTest` simulation and preflight assertions |
+| Scope state cannot leak across lifecycle/semantics or be returned for the wrong key | in-memory and SQLite baseline/latch scope/fingerprint tests plus `RequirementEngineTest` wrong-key rejection |
+| Provider reads are batched and explicitly generation-pinned | `RequirementMetricCollectorTest`, `VanillaStatisticsProviderTest` |
+| Aggregate costs preflight before any consumption | `RankUpEngineTest` combined-cost, outage, unmet, and simulation cases |
+| Required reward impossibility precedes costs | required-outage planning test; immutable operation ordering assertions |
+| External command input cannot become arbitrary execution | `CommandActionValidatorTest`, production `CommandRewardProvider`, mandatory root/token/bounds checks |
+| High-volume API progress is owner/provenance bound and batched | `ManualProgressProviderTest`, `SqlitePhaseThreeStateTest` |
+| Canonical rank-up inputs cannot be caller-substituted | intent-only `RankUpIntent`, injected `RankUpProgressContextSource`/`RequirementStateReader`, opaque evaluation/plan bindings, and `RankUpEngineTest` component-shape, trusted-source, illegal-target, and stale-pin cases |
+| Blocked/tampered public plans cannot reuse canonical authority | `RankUpAuthorization`, `RankUpPlanner`, executor-first seal check, and `RankUpEngineTest` blocked-gate escalation, denied-authority, requirement-outcome substitution, external-projection substitution, no-journal/no-effect, and untouched execution cases |
+| Player source provenance and active plan revision are distinct | `RankUpPlan.expectedPlayerConfigRevision`, `RepositoryStageTransitionCommitter`, and `RankUpEngineTest` safe R1→R2, unknown/disabled/terminal source, remap, and CAS cases |
+| Rank projection health and contract participate in planning/simulation | `RankUpPlanner` and `RankUpEngineTest` active/healthy/exact-generation/`RankAdapter`, `projection: none`, and optional-reward role-isolation cases |
+| External projection is journaled and isolated | `RankUpEngineTest` projection-none/success/missing/known/uncertain/generation/divergence/duplicate/supporter cases |
+| Compensation retains per-action recovery evidence | `RankUpEngineTest` applied/failed/uncertain/exceptional/reverse-order reload cases |
+| Active snapshots retain exact pins; dormant/optional semantics match runtime | `StageConfigurationWorkflowTest`, `PhaseThreeConfigurationValidatorTest` |
+| Provider synchronous throws and failed futures normalize | metric collector, rank target, and cost/reward preflight focused tests |
+| Semantic state keys are structurally unambiguous | `RequirementSemanticsTest` version/shape/scaling/catch-up/type cases |
+| Manual progress authority is capability-bound and race-safe | `ManualProgressProviderTest` forged/foreign/stale/close/final-slot cases |
+| Command recursion uses runtime context | `CommandActionValidatorTest.propagatesActualNestedExecutionDepth` |

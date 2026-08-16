@@ -8,6 +8,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import net.maddkraft.maddprestige.api.id.ProviderId;
+import net.maddkraft.maddprestige.api.id.CostId;
+import net.maddkraft.maddprestige.api.id.RequirementId;
+import net.maddkraft.maddprestige.api.id.RewardId;
 import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.api.validation.ValidationFinding;
 import net.maddkraft.maddprestige.api.validation.ValidationReport;
@@ -22,9 +25,9 @@ public final class StageConfigurationCompiler {
     private static final Set<String> TOP_LEVEL_KEYS = Set.of(
             "schema-version", "active", "stages", "order", "baseline", "reconciliation-policy");
     private static final Set<String> STAGE_KEYS = Set.of(
-            "enabled", "display-name", "display-metadata", "projection");
+            "enabled", "display-name", "display-metadata", "projection", "requirements", "costs", "rewards");
     private static final Set<String> DEFERRED_STAGE_KEYS = Set.of(
-            "requirements", "costs", "rewards", "actions", "entry-actions", "completion-actions",
+            "actions", "entry-actions", "completion-actions",
             "prestige", "scaling", "permission-predicates", "gui");
     private static final LoadSettings SETTINGS = LoadSettings.builder()
             .setLabel(DOCUMENT)
@@ -104,12 +107,70 @@ public final class StageConfigurationCompiler {
             Map<String, String> metadata = stringMap(
                     fields.get("display-metadata"), path(rawId, "display-metadata"), findings);
             StageProjection projection = projection(fields.get("projection"), rawId, findings);
+            Optional<RequirementId> requirements = optionalRequirementId(
+                    fields.get("requirements"), path(rawId, "requirements"), findings);
+            List<CostId> costs = idList(fields.get("costs"), path(rawId, "costs"), CostId::new, findings);
+            List<RewardId> rewards = idList(fields.get("rewards"), path(rawId, "rewards"), RewardId::new, findings);
             if (displayName == null) {
                 displayName = rawId;
             }
-            stages.put(id, new StageDefinition(id, enabled, displayName, metadata, projection));
+            stages.put(id, new StageDefinition(id, enabled, displayName, metadata, projection,
+                    requirements, costs, rewards));
         }
         return stages;
+    }
+
+    private static Optional<RequirementId> optionalRequirementId(
+            Object value, String valuePath, List<ValidationFinding> findings) {
+        if (value == null) {
+            return Optional.empty();
+        }
+        String scalar = scalarString(value);
+        if (scalar == null) {
+            findings.add(error("stage.requirements.reference", valuePath,
+                    "Stage requirements must reference one stable requirement-tree ID.",
+                    "Use requirements: tree_id instead of anonymous inline behavior."));
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new RequirementId(scalar));
+        } catch (IllegalArgumentException exception) {
+            findings.add(error("stage.requirements.id", valuePath, exception.getMessage(),
+                    "Use a normalized stable requirement-tree ID."));
+            return Optional.empty();
+        }
+    }
+
+    private static <T> List<T> idList(
+            Object value,
+            String valuePath,
+            java.util.function.Function<String, T> constructor,
+            List<ValidationFinding> findings) {
+        if (value == null) {
+            return List.of();
+        }
+        if (!(value instanceof List<?> list)) {
+            findings.add(error("stage.references.type", valuePath,
+                    "Stage references must be a list of stable IDs.", "Use a YAML list of immutable IDs."));
+            return List.of();
+        }
+        ArrayList<T> result = new ArrayList<>();
+        Set<String> seen = new LinkedHashSet<>();
+        for (Object item : list) {
+            String scalar = scalarString(item);
+            if (scalar == null || !seen.add(scalar)) {
+                findings.add(error("stage.references.invalid", valuePath,
+                        "Stage references must be unique scalar IDs.", "Remove duplicates and invalid values."));
+                continue;
+            }
+            try {
+                result.add(constructor.apply(scalar));
+            } catch (IllegalArgumentException exception) {
+                findings.add(error("stage.references.id", valuePath, exception.getMessage(),
+                        "Use normalized stable IDs."));
+            }
+        }
+        return List.copyOf(result);
     }
 
     private static StageProjection projection(Object value, String stageId, List<ValidationFinding> findings) {
