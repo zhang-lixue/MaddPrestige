@@ -27,6 +27,19 @@ public final class BaselineInitializationService {
             List<RequirementDefinition> requirements,
             Map<RequirementId, MetricSample> samples,
             Map<ProviderId, Long> providerGenerations) {
+        List<RequirementBaseline> prepared = prepareScope(playerId, scope, scopeInstance, requirements, samples,
+                providerGenerations);
+        return prepared.stream().map(states::initializeBaseline).toList();
+    }
+
+    /** Validates and creates exact baseline rows without mutating persistence. */
+    public List<RequirementBaseline> prepareScope(
+            UUID playerId,
+            MeasurementScope scope,
+            net.maddkraft.maddprestige.api.id.ScopeId scopeInstance,
+            List<RequirementDefinition> requirements,
+            Map<RequirementId, MetricSample> samples,
+            Map<ProviderId, Long> providerGenerations) {
         if (!scope.requiresBaseline()) {
             throw new IllegalArgumentException("Only snapshot-relative scopes initialize baselines");
         }
@@ -46,7 +59,7 @@ public final class BaselineInitializationService {
                     definition.semanticFingerprint());
             RequirementBaseline proposed = new RequirementBaseline(key, sample.value().orElseThrow(), generation,
                     clock.instant());
-            initialized.add(states.initializeBaseline(proposed));
+            initialized.add(proposed);
         }
         return List.copyOf(initialized);
     }

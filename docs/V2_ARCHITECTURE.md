@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
-**Architecture baseline:** Phase 3, 2026-08-15
-**Runtime status:** Phase 3 authorization/planning services are implemented and testable, but remain deliberately disconnected from frozen V1 production bootstrap/player data
+**Architecture baseline:** Phase 4, 2026-08-15
+**Runtime status:** Phase 4 lifecycle/authorization/recovery services are implemented and testable, but remain deliberately disconnected from frozen V1 production bootstrap/player data
 
 ## Module graph
 
@@ -20,8 +20,8 @@ api/core/persistence ────────┘
 ```
 
 - `maddprestige-api` contains immutable public value objects, typed metric/cost/reward/provider contracts, identifiers, structured results, provider metadata, operation plans, validation, explanations, audit contracts, and the asynchronous generic rank-adapter contract. It imports no Paper, SQL, Vault, LuckPerms, or V1 types.
-- `maddprestige-core` contains schema/configuration, lossless YAML documents, provider registry, typed requirement trees/scopes/scaling/catch-up, manual progress, safe command rewards, immutable rank-up planning/simulation, operation state validation, arbitrary ordered stages, reconciliation decisions, legacy plans, and generic safe defaults. It imports no Paper, SQL, or external plugin APIs.
-- `maddprestige-persistence` owns repository interfaces, JDBC boundaries, backup verification, deterministic migration history, UUID-first player-stage/baseline/latch/manual state, persisted rank-up/projection/reconciliation coordination, the disposable SQLite V2 schema, and external-backend contract harness.
+- `maddprestige-core` contains schema/configuration, lossless YAML documents, provider registry, typed requirement trees/scopes/scaling/catch-up, manual progress, safe command rewards, immutable rank-up and Prestige authorization/simulation, exact internal currency contracts, entitlement merging, milestone/season models, operation state validation, arbitrary ordered stages, reconciliation decisions, legacy plans, and generic safe defaults. It imports no Paper, SQL, or external plugin APIs.
+- `maddprestige-persistence` owns repository interfaces, JDBC boundaries, backup verification, deterministic migration history, UUID-first player-stage/Prestige/baseline/latch/manual/season/currency state, persisted rank-up/Prestige/projection/reconciliation coordination, bounded startup recovery, the disposable SQLite V2 schema, and external-backend contract harness.
 - `maddprestige-platform-paper` owns explicit Paper server-thread/worker boundaries and actual Bukkit statistic capability/read adaptation. It contains no V2 bootstrap or progression activation through Phase 3.
 - `maddprestige-integrations` owns dependency-health classification and the first-party LuckPerms 5.5 rank adapter. LuckPerms remains provided/optional and is never imported by generic core.
 - `maddprestige-testkit` provides fake rank/currency/progression/cost/reward providers, health simulation, failure injection, action fakes, golden configuration helpers, and disposable SQLite fixtures.
@@ -54,6 +54,19 @@ api/core/persistence ────────┘
 23. `PlayerStageState.configRevision` is historical provenance for the configuration that last wrote that row. A rank-up separately binds that observed source revision and the current active revision governing the new plan/write.
 24. Rank projection is a required provider role during planning/simulation: its exact pin must be active, healthy, and a `RankAdapter`. Optional reward health remains role-local and may omit only that reward.
 25. A blocked canonical plan carries denied authority. An executable authorization seals every execution-consequential plan field and is checked before journal insertion; `unavailableProviders` remains diagnostic-only because no execution decision consumes it.
+26. Prestige has its own intent-only authorization and plan because its multi-domain reset transaction is not a rank-up, while sharing the accepted operation/action journal.
+27. A successful Prestige changes stage, current/lifetime counts, Prestige scope/baselines, configured internal currency, milestone awards and stage/Prestige history in one SQLite transaction guarded by both stage and Prestige CAS revisions.
+28. Internal currency identity is independent of display metadata; all mutations are exact, bounded, audited, transactionally ledgered and idempotent by operation/action ID.
+29. External metric read capability never implies reset authority. Phase 4 external resets are disabled and unsupported configuration fails closed.
+30. Seasons are one-active progression-data containers with immutable scope/archive history; they never own world or unrelated gameplay lifecycle.
+31. Recovery is bounded and evidence-driven. Known native effects may be verified; uncertain external actions are retained for reconciliation and never blindly replayed.
+32. Phase 4 provider pins must retain every prior-phase pin exactly and may add validated Phase 4-only cost/reward/metric pins. The active Prestige requirement tree is traversed transitively; reachable leaves are validated/health-checked/pinned while truly dormant definitions remain lazy.
+33. Prestige scoped requirement progress, baselines, and latches are one coherent disposition. `RESET` creates a new scope and reachable boundaries; `PRESERVE` keeps the existing scope and writes no replacement boundary. Purchased perks, milestone history, season progress, and historical statistics are preserve-only in the Prestige policy. A season owns a separate, narrow `season-progress` `RESET`/`PRESERVE` policy; unrelated generic reset components are rejected.
+34. Full active-revision/provider-generation/activation/health bindings are rechecked after costs and before either rank projection or internal commit. Native currency actions carry their plan-bound configuration revision in the sealed planned action.
+35. SQLite, not a process-local monitor, is the internal-currency concurrency authority. Independent connections use transactions, uniqueness, and bounded contention retry. Currency replay equivalence binds financial identity plus actor type/UUID/name, source, reason, and configuration revision; retry timestamps are not identity.
+36. Season entry, its authoritative `ACTIVE` qualification, and all required season baselines share one transaction. Active progress updates use a conditional `ACTIVE` write; archive makes normal season progress immutable.
+37. Recovery may replay only exact persisted native idempotent payloads through the same healthy generation, or compensate exact known-applied native reversible/idempotent costs. Terminal `COMPENSATED` requires every consequential cost effect to be reversed or proven absent; any mixed uncertain external cost keeps `NEEDS_RECONCILIATION` even after safe native compensation.
+38. Normal rank-up and Prestige-reset stage history persist complete actor type/optional UUID/name provenance. Migration 5 preserves legacy null-UUID rows while making actor UUID durable across restart.
 
 ## Configuration flow foundation
 
@@ -121,12 +134,58 @@ Cost and reward preflight is provider-batched. Required reward impossibility blo
 
 Command rewards are a narrow adapter over reviewed templates and structured tokens, not arbitrary console/process access. `CommandExecutionContext` retains operation correlation and monotonically increments actual nested depth; production command-triggered rank-up ingress is still Phase 6. Vanilla statistics live in the Paper boundary, classify block/item/entity dimensions separately, and use one scheduler task per provider batch. Manual progress lives in core and uses bootstrap-issued opaque capability authority, bounded aggregation, versioned batch persistence, and explicit flush/shutdown barriers.
 
+## Phase 4 lifecycle architecture
+
+```text
+PrestigeIntent
+    ↓ active Stage + PhaseThree + PhaseFour snapshots
+authoritative PlayerStageState + PlayerPrestigeState
+    ↓ trusted progress/scope/state sources + pinned metric collection
+requirements + cost/reward/milestone preflight
+    ↓ exact zero-write PrestigeSimulation
+opaque sealed PrestigePlan
+    ↓ persist PREPARED operation/actions/details
+costs → managed rank projection → atomic internal commit → rewards
+    ↓
+COMPLETED / COMPENSATED / FAILED / NEEDS_RECONCILIATION
+```
+
+Prestige eligibility derives only from configured immutable required/reset stage IDs. Current and lifetime counters are distinct; the finite cap applies to current count, while lifetime is preserved historical state. Cooldown and count arithmetic fail closed. The trusted progress source owns scaling index, catch-up position and current scope IDs. Requirement trees retain Phase 3 exact scaling/catch-up behavior.
+
+The simulation is the future UI's canonical confirmation payload. It seals source/reset stages, counter transitions, requirement explanation, costs/rewards, currency deltas, every reset/preserve component, old/new scopes and baseline snapshots, milestones, season context, provider actions/uncertainty, config provenance, state revisions and generation pins. Simulation has no mutation dependency. Blocked plans have denied authority, and the executor rejects reconstruction/tampering before journal insertion.
+
+The internal commit is a single SQLite transaction guarded by stage and Prestige compare-and-set predicates. It updates both authoritative rows, applies the exact sealed scoped-state disposition, conditionally stores fresh provider-sampled reachable `SINCE_PRESTIGE_START` baselines, conditionally resets Prestige-scoped balances with ledger provenance, records repeatability-keyed milestones, and appends immutable stage/Prestige history. `PRESERVE` retains the current scope/baselines/latches; `RESET` creates a new scope without deleting old evidence. The three scoped requirement components must agree. Purchased perks, milestone history, season progress, and historical statistics reject `RESET` because Phase 4 does not own a truthful mutation for them. External provider resets are a separate capability and remain disabled.
+
+Internal currencies use stable IDs plus display metadata and exact bounded values. Each ledger action uniquely binds operation/action/player/currency/delta/kind/revision. Exact replay returns the original result; conflicting reuse is rejected. The revision is carried by `PlannedCost`/`PlannedReward`, including compensation, so a later active configuration cannot rewrite provenance. Two independent stores are serialized by SQLite transactions and bounded `BUSY`/`LOCKED`/busy-snapshot retry; correctness does not depend on a JVM monitor. Administrative adjustment is a non-player, reason-bound service call.
+
+Entitlement merging is pure and deterministic. Contributions sort by priority then source ID; duplicate sources and mismatched types fail. `MAX`, `MIN`, exact overflow-bounded `SUM`, priority `OVERRIDE`, and `BOOLEAN_OR` return both effective value and provenance.
+
+Milestone definitions model current/lifetime Prestige, stage, season and provider-metric triggers. The Prestige lifecycle evaluates only current/lifetime triggers it owns; enabled unsupported trigger kinds fail configuration validation. Triggered reward definitions enter the same preflight/action plan. Award identity and reward snapshot are committed atomically so restart cannot redeliver a one-time key.
+
+Seasons use a one-active partial unique index. Start allocates a new immutable scope; player entry prepares boundary values without mutation and then transactionally persists the entry plus every required `SINCE_SEASON_START` baseline. Boundary failure rolls back the entry, and exact retry is idempotent. End archives and records history before replacement. Requirement overrides/catch-up references fail closed until a runtime owns them; timestamps are manual-lifecycle metadata only. Stored progress and archive queries are bounded/indexed. A season is data only and has no world, PvP, Court or resource-world authority.
+
+```text
+bounded incomplete-operation scan
+    ├─ PREPARED → FAILED (no execution began)
+    ├─ committed internal evidence → verify transaction actions
+    │       ├─ exact native idempotent reward → replay by sealed operation/action ID
+    │       ├─ all rewards verified → COMPLETED
+    │       └─ incomplete/uncertain external reward → NEEDS_RECONCILIATION
+    ├─ no internal commit + exact known native costs → compensate in reverse order
+    ├─ interrupted STARTED external action → UNCERTAIN
+    └─ generic/compensation ambiguity → NEEDS_RECONCILIATION
+```
+
+Recovery reads persisted provider/action characteristics, exact sealed native recovery payloads, journal state, and internal commit evidence. It reissues only native actions explicitly marked recoverable, idempotent, non-external, bound to the same active healthy generation; it never fabricates a plan or reissues an unknown external provider call. Automatic decisions append recovery audit events. Prestige history is updated from `STATE_COMMITTED` to `COMPLETED` or `NEEDS_RECONCILIATION`, preserving both authoritative internal success and later external uncertainty.
+
 ## Persistence foundation
 
 The SQLite implementation uses a V2-only disposable schema with foreign keys, integrity checks, explicit indexes, UTC ISO-8601 timestamps, exact decimal text, operation/action journals, configuration revisions, UUID-first `mp_player_stage_state`, semantic baseline/latch state, versioned manual progress, and append-only audit rows. `mp_player_stage_state.config_revision` records the active configuration that last wrote the player's stage; it is historical row provenance, not a demand to bulk-rewrite every row on config apply. Player stage updates use optimistic state-revision compare-and-set; import and baseline/latch initialization use insert-once semantics. Manual progress uses static prepared batch UPSERT guarded by update version. Migration attempts record version, checksum, description, time, result, and detail. An applied version is written only in the same transaction as its successful DDL.
+
+Migration 4 adds player Prestige state/details, exact currency ledger, stage/Prestige history, milestone awards, one-active seasons/player progress/archive, native recovery payloads, and recovery events with player/time/state indexes. Both normal rank-up and Prestige reset append stage history transactionally with their stage CAS; stale CAS writes no orphan row. History and recovery APIs enforce 1–1000 row bounds. Query values are prepared parameters; static column fragments do not contain caller data. No Phase 4 high-volume event path writes SQL per event.
 
 `MySQL` and `MariaDB` are backend contract targets, not supported deployments. CI can provision each separately to exercise exact-decimal and uniqueness primitives. No network/proxy-safe behavior is claimed.
 
 ## V1 isolation
 
-V1 source, tests, resources, release artifacts, runtime configuration, and empty SQLite evidence remain at their baseline paths. Phase 0/1 characterization remains historical evidence. Phase 3 tests use only synthetic YAML, real public API types with proxy/test boundaries, in-memory providers, and disposable `mp_`-prefixed SQLite files. No production configuration, player record, database, economy, Paper server, or LuckPerms state is opened or mutated.
+V1 source, tests, resources, release artifacts, runtime configuration, and empty SQLite evidence remain at their baseline paths. Phase 0/1 characterization remains historical evidence. Phase 4 tests use only synthetic YAML, real public API types with proxy/test boundaries, in-memory providers, and disposable `mp_`-prefixed SQLite files. No production configuration, player record, database, economy, Paper server, or LuckPerms state is opened or mutated.

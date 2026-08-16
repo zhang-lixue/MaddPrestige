@@ -25,6 +25,7 @@ public final class FakeCostProvider extends FakeProvider implements CostProvider
     private final Map<UUID, BigDecimal> balances = new ConcurrentHashMap<>();
     private final Set<String> applied = ConcurrentHashMap.newKeySet();
     private volatile ActionExecutionResult nextExecution;
+    private volatile Runnable nextExecutionHook;
     private volatile Supplier<CompletionStage<List<CostPreflight>>> nextPreflight;
     private final ConcurrentLinkedQueue<Supplier<CompletionStage<ActionExecutionResult>>> compensations =
             new ConcurrentLinkedQueue<>();
@@ -48,6 +49,10 @@ public final class FakeCostProvider extends FakeProvider implements CostProvider
 
     public void nextExecution(ActionExecutionResult result) {
         nextExecution = result;
+    }
+
+    public void onNextExecution(Runnable hook) {
+        nextExecutionHook = java.util.Objects.requireNonNull(hook, "execution hook");
     }
 
     public void nextCompensation(ActionExecutionResult result) {
@@ -124,20 +129,31 @@ public final class FakeCostProvider extends FakeProvider implements CostProvider
 
     @Override
     public CompletionStage<ActionExecutionResult> execute(PlannedCost plannedCost) {
+        Runnable hook = nextExecutionHook;
+        nextExecutionHook = null;
         ActionExecutionResult forced = nextExecution;
         nextExecution = null;
         if (forced != null) {
             if (forced.status() == net.maddkraft.maddprestige.api.action.ActionExecutionStatus.APPLIED) {
                 apply(plannedCost);
             }
+            if (hook != null) {
+                hook.run();
+            }
             return CompletableFuture.completedFuture(forced);
         }
         String key = key(plannedCost);
         if (!applied.add(key)) {
+            if (hook != null) {
+                hook.run();
+            }
             return CompletableFuture.completedFuture(ActionExecutionResult.unchanged());
         }
         balances.compute(plannedCost.playerId(), (ignored, current) ->
                 (current == null ? BigDecimal.ZERO : current).subtract(plannedCost.definition().amount().asNumber()));
+        if (hook != null) {
+            hook.run();
+        }
         return CompletableFuture.completedFuture(ActionExecutionResult.applied());
     }
 

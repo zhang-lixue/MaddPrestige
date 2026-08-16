@@ -15,5 +15,12 @@ public interface PlayerStageRepository {
 
     void update(PlayerStageState replacement, long expectedRevision);
 
+    void updateAndAppendHistory(
+            PlayerStageState replacement,
+            long expectedRevision,
+            StageHistoryRecord history);
+
+    java.util.List<StageHistoryRecord> history(UUID playerId, int limit);
+
     Map<StageId, Long> countByStage();
 }

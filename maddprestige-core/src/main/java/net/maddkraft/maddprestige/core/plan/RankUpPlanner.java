@@ -156,7 +156,8 @@ public final class RankUpPlanner {
             }
             long generation = request.pinnedProviderGenerations().get(definition.providerId());
             PlannedCost planned = new PlannedCost(operationId, "cost-" + index, request.playerId(), definition,
-                    generation, costProvider.characteristics(definition), "consume " + definition.displayName());
+                    request.configRevision(), generation, costProvider.characteristics(definition),
+                    "consume " + definition.displayName());
             proposals.add(new ProposedCost(costProvider, planned));
         }
         return List.copyOf(proposals);
@@ -194,7 +195,8 @@ public final class RankUpPlanner {
             }
             long generation = request.pinnedProviderGenerations().get(definition.providerId());
             PlannedReward planned = new PlannedReward(operationId, "reward-" + index, request.playerId(), definition,
-                    generation, rewardProvider.characteristics(definition), "apply " + definition.displayName());
+                    request.configRevision(), generation, rewardProvider.characteristics(definition),
+                    "apply " + definition.displayName());
             proposals.add(new ProposedReward(rewardProvider, planned));
         }
         return List.copyOf(proposals);

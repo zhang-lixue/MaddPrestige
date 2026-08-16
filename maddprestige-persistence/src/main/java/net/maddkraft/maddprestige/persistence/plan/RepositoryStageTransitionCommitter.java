@@ -11,6 +11,7 @@ import net.maddkraft.maddprestige.core.plan.StageTransitionCommitter;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.PlayerStageRepository;
 import net.maddkraft.maddprestige.persistence.StalePlayerStageStateException;
+import net.maddkraft.maddprestige.persistence.StageHistoryRecord;
 
 /**
  * Production optimistic-CAS committer backed by the accepted Phase 2 player-stage repository. It compares the
@@ -40,7 +41,9 @@ public final class RepositoryStageTransitionCommitter implements StageTransition
         try {
             var replacement = current.orElseThrow().advanceTo(plan.targetStage(), plan.configRevision(),
                     rankGeneration, clock.instant());
-            playerStages.update(replacement, plan.expectedStateRevision());
+            playerStages.updateAndAppendHistory(replacement, plan.expectedStateRevision(), new StageHistoryRecord(
+                    plan.playerId(), plan.targetStage(), replacement.stageEnteredAt(), plan.operationId(),
+                    plan.operationPlan().actor(), "Normal rank-up", plan.configRevision()));
             return CompletableFuture.completedFuture(ActionExecutionResult.applied());
         } catch (StalePlayerStageStateException exception) {
             return CompletableFuture.completedFuture(ActionExecutionResult.failed(exception.getMessage()));

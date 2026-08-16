@@ -3,6 +3,7 @@ package net.maddkraft.maddprestige.api.reward;
 import java.util.Objects;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.action.ActionCharacteristics;
+import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.OperationId;
 
 public record PlannedReward(
@@ -10,6 +11,7 @@ public record PlannedReward(
         String actionId,
         UUID playerId,
         RewardDefinition definition,
+        ConfigRevisionId configRevision,
         long providerGeneration,
         ActionCharacteristics characteristics,
         String redactedPreview) {
@@ -18,6 +20,7 @@ public record PlannedReward(
         actionId = Objects.requireNonNull(actionId, "action ID");
         playerId = Objects.requireNonNull(playerId, "player ID");
         definition = Objects.requireNonNull(definition, "definition");
+        configRevision = Objects.requireNonNull(configRevision, "configuration revision");
         if (providerGeneration < 1) {
             throw new IllegalArgumentException("Provider generation must be positive");
         }

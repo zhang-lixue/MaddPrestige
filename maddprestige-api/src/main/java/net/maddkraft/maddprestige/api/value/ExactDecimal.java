@@ -37,6 +37,22 @@ public final class ExactDecimal implements Comparable<ExactDecimal> {
         return new ExactDecimal(value.add(other.value));
     }
 
+    public ExactDecimal subtract(ExactDecimal other) {
+        return new ExactDecimal(value.subtract(other.value));
+    }
+
+    public ExactDecimal negate() {
+        return new ExactDecimal(value.negate());
+    }
+
+    public int precision() {
+        return value.precision();
+    }
+
+    public int scale() {
+        return Math.max(value.scale(), 0);
+    }
+
     @Override
     public int compareTo(ExactDecimal other) {
         return value.compareTo(other.value);

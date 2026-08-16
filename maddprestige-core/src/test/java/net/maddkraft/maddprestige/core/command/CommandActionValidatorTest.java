@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.maddkraft.maddprestige.api.action.ActionCharacteristics;
 import net.maddkraft.maddprestige.api.action.ActionExecutionStatus;
 import net.maddkraft.maddprestige.api.id.OperationId;
+import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.id.RewardId;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class CommandActionValidatorTest {
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("command-action-test");
     private final CommandActionValidator validator = new CommandActionValidator();
 
     @Test
@@ -128,7 +130,7 @@ class CommandActionValidatorTest {
                 MetricValue.parse(MetricValueType.STRING, "action"), Map.of(), "Welcome command",
                 RewardFailurePolicy.REQUIRED, RewardRepeatability.ONCE_PER_OPERATION);
         PlannedReward planned = new PlannedReward(OperationId.random(), "reward:welcome", UUID.randomUUID(),
-                definition, 1, new ActionCharacteristics(false, false, false, true), "console:say");
+                definition, REVISION, 1, new ActionCharacteristics(false, false, false, true), "console:say");
 
         assertFalse(provider.validate(definition).hasErrors());
         assertTrue(provider.preflight(planned).toCompletableFuture().join().plannedReward().isPresent());
@@ -153,9 +155,9 @@ class CommandActionValidatorTest {
                 RewardFailurePolicy.REQUIRED, RewardRepeatability.ONCE_PER_OPERATION);
         UUID playerId = UUID.randomUUID();
         OperationId operationId = OperationId.random();
-        PlannedReward first = new PlannedReward(operationId, "reward:first", playerId, definition, 1,
+        PlannedReward first = new PlannedReward(operationId, "reward:first", playerId, definition, REVISION, 1,
                 provider.characteristics(definition), "console:say");
-        PlannedReward second = new PlannedReward(operationId, "reward:second", playerId, definition, 1,
+        PlannedReward second = new PlannedReward(operationId, "reward:second", playerId, definition, REVISION, 1,
                 provider.characteristics(definition), "console:say");
 
         var preflights = provider.preflightBatch(List.of(first, second)).toCompletableFuture().join();
@@ -196,7 +198,7 @@ class CommandActionValidatorTest {
                 MetricValue.parse(MetricValueType.STRING, "action"), Map.of(), "Nested",
                 RewardFailurePolicy.REQUIRED, RewardRepeatability.ONCE_PER_OPERATION);
         OperationId operationId = OperationId.random();
-        reward[0] = new PlannedReward(operationId, "reward:nested", UUID.randomUUID(), definition, 1,
+        reward[0] = new PlannedReward(operationId, "reward:nested", UUID.randomUUID(), definition, REVISION, 1,
                 provider[0].characteristics(definition), "console:say");
 
         var result = provider[0].execute(reward[0]).toCompletableFuture().join();
