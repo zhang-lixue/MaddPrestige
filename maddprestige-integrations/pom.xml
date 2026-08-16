@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion><parent><groupId>net.maddkraft</groupId><artifactId>maddprestige-parent</artifactId><version>2.0.0-SNAPSHOT</version></parent><artifactId>maddprestige-integrations</artifactId><name>MaddPrestige V2 Integration Contracts</name>
-    <dependencies><dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-api</artifactId></dependency><dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-core</artifactId></dependency><dependency><groupId>net.luckperms</groupId><artifactId>api</artifactId><scope>provided</scope></dependency><dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency></dependencies>
+    <dependencies>
+        <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-api</artifactId></dependency>
+        <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-core</artifactId></dependency>
+        <dependency><groupId>org.snakeyaml</groupId><artifactId>snakeyaml-engine</artifactId></dependency>
+        <dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><version>${paper.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>net.luckperms</groupId><artifactId>api</artifactId><scope>provided</scope></dependency>
+        <dependency><groupId>com.github.MilkBowl</groupId><artifactId>VaultAPI</artifactId><scope>provided</scope></dependency>
+        <dependency><groupId>com.gmail.nossr50.mcMMO</groupId><artifactId>mcMMO</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>me.clip</groupId><artifactId>placeholderapi</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.github.Gypopo</groupId><artifactId>EconomyShopGUI-API</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.ghostchu</groupId><artifactId>quickshop-api</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+    </dependencies>
 </project>

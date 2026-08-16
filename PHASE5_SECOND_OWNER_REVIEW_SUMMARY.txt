@@ -1,0 +1,249 @@
+MaddPrestige V2 Phase 5 — SECOND OWNER REVIEW SUMMARY
+Correction Pass 1
+Generated: 2026-08-16 (America/Los_Angeles)
+
+REPOSITORY STATE
+Accepted starting baseline: 38cde9a084712a3f8c06edb0e77dc31333204374
+Branch: v2/phase-5
+Current HEAD: 38cde9a084712a3f8c06edb0e77dc31333204374
+Main HEAD: 38cde9a084712a3f8c06edb0e77dc31333204374
+Main status: clean
+Index/staged paths: 0
+All Phase 5 implementation and correction files remain unstaged and uncommitted.
+No commit, push, PR, merge, main modification, Phase 6 work, or Phase 7 work occurred.
+
+CORRECTION PASS 1 EXACT FILE DELTA AGAINST THE FIRST OWNER-REVIEW BUNDLE (20)
+Modified (16):
+- DECISIONS.md
+- STATUS.md
+- docs/V2_ARCHITECTURE.md
+- docs/V2_PHASE5_FILE_MANIFEST.md
+- docs/V2_PHASE5_IMPLEMENTATION.md
+- docs/V2_TRACEABILITY.md
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/IntegrationProviderLifecycle.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationCompiler.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationConfiguration.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationPlan.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationSchema.java
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyCostProvider.java
+- maddprestige-integrations/src/main/resources/integrations.yml
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveConfigurationAndLifecycleTest.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/ShopAndMcMmoEventContractTest.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/VaultEconomyProviderTest.java
+Added (3):
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/economyshopgui/EconomyShopGuiCompatibilityListener.java
+- maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveCorrectionPassTest.java
+- PHASE5_SECOND_OWNER_REVIEW_SUMMARY.txt
+Withdrawn from the first review implementation (1):
+- maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/economyshopgui/EconomyShopGuiSaleListener.java
+
+BLOCKER 1 — STRICT CONFIGURATION SHAPES AND IDENTIFIERS
+An optional mapping receives an empty/dormant default only when its field is absent. A
+present mapping field with null, boolean, number, string, or sequence value is rejected.
+The structured finding path names the exact object and the explanation identifies the
+expected mapping and practical actual type. This rule covers vault, mcmmo,
+placeholderapi, placeholderapi.output, placeholderapi.inputs, each input definition,
+economyshopgui, both shop progression-credit objects, and quickshop. Unknown fields
+remain errors. The schema now declares every Phase 5 mapping node explicitly.
+
+Placeholder input keys must be actual YAML String keys. Numeric, boolean, null, and
+object keys are never String.valueOf-coerced. Each string is constructed as the
+canonical API MetricId before configuration is accepted; the exact offending input
+path is reported on failure. Valid lowercase canonical IDs remain unchanged.
+
+The same audit also corrected adjacent coercion defects: schema-version must be an
+actual YAML integer, boolean fields must be actual YAML booleans, and positive
+ISO-8601 durations report their precise field path. A compile error still returns only
+the safe disabled fallback and cannot activate malformed HOT_RELOAD input.
+
+BLOCKER 2 — EXACT PROVIDER LIFECYCLE RECONCILIATION
+PhaseFiveIntegrationPlan exposes the exact reachable provider set.
+IntegrationProviderLifecycle.reconcile(plan) applies that set authoritatively:
+1. copy/validate the desired set;
+2. inspect each owned discovered registration's current activation;
+3. activate a desired inactive binding and mark it ACTIVE;
+4. deactivate an active binding absent from the desired set and mark it INACTIVE;
+5. do nothing to an unchanged desired active binding or unrelated dormant binding.
+
+The old additive activateReferenced API no longer exists. Shrink, expansion, removal,
+addition, and identical reapplication are deterministic/idempotent. Activation and
+deactivation reuse the same registration/generation. Only dependency unregister plus
+genuine discovery/rebind advances generation. An unrelated unhealthy dormant provider
+does not block required reconciliation. A real compiled mcmmo-enabled plan followed by
+an empty HOT_RELOAD plan proves active -> dormant removal without generation churn.
+
+BLOCKER 3 — PLACEHOLDERAPI SELF-RECURSION
+Validation scans every closed %identifier_parameters% token in each configured input.
+It extracts the identifier before the first parameter underscore and compares it to
+maddprestige case-insensitively, matching PlaceholderAPI expansion lookup semantics.
+Lowercase, uppercase, title case, arbitrary mixed case, and a multi-placeholder string
+containing a MaddPrestige token are rejected. Multiple external tokens are accepted.
+%someplugin_maddprestige_value% is accepted because its expansion identifier is
+someplugin; the similar text occurs only in parameters. The finding identifies the
+exact input placeholder path. Requirement reads remain cache-only and zero-mutation.
+
+BLOCKER 4 — ECONOMYSHOPGUI FINAL DECISION
+EconomyShopGUI progression is deferred. The verified public 1.10.1 PostTransactionEvent
+contract remains as an optional/default-off compatibility diagnostic listener only.
+It has no MetricProvider, CostProvider, RewardProvider, ManualMetricHandle, amount
+conversion, or persistence path, and progressionCredits() is hard zero. Configuration
+has separate compatibility-enabled and progression-credit.enabled fields; progression
+accepts only false and true fails actionably.
+
+The withdrawn sale metric used scalar getPrice() and could not truthfully distinguish
+Vault money, EXP, levels, item currencies, PlayerPoints, or custom economies, nor every
+total in multi-economy sale events. No giant multi-currency subsystem was pulled into
+Phase 5. A later currency-aware provider design is required before progression support
+can be claimed.
+
+HARDENING 5 — VAULT AGGREGATE BATCH IDENTITY
+Vault cost aggregate preflight now validates every definition and requires identical:
+- player UUID;
+- canonical operation ID;
+- configuration revision;
+- sealed provider generation.
+
+Validation completes before scheduler/economy access. A mismatch returns deterministic
+BLOCKED preflights for the complete batch with zero fractionalDigits, has, withdrawal,
+or deposit calls. The corrected normal test constructs one coherent identity, sums the
+exact values, and performs exactly one balance check. Both sufficient and insufficient
+coherent behavior remain tested. Execution semantics, exact decimals, disappearance,
+non-idempotent/non-reversible/non-reconcilable characteristics, and response-mismatch
+UNCERTAIN behavior are preserved.
+
+ADDITIONAL NARROW-AUDIT FINDINGS
+The quoted-boolean and stringified-schema coercions plus duration/schema diagnostic
+precision described under Blocker 1 were corrected. No other correctness defect was
+found in the required Phase 5 provider, listener, cache, resolver, Maven, test, or
+documentation surfaces. No optional API version or provided-scope dependency changed.
+
+ACCEPTANCE / TRACEABILITY
+A48 Satisfied — real authoritative mcMMO skill/power MetricProvider remains unchanged.
+A49 Satisfied — official adjusted-XP event monotonic total/baseline behavior remains unchanged.
+A50 Satisfied — exact-set HOT_RELOAD reconciliation, stable unchanged generations,
+                 outage/rebind advancement, and dormant isolation are now proven.
+A51 Satisfied — coherent Vault batch enforcement, mixed-batch zero-call rejection,
+                 outage/disappearance blocking, and uncertainty semantics are proven.
+A52 Satisfied — PAPI output remains bounded immutable cache-only per render.
+A53 Satisfied — canonical IDs, token-aware case-insensitive self-recursion prevention,
+                 scheduled typed refresh, and unavailable freshness/data behavior are proven.
+A54 Satisfied — QuickShop remains real public-event compatibility with no progression
+                 handle and hard zero credit; EconomyShopGUI progression is separately deferred.
+A24 remains Satisfied with the strengthened coherent aggregate evidence.
+Canonical totals remain 35 Satisfied, 33 Partial, and 8 Later. Phase 0–4 statuses did
+not change, and no acceptance count was inflated for EconomyShopGUI.
+
+REAL API CONTRACT RESULTS
+- VaultAPI 1.7.1 / VaultUnlocked 2.20.2: PASS; real Economy signatures compile.
+- mcMMO 2.2.053: PASS; real ExperienceAPI and final XP event signatures compile.
+- PlaceholderAPI 2.12.2 (2.12.3 surface checked): PASS; resolver/expansion contracts compile.
+- EconomyShopGUI API 1.10.1 / runtime 7.2.0 surface: PASS; compatibility event compiles.
+- QuickShop API/runtime 6.2.0.11: PASS; post-success compatibility event compiles.
+Focused integration contract module: 41 tests, 0 failures/errors/skips.
+Focused Paper boundary: 8 tests, 0 failures/errors/skips.
+
+FULL VERIFICATION — TWO CONSECUTIVE CLEAN RUNS
+Command: .\mvnw.cmd --no-transfer-progress clean verify
+Reactor: 8/8 modules SUCCESS on both runs
+Tests: 251
+Suites: 60
+Failures: 0
+Errors: 0
+Skips: 0
+New Phase 5 tests: 37 (34 integration, 3 Paper PlaceholderAPI)
+Correction regressions added: 14
+Checkstyle: 7 reports, 0 violations
+Maven Enforcer Java/Maven version rules: PASS
+Dependency convergence: PASS
+Duplicate dependency-version rule: PASS
+JaCoCo: 7 XML reports generated
+CycloneDX: aggregate spec 1.6, 67 components, all five API coordinates present
+Optional plugin API classes shaded into distribution: 0
+Distribution SHA-256, identical both runs:
+  C7DD563A754735CB48AD3D2AB5DB898B7846FEFA41E9882173055940134C54C8
+Aggregate SBOM SHA-256, identical both runs:
+  9A0CD953432F5682AE723B2ABA954A93B4D4B6DA0197E1742E5A89F20496FFEE
+
+STATIC / SECURITY / ARCHITECTURE AUDITS
+git diff --check: clean
+Untracked trailing whitespace: 0
+Protected V1 tracked/untracked changes under src, baseline/v1, dist: 0
+Plugin-specific imports in generic API/core/persistence/testkit: 0
+Reflection: 0
+Process execution: 0
+Command-scraping pseudo-API: 0
+Direct third-party DB/file access: 0
+Dynamic SQL introduced by Phase 5: 0
+Unsafe public authorization routes introduced by Phase 5: 0
+LuckPerms group-creation paths: 0
+TODO/FIXME/HACK: 0
+TeaLeaf/MADDHATTER: 0
+Phase 6 production leakage: 0
+Phase 7/deferred integration production leakage: 0
+MaddKraft literal findings: 1 expected Placeholder expansion author metadata, 0 gameplay coupling
+EconomyShopGUI/QuickShop progression handles or mutation paths: 0
+Optional plugin API package entries in shaded artifact: 0
+Main remains clean and exact at the accepted SHA.
+
+MANIFEST / SECOND REVIEW BUNDLE
+Declared changed/new repository paths: 44
+Actual changed/new repository paths: 44
+Manifest missing paths: 0
+Manifest extra paths: 0
+Relevant unchanged review contracts: 18
+Bundle includes all 44 changed/new files, all 18 contracts, the aggregate SBOM,
+verified distribution, 60 Surefire XML reports, 7 JaCoCo XML reports, and 7
+Checkstyle reports. Bundle inventory missing/extra/duplicate counts are all zero.
+Bundle: target\MaddPrestige_Phase5_Second_Owner_Review.zip
+
+EXACT FINAL GIT STATUS / CHANGED PATHS (44)
+ M DECISIONS.md
+ M STATUS.md
+ M docs/V2_ARCHITECTURE.md
+ M docs/V2_TRACEABILITY.md
+ M maddprestige-distribution/pom.xml
+ M maddprestige-integrations/pom.xml
+ M maddprestige-platform-paper/pom.xml
+ M pom.xml
+?? PHASE5_OWNER_REVIEW_SUMMARY.txt
+?? PHASE5_SECOND_OWNER_REVIEW_SUMMARY.txt
+?? docs/V2_PHASE5_FILE_MANIFEST.md
+?? docs/V2_PHASE5_IMPLEMENTATION.md
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/IntegrationProviderLifecycle.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/IntegrationTaskScheduler.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/MutableProviderHealth.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationCompilation.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationCompiler.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationConfiguration.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationPlan.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationSchema.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/economyshopgui/EconomyShopGuiCompatibilityListener.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoAdjustedXpListener.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoExperienceAccess.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoMetricProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/OfficialMcMmoExperienceAccess.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/OfficialPlaceholderResolver.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/PlaceholderInputMetricProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/placeholder/PlaceholderResolver.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/quickshop/QuickShopCompatibilityListener.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultBalanceMetricProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyBinding.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyCostProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultEconomyRewardProvider.java
+?? maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/vault/VaultProviderDescriptors.java
+?? maddprestige-integrations/src/main/resources/integrations.yml
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/McMmoAndPlaceholderProviderTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveConfigurationAndLifecycleTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseFiveCorrectionPassTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/ShopAndMcMmoEventContractTest.java
+?? maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/VaultEconomyProviderTest.java
+?? maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderCache.java
+?? maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderExpansion.java
+?? maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderSnapshot.java
+?? maddprestige-platform-paper/src/test/java/net/maddkraft/maddprestige/platform/paper/placeholder/MaddPrestigePlaceholderExpansionTest.java
+
+LIMITATION DISCLOSURE
+No live Paper server or installed plugin implementation was mutated or started. Real
+published API artifacts and contract tests prove MaddPrestige's public-boundary usage.
+V2 runtime composition remains deliberately disconnected from protected V1 until its
+authorized later composition phase. This is not represented as live-server qualification.
