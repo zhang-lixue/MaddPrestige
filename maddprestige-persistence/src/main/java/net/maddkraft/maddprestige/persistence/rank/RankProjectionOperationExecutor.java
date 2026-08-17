@@ -25,6 +25,9 @@ import net.maddkraft.maddprestige.core.rank.RankOperationExecution;
 import net.maddkraft.maddprestige.core.rank.RankOperationExecutionStatus;
 import net.maddkraft.maddprestige.core.rank.RankProjectionOperation;
 import net.maddkraft.maddprestige.core.stage.StageConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
+import net.maddkraft.maddprestige.core.stage.StageTransitionFence;
+import net.maddkraft.maddprestige.core.stage.StageTransitionPermit;
 import net.maddkraft.maddprestige.persistence.AuditRepository;
 import net.maddkraft.maddprestige.persistence.OperationRepository;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
@@ -37,6 +40,7 @@ public final class RankProjectionOperationExecutor {
     private final AuditRepository audit;
     private final ProviderRegistry providers;
     private final Supplier<Optional<StageConfigurationSnapshot>> activeConfiguration;
+    private final StageTransitionFence transitionFence;
     private final Executor workerExecutor;
     private final Clock clock;
 
@@ -46,6 +50,7 @@ public final class RankProjectionOperationExecutor {
             AuditRepository audit,
             ProviderRegistry providers,
             Supplier<Optional<StageConfigurationSnapshot>> activeConfiguration,
+            StageTransitionFence transitionFence,
             Executor workerExecutor,
             Clock clock) {
         this.operations = Objects.requireNonNull(operations, "operation repository");
@@ -53,6 +58,7 @@ public final class RankProjectionOperationExecutor {
         this.audit = Objects.requireNonNull(audit, "audit repository");
         this.providers = Objects.requireNonNull(providers, "provider registry");
         this.activeConfiguration = Objects.requireNonNull(activeConfiguration, "active configuration supplier");
+        this.transitionFence = Objects.requireNonNull(transitionFence, "stage transition fence");
         this.workerExecutor = Objects.requireNonNull(workerExecutor, "worker executor");
         this.clock = Objects.requireNonNull(clock, "clock");
     }
@@ -64,8 +70,8 @@ public final class RankProjectionOperationExecutor {
         Objects.requireNonNull(adapter, "rank adapter");
         return CompletableFuture.supplyAsync(() -> prepare(operation, adapter), workerExecutor)
                 .thenCompose(prepared -> {
-                    if (prepared != null) {
-                        return CompletableFuture.completedFuture(prepared);
+                    if (prepared.earlyResult().isPresent()) {
+                        return CompletableFuture.completedFuture(prepared.earlyResult().orElseThrow());
                     }
                     return adapter.project(operation.projectionRequest())
                             .handle((result, failure) -> failure == null
@@ -73,39 +79,71 @@ public final class RankProjectionOperationExecutor {
                                     : Result.<net.maddkraft.maddprestige.api.rank.RankProjectionResult>failure(
                                             new StructuredError("rank.projection.exception", ErrorCategory.UNCERTAIN,
                                                     rootMessage(failure), java.util.Map.of())))
-                            .thenCompose(result -> CompletableFuture.supplyAsync(
-                                    () -> finish(operation, result), workerExecutor));
+                            .thenCompose(result -> CompletableFuture.supplyAsync(() -> {
+                                RankOperationExecution outcome = finish(operation, result);
+                                if (outcome.status() != RankOperationExecutionStatus.NEEDS_RECONCILIATION) {
+                                    transitionFence.release(prepared.permit().orElseThrow(), clock.instant());
+                                }
+                                return outcome;
+                            }, workerExecutor));
                 });
     }
 
-    private RankOperationExecution prepare(RankProjectionOperation operation, RankAdapter adapter) {
+    private Preparation prepare(RankProjectionOperation operation, RankAdapter adapter) {
         var existing = operations.findByIdempotency(operation.plan().operationType(), operation.plan().target(),
                 operation.plan().idempotencyKey());
-        if (existing.isPresent()) {
-            return new RankOperationExecution(operation.plan().id(), RankOperationExecutionStatus.DUPLICATE,
+        if (existing.isPresent()
+                && (!existing.orElseThrow().operationId().equals(operation.plan().id())
+                        || existing.orElseThrow().state() != OperationState.PREPARED)) {
+            return Preparation.early(new RankOperationExecution(operation.plan().id(),
+                    RankOperationExecutionStatus.DUPLICATE,
                     "An operation with the same target/type/idempotency key already exists as "
-                            + existing.orElseThrow().operationId() + ".");
+                            + existing.orElseThrow().operationId() + "."));
         }
+        if (existing.isEmpty()) {
+            try {
+                operations.insertPrepared(operation.plan());
+            } catch (PersistenceException exception) {
+                var raced = operations.findByIdempotency(operation.plan().operationType(), operation.plan().target(),
+                        operation.plan().idempotencyKey());
+                if (raced.isEmpty() || !raced.orElseThrow().operationId().equals(operation.plan().id())
+                        || raced.orElseThrow().state() != OperationState.PREPARED) {
+                    RankOperationExecutionStatus status = raced.isPresent()
+                            ? RankOperationExecutionStatus.DUPLICATE : RankOperationExecutionStatus.FAILED;
+                    return Preparation.early(new RankOperationExecution(operation.plan().id(), status,
+                            "Operation could not be prepared safely: " + exception.getMessage()));
+                }
+            }
+        }
+        StageTransitionPermit permit;
         try {
-            operations.insertPrepared(operation.plan());
-        } catch (PersistenceException exception) {
-            var raced = operations.findByIdempotency(operation.plan().operationType(), operation.plan().target(),
-                    operation.plan().idempotencyKey());
-            RankOperationExecutionStatus status = raced.isPresent()
-                    ? RankOperationExecutionStatus.DUPLICATE : RankOperationExecutionStatus.FAILED;
-            return new RankOperationExecution(operation.plan().id(), status,
-                    "Operation could not be prepared safely: " + exception.getMessage());
+            permit = transitionFence.acquire(operation.plan().id(), operation.expectedPlayerState().stageId(),
+                    operation.targetStage(), operation.plan().configRevision(), clock.instant());
+        } catch (StageTransitionBlockedException exception) {
+            failPrepared(operation.plan().id());
+            return Preparation.early(new RankOperationExecution(operation.plan().id(),
+                    RankOperationExecutionStatus.FAILED,
+                    "Configuration transition fence denied source/target participation before projection: "
+                            + exception.getMessage()));
         }
         if (!bindingMatches(operation, adapter)) {
             operations.transition(operation.plan().id(), OperationState.PREPARED, OperationState.FAILED);
             appendAudit(operation, AuditOutcome.FAILED, "Pinned provider/configuration generation is stale.");
-            return new RankOperationExecution(operation.plan().id(), RankOperationExecutionStatus.FAILED,
-                    "Pinned provider or configuration generation changed before projection.");
+            transitionFence.release(permit, clock.instant());
+            return Preparation.early(new RankOperationExecution(operation.plan().id(),
+                    RankOperationExecutionStatus.FAILED,
+                    "Pinned provider or configuration generation changed before projection."));
         }
-        operations.transition(operation.plan().id(), OperationState.PREPARED, OperationState.EXECUTING);
+        try {
+            operations.transition(operation.plan().id(), OperationState.PREPARED, OperationState.EXECUTING);
+        } catch (PersistenceException exception) {
+            return Preparation.early(new RankOperationExecution(operation.plan().id(),
+                    RankOperationExecutionStatus.DUPLICATE,
+                    "Another owner already resumed this exact prepared projection operation."));
+        }
         operations.transitionAction(operation.plan().id(), ACTION_ID, ActionState.PENDING, ActionState.STARTED,
                 Optional.empty());
-        return null;
+        return Preparation.ready(permit);
     }
 
     private RankOperationExecution finish(
@@ -204,6 +242,14 @@ public final class RankProjectionOperationExecutor {
                 operation.plan().id().value(), now));
     }
 
+    private void failPrepared(net.maddkraft.maddprestige.api.id.OperationId operationId) {
+        try {
+            operations.transition(operationId, OperationState.PREPARED, OperationState.FAILED);
+        } catch (PersistenceException ignored) {
+            // A concurrent exact owner may already have advanced it; its durable lease remains authoritative.
+        }
+    }
+
     private static boolean healthy(ProviderHealthState state) {
         return state == ProviderHealthState.AVAILABLE || state == ProviderHealthState.ACTIVE;
     }
@@ -214,5 +260,15 @@ public final class RankProjectionOperationExecutor {
             current = current.getCause();
         }
         return current.getMessage() == null ? current.getClass().getSimpleName() : current.getMessage();
+    }
+
+    private record Preparation(Optional<RankOperationExecution> earlyResult, Optional<StageTransitionPermit> permit) {
+        private static Preparation early(RankOperationExecution result) {
+            return new Preparation(Optional.of(result), Optional.empty());
+        }
+
+        private static Preparation ready(StageTransitionPermit permit) {
+            return new Preparation(Optional.empty(), Optional.of(permit));
+        }
     }
 }

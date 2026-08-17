@@ -1,0 +1,184 @@
+# MaddPrestige V2 Phase 6 exact file manifest
+
+Baseline/current HEAD: `2a9532fe48b82a24b716d060bfebfc6d69682c41`
+
+Branch: `v2/phase-6`
+
+This inventory is the mechanically reconciled union of `git diff --name-only HEAD --` and `git ls-files --others --exclude-standard` after Correction Pass 4. Paths are relative to the authoritative Phase 6 worktree. Generated Maven `target` trees are ignored Git output and are listed separately as review evidence rather than source inventory.
+
+## Reconciliation
+
+- Tracked modified paths: 27
+- Untracked paths: 122
+- Declared exact inventory: 149
+- Actual Git changed/untracked union: 149
+- Missing declared paths: 0
+- Extra declared paths: 0
+- Staged paths: 0
+- Protected V1 paths under `src/`, `baseline/v1/` or `dist/`: 0
+
+## Exact changed/new inventory (149)
+
+- `DECISIONS.md`
+- `docs/V2_ARCHITECTURE.md`
+- `docs/V2_PHASE6_FILE_MANIFEST.md`
+- `docs/V2_PHASE6_IMPLEMENTATION.md`
+- `docs/V2_TRACEABILITY.md`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/AdministrationException.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/CommandCompletionService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/CommandInvocation.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/CommandResponse.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/CompletionCatalog.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/ContextualHelpService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/PhaseSixCommandService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationAdministrationService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationApplicationStatus.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationApplyKind.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationExplanation.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationHistoryStore.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationIntrospectionService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationPathResolver.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationPreview.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationSearchResult.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationSnapshotStore.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationStageReservationKind.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationStageTransitionExecution.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationStageTransitionState.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationStageTransitionStatus.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/ConfigurationValidationExtension.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/PhaseSixConfigurationCandidate.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/PhaseSixConfigurationWorkflow.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/PreparedConfigurationAcknowledgement.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/PreparedConfigurationSnapshot.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StageReferenceMigrationStore.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StageReferenceSnapshot.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StageRemapEntry.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StageRemapExecution.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StageRemapReconciliation.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StageRemapSnapshot.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/config/StoredConfigurationRevision.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/ConfigurationHistoryDiagnosticProbe.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DatabaseDiagnosticProbe.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DatabaseHealth.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticDomain.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticFinding.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticIntegrityIssue.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticProbe.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticProviderReference.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticSeverity.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DiagnosticSubsystemState.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DoctorReport.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/DoctorService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/PhaseSixOperationalDiagnosticProbe.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/PhaseSixOperationalSnapshot.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/RankTargetDiagnosticProbe.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/WhyReport.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/diagnostic/WhyService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ManualPrestigeAdjustment.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ManualPrestigeAdministrationService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/OperationConfirmationService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/OperationExecutionResult.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/OperationKind.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/OperationPreview.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/OperationPreviewService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/PermissionSubject.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/PhaseSixPermissions.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/player/PlayerProgressView.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/player/PlayerProgressViewService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/PreparedConfirmation.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/PrestigeAdministrationStore.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/PrestigePlanExecutor.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/RankUpPlanExecutor.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupCost.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupDiscovery.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupPrestige.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupPreview.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupProviderOption.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupRequirement.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupReward.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupStage.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupWizardService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/CanonicalGuiActionExecutor.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/CanonicalGuiMutationExecutor.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiAction.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiActionExecutor.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiActionKind.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiAudience.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiConfigurationAuthority.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiMutationContext.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiMutationExecutor.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiSessionService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/ui/GuiSessionView.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/operation/OperationStateMachine.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/schema/PhaseSixSchema.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/schema/SchemaRegistry.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageChangeImpactAnalyzer.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageConfigurationWorkflow.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageRemapPlan.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageTransitionBlockedException.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageTransitionFence.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageTransitionLease.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/stage/StageTransitionPermit.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/yaml/LosslessYamlDocument.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixAdministrationUxTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixCommandServiceTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixConfigurationAdministrationTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixSimulationAndConfirmationTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/stage/StageChangeImpactAnalyzerTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/yaml/LosslessYamlDocumentTest.java`
+- `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveConfigurationValidationExtension.java`
+- `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseFiveIntegrationSchema.java`
+- `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/config/PhaseSixIntegrationSchema.java`
+- `maddprestige-integrations/src/test/java/net/maddkraft/maddprestige/integrations/PhaseSixIntegrationAdministrationTest.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/admin/AtomicConfigurationFileStore.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/admin/SqliteConfigurationHistoryStore.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/admin/SqlitePrestigeAdministrationStore.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/admin/SqliteStageReferenceMigrationStore.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/plan/PrestigeOperationExecutor.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/plan/RankUpOperationExecutor.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/rank/RankProjectionOperationExecutor.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/recovery/PendingOperationRecoveryService.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/sqlite/SqliteMigrations.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/sqlite/SqlitePlayerStageRepository.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/sqlite/SqlitePrestigeLifecycleRepository.java`
+- `maddprestige-persistence/src/main/java/net/maddkraft/maddprestige/persistence/sqlite/SqliteStageTransitionGuard.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/admin/AtomicConfigurationFileStoreTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/admin/SqlitePhaseSixAdministrationTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/admin/SqlitePhaseSixStageRemovalIntegrationTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/admin/SqliteStageReferenceMigrationStoreTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/rank/RankProjectionOperationExecutorTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/recovery/StageTransitionLeaseRecoveryTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/sqlite/SqliteMigrationTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/sqlite/SqlitePlayerStageRepositoryTest.java`
+- `maddprestige-persistence/src/test/java/net/maddkraft/maddprestige/persistence/sqlite/SqliteStageHistoryActorTest.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/admin/InventoryInteractionDecision.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/admin/PaperGuiInventory.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/admin/PaperGuiInventoryGuard.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/admin/PaperPermissionSubjects.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/admin/PaperPhaseSixCommandAdapter.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/admin/PaperPhaseSixGuiController.java`
+- `maddprestige-platform-paper/src/test/java/net/maddkraft/maddprestige/platform/paper/admin/PaperGuiInventoryGuardTest.java`
+- `maddprestige-testkit/src/main/java/net/maddkraft/maddprestige/testkit/DisposableSqliteFixture.java`
+- `maddprestige-testkit/src/main/java/net/maddkraft/maddprestige/testkit/InMemoryStageTransitionFence.java`
+- `maddprestige-testkit/src/test/java/net/maddkraft/maddprestige/testkit/PhaseFourLifecycleTest.java`
+- `maddprestige-testkit/src/test/java/net/maddkraft/maddprestige/testkit/RankUpEngineTest.java`
+- `PHASE6_FIFTH_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_FOURTH_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_SECOND_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_THIRD_OWNER_REVIEW_SUMMARY.txt`
+- `STATUS.md`
+
+## Generated fifth-review evidence (not Git inventory)
+
+- `target/MaddPrestige_Phase6_Fifth_Owner_Review.zip`
+- `target/phase6-fifth-owner-review-evidence/clean-verify-run1.log`
+- `target/phase6-fifth-owner-review-evidence/clean-verify-run2.log`
+- `target/phase6-fifth-owner-review-evidence/verification-summary.txt`
+- final Surefire XML/text reports from every module
+- seven Checkstyle XML reports
+- seven JaCoCo XML reports
+- aggregate and distribution CycloneDX 1.6 SBOMs
+- `maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar`
+
+The review ZIP contains the 149-path inventory plus the generated evidence above. It does not alter the Git inventory, staging area or accepted HEAD.

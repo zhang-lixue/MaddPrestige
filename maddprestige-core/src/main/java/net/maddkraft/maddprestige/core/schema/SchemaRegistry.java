@@ -37,7 +37,32 @@ public final class SchemaRegistry {
         return Optional.ofNullable(direct != null ? direct : byAlias.get(pathOrAlias));
     }
 
+    public synchronized Optional<SchemaNode> resolve(String actualPath) {
+        Objects.requireNonNull(actualPath, "actual path");
+        Optional<SchemaNode> exact = find(actualPath);
+        if (exact.isPresent()) {
+            return exact;
+        }
+        return byPath.values().stream()
+                .filter(node -> pathMatches(node.canonicalPath(), actualPath))
+                .findFirst();
+    }
+
     public synchronized Collection<SchemaNode> nodes() {
         return List.copyOf(byPath.values());
+    }
+
+    private static boolean pathMatches(String schemaPath, String actualPath) {
+        String[] schema = schemaPath.split("\\.");
+        String[] actual = actualPath.split("\\.");
+        if (schema.length != actual.length) {
+            return false;
+        }
+        for (int index = 0; index < schema.length; index++) {
+            if (!schema[index].equals("*") && !schema[index].equals(actual[index])) {
+                return false;
+            }
+        }
+        return true;
     }
 }

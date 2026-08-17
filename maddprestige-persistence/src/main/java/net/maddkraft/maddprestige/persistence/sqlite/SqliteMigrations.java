@@ -425,4 +425,215 @@ public final class SqliteMigrations {
                 "ALTER TABLE mp_stage_history ADD COLUMN actor_uuid TEXT NULL")));
         return List.copyOf(migrations);
     }
+
+    public static List<Migration> phaseSix() {
+        ArrayList<Migration> migrations = new ArrayList<>(phaseFour());
+        migrations.add(Migration.of(6, "Phase 6 durable configuration history and exact revision documents", List.of(
+                """
+                CREATE TABLE mp_configuration_revisions_v2 (
+                    revision_id TEXT PRIMARY KEY,
+                    parent_revision_id TEXT NULL,
+                    rollback_source_revision_id TEXT NULL,
+                    canonical_content_hash TEXT NOT NULL,
+                    actor_type TEXT NOT NULL,
+                    actor_uuid TEXT NULL,
+                    actor_name TEXT NOT NULL,
+                    source_surface TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    validation_summary TEXT NOT NULL,
+                    diff_summary TEXT NOT NULL,
+                    application_status TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    applied_at TEXT NULL,
+                    failure_detail TEXT NULL,
+                    CHECK (length(canonical_content_hash) = 64),
+                    CHECK (application_status IN ('ATTEMPTED','APPLIED','FAILED'))
+                )
+                """,
+                """
+                CREATE TABLE mp_configuration_revision_documents (
+                    revision_id TEXT NOT NULL REFERENCES mp_configuration_revisions_v2(revision_id)
+                        ON DELETE CASCADE,
+                    document_name TEXT NOT NULL,
+                    document_hash TEXT NOT NULL,
+                    document_content TEXT NOT NULL,
+                    PRIMARY KEY (revision_id, document_name),
+                    CHECK (length(document_hash) = 64)
+                )
+                """,
+                "CREATE INDEX mp_configuration_revision_status_time_idx ON "
+                        + "mp_configuration_revisions_v2(application_status, created_at DESC)",
+                "CREATE INDEX mp_configuration_revision_parent_idx ON "
+                        + "mp_configuration_revisions_v2(parent_revision_id, created_at DESC)")));
+        migrations.add(Migration.of(7, "Phase 6 recoverable referenced-stage replacement migration", List.of(
+                """
+                CREATE TABLE mp_stage_remap_operations (
+                    operation_id TEXT PRIMARY KEY,
+                    config_revision_id TEXT NOT NULL REFERENCES mp_config_revisions(revision_id),
+                    plan_revision TEXT NOT NULL,
+                    plan_hash TEXT NOT NULL,
+                    actor_type TEXT NOT NULL,
+                    actor_uuid TEXT NULL,
+                    actor_name TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    migrated_players INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    detail TEXT NOT NULL,
+                    CHECK (length(plan_hash) = 64),
+                    CHECK (migrated_players >= 1),
+                    CHECK (status IN ('MIGRATED_PENDING_CONFIG','CONFIG_APPLIED','CONFIG_FAILED_SAFE'))
+                )
+                """,
+                """
+                CREATE TABLE mp_stage_remap_entries (
+                    operation_id TEXT NOT NULL REFERENCES mp_stage_remap_operations(operation_id)
+                        ON DELETE CASCADE,
+                    player_uuid TEXT NOT NULL,
+                    source_stage_id TEXT NOT NULL,
+                    target_stage_id TEXT NOT NULL,
+                    expected_state_revision INTEGER NOT NULL,
+                    resulting_state_revision INTEGER NOT NULL,
+                    source_config_revision_id TEXT NOT NULL REFERENCES mp_config_revisions(revision_id),
+                    PRIMARY KEY (operation_id, player_uuid),
+                    CHECK (expected_state_revision >= 0),
+                    CHECK (resulting_state_revision = expected_state_revision + 1),
+                    CHECK (source_stage_id <> target_stage_id)
+                )
+                """,
+                "CREATE INDEX mp_stage_remap_status_time_idx ON mp_stage_remap_operations(status, updated_at)",
+                "CREATE INDEX mp_stage_remap_entry_source_idx ON "
+                        + "mp_stage_remap_entries(source_stage_id, player_uuid)")));
+        migrations.add(Migration.of(8, "Phase 6 durable stage-transition fence", List.of(
+                """
+                CREATE TABLE mp_stage_transition_leases (
+                    operation_id TEXT PRIMARY KEY,
+                    target_stage_id TEXT NOT NULL,
+                    config_revision_id TEXT NOT NULL REFERENCES mp_config_revisions(revision_id),
+                    acquired_at TEXT NOT NULL
+                )
+                """,
+                "CREATE INDEX mp_stage_transition_target_idx ON "
+                        + "mp_stage_transition_leases(target_stage_id, acquired_at)")));
+        migrations.add(Migration.of(9, "Phase 6 owned source-and-target stage participation", List.of(
+                """
+                CREATE TABLE mp_stage_transition_leases_v9 (
+                    operation_id TEXT PRIMARY KEY REFERENCES mp_operations(operation_id) ON DELETE CASCADE,
+                    source_stage_id TEXT NULL,
+                    target_stage_id TEXT NOT NULL,
+                    config_revision_id TEXT NOT NULL REFERENCES mp_config_revisions(revision_id),
+                    lease_token TEXT NOT NULL UNIQUE,
+                    owner_type TEXT NOT NULL,
+                    participation_complete INTEGER NOT NULL,
+                    acquired_at TEXT NOT NULL,
+                    CHECK (owner_type = 'OPERATION'),
+                    CHECK (participation_complete IN (0, 1)),
+                    CHECK (participation_complete = 0 OR source_stage_id IS NOT NULL)
+                )
+                """,
+                """
+                INSERT INTO mp_stage_transition_leases_v9 (
+                    operation_id, source_stage_id, target_stage_id, config_revision_id,
+                    lease_token, owner_type, participation_complete, acquired_at
+                )
+                SELECT lease.operation_id, NULL, lease.target_stage_id, lease.config_revision_id,
+                    lease.operation_id, 'OPERATION', 0, lease.acquired_at
+                FROM mp_stage_transition_leases lease
+                JOIN mp_operations operation ON operation.operation_id = lease.operation_id
+                WHERE operation.state IN (
+                    'PREPARED','EXECUTING','STATE_COMMITTED','COMPENSATING','NEEDS_RECONCILIATION'
+                )
+                """,
+                "DROP TABLE mp_stage_transition_leases",
+                "ALTER TABLE mp_stage_transition_leases_v9 RENAME TO mp_stage_transition_leases",
+                "CREATE INDEX mp_stage_transition_source_idx ON "
+                        + "mp_stage_transition_leases(source_stage_id, acquired_at)",
+                "CREATE INDEX mp_stage_transition_target_idx ON "
+                        + "mp_stage_transition_leases(target_stage_id, acquired_at)",
+                "CREATE INDEX mp_stage_transition_owner_idx ON "
+                        + "mp_stage_transition_leases(owner_type, participation_complete, acquired_at)")));
+        migrations.add(Migration.of(10, "Phase 6 configuration-owned unsafe-stage reservations", List.of(
+                """
+                CREATE TABLE mp_configuration_stage_transitions (
+                    config_revision_id TEXT PRIMARY KEY
+                        REFERENCES mp_configuration_revisions_v2(revision_id),
+                    prior_revision_id TEXT NULL,
+                    candidate_hash TEXT NOT NULL,
+                    remap_operation_id TEXT NULL
+                        REFERENCES mp_stage_remap_operations(operation_id),
+                    status TEXT NOT NULL,
+                    scope_complete INTEGER NOT NULL,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    detail TEXT NOT NULL,
+                    CHECK (length(candidate_hash) = 64),
+                    CHECK (status IN (
+                        'RESERVED','NEEDS_RECONCILIATION','CONFIG_APPLIED','CONFIG_FAILED_SAFE'
+                    )),
+                    CHECK (scope_complete IN (0, 1))
+                )
+                """,
+                """
+                CREATE TABLE mp_configuration_transition_stages (
+                    config_revision_id TEXT NOT NULL
+                        REFERENCES mp_configuration_stage_transitions(config_revision_id) ON DELETE CASCADE,
+                    stage_id TEXT NOT NULL,
+                    reservation_kind TEXT NOT NULL,
+                    PRIMARY KEY (config_revision_id, stage_id),
+                    CHECK (reservation_kind IN ('REMOVED','DISABLED','UNKNOWN_LEGACY'))
+                )
+                """,
+                """
+                CREATE TABLE mp_configuration_stage_reservations (
+                    stage_id TEXT PRIMARY KEY,
+                    config_revision_id TEXT NOT NULL
+                        REFERENCES mp_configuration_stage_transitions(config_revision_id) ON DELETE CASCADE,
+                    reserved_at TEXT NOT NULL,
+                    UNIQUE (config_revision_id, stage_id)
+                )
+                """,
+                """
+                INSERT OR IGNORE INTO mp_configuration_stage_transitions (
+                    config_revision_id, prior_revision_id, candidate_hash, remap_operation_id,
+                    status, scope_complete, created_at, updated_at, detail
+                )
+                SELECT operation.config_revision_id, history.parent_revision_id,
+                    history.canonical_content_hash, operation.operation_id,
+                    'NEEDS_RECONCILIATION', 0, operation.created_at, operation.updated_at,
+                    'Migrated pending remap has an unknown complete unsafe-stage scope; reconcile fail-closed.'
+                FROM mp_stage_remap_operations operation
+                JOIN mp_configuration_revisions_v2 history
+                    ON history.revision_id = operation.config_revision_id
+                WHERE operation.status IN ('MIGRATED_PENDING_CONFIG','CONFIG_FAILED_SAFE')
+                """,
+                """
+                INSERT OR IGNORE INTO mp_configuration_transition_stages (
+                    config_revision_id, stage_id, reservation_kind
+                )
+                SELECT operation.config_revision_id, entry.source_stage_id, 'UNKNOWN_LEGACY'
+                FROM mp_stage_remap_operations operation
+                JOIN mp_stage_remap_entries entry ON entry.operation_id = operation.operation_id
+                JOIN mp_configuration_stage_transitions transition
+                    ON transition.config_revision_id = operation.config_revision_id
+                WHERE operation.status IN ('MIGRATED_PENDING_CONFIG','CONFIG_FAILED_SAFE')
+                """,
+                """
+                INSERT OR IGNORE INTO mp_configuration_stage_reservations (
+                    stage_id, config_revision_id, reserved_at
+                )
+                SELECT stages.stage_id, stages.config_revision_id, transition.updated_at
+                FROM mp_configuration_transition_stages stages
+                JOIN mp_configuration_stage_transitions transition
+                    ON transition.config_revision_id = stages.config_revision_id
+                WHERE transition.status IN ('RESERVED','NEEDS_RECONCILIATION')
+                """,
+                "CREATE INDEX mp_configuration_transition_status_time_idx ON "
+                        + "mp_configuration_stage_transitions(status, updated_at)",
+                "CREATE INDEX mp_configuration_transition_stage_owner_idx ON "
+                        + "mp_configuration_transition_stages(stage_id, config_revision_id)",
+                "CREATE INDEX mp_configuration_reservation_owner_idx ON "
+                        + "mp_configuration_stage_reservations(config_revision_id, stage_id)")));
+        return List.copyOf(migrations);
+    }
 }

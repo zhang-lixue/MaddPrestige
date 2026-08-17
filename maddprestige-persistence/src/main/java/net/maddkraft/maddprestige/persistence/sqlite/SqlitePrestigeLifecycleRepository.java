@@ -85,9 +85,11 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
     public void commitInternal(PrestigePlan plan, Instant now) {
         requireAuthorized(plan);
         try (Connection connection = connections.open()) {
-            connection.setAutoCommit(false);
+            SqliteStageTransitionGuard.beginImmediate(connection);
             try {
                 requireExecuting(connection, plan.operationId());
+                SqliteStageTransitionGuard.requireNoPendingRemap(connection,
+                        java.util.List.of(plan.simulation().sourceStage(), plan.simulation().resetStage()));
                 updateStage(connection, plan, now);
                 updatePrestige(connection, plan, now);
                 insertPrestigeBaselines(connection, plan, now);
@@ -99,9 +101,9 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
                 }
                 insertStageHistory(connection, plan, now);
                 insertPrestigeHistory(connection, plan, now);
-                connection.commit();
+                SqliteStageTransitionGuard.commit(connection);
             } catch (SQLException | RuntimeException exception) {
-                connection.rollback();
+                SqliteStageTransitionGuard.rollback(connection, exception);
                 throw exception;
             }
         } catch (SQLException exception) {

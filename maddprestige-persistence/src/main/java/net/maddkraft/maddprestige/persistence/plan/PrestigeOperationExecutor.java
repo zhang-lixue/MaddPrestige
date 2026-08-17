@@ -26,7 +26,11 @@ import net.maddkraft.maddprestige.core.prestige.PrestigeExecutionResult;
 import net.maddkraft.maddprestige.core.prestige.PrestigeExecutionStatus;
 import net.maddkraft.maddprestige.core.prestige.PrestigePlan;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
+import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
+import net.maddkraft.maddprestige.core.stage.StageTransitionFence;
+import net.maddkraft.maddprestige.core.stage.StageTransitionPermit;
 import net.maddkraft.maddprestige.persistence.OperationRepository;
+import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.PrestigeLifecycleRepository;
 
 /** Deterministic journal-first Prestige executor. */
@@ -37,6 +41,7 @@ public final class PrestigeOperationExecutor {
     private final OperationRepository operations;
     private final ProviderRegistry providers;
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
+    private final StageTransitionFence transitionFence;
     private final Clock clock;
 
     public PrestigeOperationExecutor(
@@ -44,11 +49,13 @@ public final class PrestigeOperationExecutor {
             OperationRepository operations,
             ProviderRegistry providers,
             Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionFence transitionFence,
             Clock clock) {
         this.lifecycle = java.util.Objects.requireNonNull(lifecycle, "Prestige lifecycle repository");
         this.operations = java.util.Objects.requireNonNull(operations, "operation repository");
         this.providers = java.util.Objects.requireNonNull(providers, "provider registry");
         this.activeRevision = java.util.Objects.requireNonNull(activeRevision, "active revision");
+        this.transitionFence = java.util.Objects.requireNonNull(transitionFence, "stage transition fence");
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
     }
 
@@ -68,28 +75,62 @@ public final class PrestigeOperationExecutor {
         }
         var duplicate = operations.findByIdempotency("prestige", plan.playerId(),
                 plan.operationPlan().idempotencyKey());
-        if (duplicate.isPresent()) {
+        if (duplicate.isPresent()
+                && (!duplicate.orElseThrow().operationId().equals(plan.operationId())
+                        || duplicate.orElseThrow().state() != OperationState.PREPARED)) {
             return result(plan, PrestigeExecutionStatus.DUPLICATE,
                     "Prestige idempotency key already belongs to operation "
                             + duplicate.orElseThrow().operationId());
         }
-        try {
-            lifecycle.insertPrepared(plan);
-        } catch (RuntimeException insertionFailure) {
-            var raced = operations.findByIdempotency("prestige", plan.playerId(),
-                    plan.operationPlan().idempotencyKey());
-            if (raced.isPresent()) {
-                return result(plan, PrestigeExecutionStatus.DUPLICATE,
-                        "Concurrent Prestige request already persisted operation "
-                                + raced.orElseThrow().operationId());
+        if (duplicate.isEmpty()) {
+            try {
+                lifecycle.insertPrepared(plan);
+            } catch (RuntimeException insertionFailure) {
+                var raced = operations.findByIdempotency("prestige", plan.playerId(),
+                        plan.operationPlan().idempotencyKey());
+                if (raced.isEmpty() || !raced.orElseThrow().operationId().equals(plan.operationId())
+                        || raced.orElseThrow().state() != OperationState.PREPARED) {
+                    if (raced.isPresent()) {
+                        return result(plan, PrestigeExecutionStatus.DUPLICATE,
+                                "Concurrent Prestige request already persisted operation "
+                                        + raced.orElseThrow().operationId());
+                    }
+                    throw insertionFailure;
+                }
             }
-            throw insertionFailure;
         }
+        StageTransitionPermit permit;
+        try {
+            permit = transitionFence.acquire(plan.operationId(), plan.simulation().sourceStage(),
+                    plan.simulation().resetStage(), plan.configRevision(), clock.instant());
+        } catch (StageTransitionBlockedException exception) {
+            failPrepared(plan.operationId());
+            return result(plan, PrestigeExecutionStatus.UNAUTHORIZED,
+                    "Configuration transition fence denied source/reset participation before effects: "
+                            + exception.getMessage());
+        }
+        PrestigeExecutionResult outcome = null;
+        try {
+            outcome = executeWhileFenced(plan);
+            return outcome;
+        } finally {
+            if (outcome != null && outcome.status() != PrestigeExecutionStatus.NEEDS_RECONCILIATION) {
+                transitionFence.release(permit, clock.instant());
+            }
+        }
+    }
+
+    private PrestigeExecutionResult executeWhileFenced(PrestigePlan plan) {
         PrestigeExecutionResult projectionValidation = validateProjection(plan);
         if (projectionValidation != null) {
             return projectionValidation;
         }
-        operations.transition(plan.operationId(), OperationState.PREPARED, OperationState.EXECUTING);
+        try {
+            operations.transition(plan.operationId(), OperationState.PREPARED, OperationState.EXECUTING);
+        } catch (PersistenceException exception) {
+            return result(plan, PrestigeExecutionStatus.DUPLICATE,
+                    "Another owner already resumed this exact prepared Prestige operation");
+        }
         ArrayList<ExecutedCost> executedCosts = new ArrayList<>();
         for (PlannedCost cost : plan.costs()) {
             if (!bindingMatches(cost.definition().providerId(), cost.providerGeneration())) {
@@ -461,6 +502,14 @@ public final class PrestigeOperationExecutor {
             PrestigeExecutionStatus status,
             String detail) {
         return new PrestigeExecutionResult(plan.operationId(), status, detail);
+    }
+
+    private void failPrepared(net.maddkraft.maddprestige.api.id.OperationId operationId) {
+        try {
+            operations.transition(operationId, OperationState.PREPARED, OperationState.FAILED);
+        } catch (PersistenceException ignored) {
+            // A concurrent exact owner may already have advanced it; its durable lease remains authoritative.
+        }
     }
 
     private static String rootMessage(Throwable failure) {

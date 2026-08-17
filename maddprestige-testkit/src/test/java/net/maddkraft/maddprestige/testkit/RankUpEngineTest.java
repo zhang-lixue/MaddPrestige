@@ -19,6 +19,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
 import net.maddkraft.maddprestige.api.action.ActionExecutionStatus;
@@ -35,6 +37,7 @@ import net.maddkraft.maddprestige.api.metric.MetricOperator;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.operation.ActionState;
 import net.maddkraft.maddprestige.api.operation.Actor;
+import net.maddkraft.maddprestige.api.operation.OperationState;
 import net.maddkraft.maddprestige.api.provider.CapabilityDescriptor;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.rank.ManagedRankState;
@@ -50,6 +53,7 @@ import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
 import net.maddkraft.maddprestige.api.reward.RewardRepeatability;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.command.CommandActionPolicy;
+import net.maddkraft.maddprestige.core.admin.config.ConfigurationStageReservationKind;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
@@ -87,6 +91,8 @@ import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 import net.maddkraft.maddprestige.core.stage.StageConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.stage.StageDefinition;
 import net.maddkraft.maddprestige.core.stage.StageProjection;
+import net.maddkraft.maddprestige.core.stage.StageRemapPlan;
+import net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore;
 import net.maddkraft.maddprestige.persistence.plan.RankUpOperationExecutor;
 import net.maddkraft.maddprestige.persistence.plan.RepositoryStageTransitionCommitter;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteConfigRevisionRepository;
@@ -256,6 +262,180 @@ class RankUpEngineTest {
             assertEquals(0, commits.get());
             assertEquals(new BigDecimal("100"), costProvider.balance(player));
             assertEquals(0, rewardProvider.executionCount());
+        }
+    }
+
+    @Test
+    @DisplayName("[A69] A preauthorized rank-up sourced from a removed stage is blocked before every effect")
+    void configurationFenceRechecksPreviouslyAuthorizedPlanBeforeEffects() throws Exception {
+        MutableRankAdapter adapter = registerRankAdapter();
+        RankUpPlan authorizedBeforeRemap = plan(List.of(cost("fenced", "25")), List.of(reward()),
+                StageProjection.group(RANK_PROVIDER_ID, "new"));
+        AtomicInteger commits = new AtomicInteger();
+
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            ConfigRevisionId removalRevision = new ConfigRevisionId("removal_revision");
+            var removalHash = RevisionHasher.hashText("remove second");
+            new SqliteConfigRevisionRepository(fixture.foundation()).insert(removalRevision, removalHash);
+            fixture.prepareConfigurationTransition(removalRevision, Optional.of(REVISION), removalHash, NOW);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            stages.insert(authorization(List.of(), List.of(), StageProjection.none()).state());
+            SqliteStageReferenceMigrationStore fence = new SqliteStageReferenceMigrationStore(fixture.foundation());
+            var remap = fence.capture(Optional.of(new StageRemapPlan("remove_source_first",
+                    Map.of(FIRST, new StageId("third"))))).remap().orElseThrow();
+            fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                    Map.of(FIRST, ConfigurationStageReservationKind.REMOVED), Optional.of(remap), actor(),
+                    "pause before configuration activation", NOW);
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                    () -> Optional.of(REVISION), ignored -> {
+                        commits.incrementAndGet();
+                        return CompletableFuture.completedFuture(ActionExecutionResult.applied());
+                    }, fence, Runnable::run);
+
+            var result = executor.execute(authorizedBeforeRemap).toCompletableFuture().join();
+
+            assertEquals(RankUpExecutionStatus.BLOCKED, result.status());
+            assertEquals(OperationState.FAILED,
+                    operations.find(authorizedBeforeRemap.operationId()).orElseThrow().state(),
+                    "journal-first ownership must fail terminally before consequential effects");
+            assertEquals(new BigDecimal("100"), costProvider.balance(player));
+            assertEquals(0, adapter.projectionCalls.get());
+            assertEquals(0, commits.get());
+            assertEquals(0, rewardProvider.executionCount());
+            assertEquals(new StageId("third"), stages.find(player).orElseThrow().stageId());
+        }
+    }
+
+    @Test
+    @DisplayName("[A69] Zero-reference source and target reservations block rank-up before every effect")
+    void zeroReferenceConfigurationAuthorityBlocksRankUpSourceAndTargetBeforeEffects() throws Exception {
+        MutableRankAdapter adapter = registerRankAdapter();
+        for (StageId reserved : List.of(FIRST, SECOND)) {
+            RankUpPlan plan = plan(List.of(cost("zero-ref-" + reserved.value(), "25")), List.of(reward()),
+                    StageProjection.group(RANK_PROVIDER_ID, "new"));
+            AtomicInteger commits = new AtomicInteger();
+            try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+                prepareRevision(fixture);
+                ConfigRevisionId removalRevision = new ConfigRevisionId("rank_up_zero_ref_" + reserved.value());
+                var removalHash = RevisionHasher.hashText("reserve " + reserved.value());
+                new SqliteConfigRevisionRepository(fixture.foundation()).insert(removalRevision, removalHash);
+                fixture.prepareConfigurationTransition(removalRevision, Optional.of(REVISION), removalHash, NOW);
+                SqliteStageReferenceMigrationStore fence = new SqliteStageReferenceMigrationStore(
+                        fixture.foundation());
+                fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                        Map.of(reserved, ConfigurationStageReservationKind.REMOVED), Optional.empty(), actor(),
+                        "zero-reference rank-up stage", NOW);
+                SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+                RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                        () -> Optional.of(REVISION), ignored -> {
+                            commits.incrementAndGet();
+                            return CompletableFuture.completedFuture(ActionExecutionResult.applied());
+                        }, fence, Runnable::run);
+
+                var result = executor.execute(plan).toCompletableFuture().join();
+
+                assertEquals(RankUpExecutionStatus.BLOCKED, result.status());
+                assertEquals(OperationState.FAILED, operations.find(plan.operationId()).orElseThrow().state());
+                assertEquals(new BigDecimal("100"), costProvider.balance(player));
+                assertEquals(0, adapter.projectionCalls.get());
+                assertEquals(0, commits.get());
+                assertEquals(0, rewardProvider.executionCount());
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("[A69] A source-stage rank-up lease wins before remap and releases only after coherent completion")
+    void sourceStageOperationWinsThenRemapRetriesAgainstFreshSnapshot() throws Exception {
+        RankUpPlan plan = plan(List.of(cost("operation-wins", "25")), List.of(), StageProjection.none());
+        CountDownLatch costStarted = new CountDownLatch(1);
+        CountDownLatch allowCompletion = new CountDownLatch(1);
+        costProvider.onNextExecution(() -> {
+            costStarted.countDown();
+            await(allowCompletion);
+        });
+
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            ConfigRevisionId removalRevision = new ConfigRevisionId("operation_wins_removal");
+            var removalHash = RevisionHasher.hashText("operation wins before source removal");
+            new SqliteConfigRevisionRepository(fixture.foundation()).insert(removalRevision, removalHash);
+            fixture.prepareConfigurationTransition(removalRevision, Optional.of(REVISION), removalHash, NOW);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            stages.insert(authorization(List.of(), List.of(), StageProjection.none()).state());
+            UUID waitingPlayer = UUID.randomUUID();
+            stages.insert(new PlayerStageState(waitingPlayer, FIRST, 0, REVISION, NOW, NOW, NOW,
+                    Optional.empty(), Optional.empty(), Optional.empty()));
+            SqliteStageReferenceMigrationStore fence = new SqliteStageReferenceMigrationStore(fixture.foundation());
+            StageRemapPlan remapPlan = new StageRemapPlan("remove_first_after_operation",
+                    Map.of(FIRST, new StageId("third")));
+            var staleSnapshot = fence.capture(Optional.of(remapPlan)).remap().orElseThrow();
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                    () -> Optional.of(REVISION), new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    fence, Runnable::run);
+            CompletableFuture<net.maddkraft.maddprestige.core.plan.RankUpExecutionResult> executing =
+                    CompletableFuture.supplyAsync(() -> executor.execute(plan).toCompletableFuture().join());
+            assertTrue(costStarted.await(10, TimeUnit.SECONDS));
+
+            assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
+                    () -> fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                            Map.of(FIRST, ConfigurationStageReservationKind.REMOVED), Optional.of(staleSnapshot),
+                            actor(), "operation source lease must win", NOW));
+            assertEquals(FIRST, stages.find(waitingPlayer).orElseThrow().stageId());
+            allowCompletion.countDown();
+            assertEquals(RankUpExecutionStatus.COMPLETED, executing.get(10, TimeUnit.SECONDS).status());
+            assertEquals(SECOND, stages.find(player).orElseThrow().stageId());
+            assertEquals(new BigDecimal("75"), costProvider.balance(player));
+            assertTrue(fence.leases(10).isEmpty());
+
+            var freshSnapshot = fence.capture(Optional.of(remapPlan)).remap().orElseThrow();
+            fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                    Map.of(FIRST, ConfigurationStageReservationKind.REMOVED), Optional.of(freshSnapshot), actor(),
+                    "retry after operation completion", NOW.plusSeconds(1));
+            assertEquals(new StageId("third"), stages.find(waitingPlayer).orElseThrow().stageId());
+        }
+    }
+
+    @Test
+    @DisplayName("[A69] Rank-up target lease wins before zero-reference removal authority")
+    void zeroReferenceTargetOperationWinsBeforeConfigurationReservation() throws Exception {
+        RankUpPlan plan = plan(List.of(cost("target-operation-wins", "25")), List.of(), StageProjection.none());
+        CountDownLatch costStarted = new CountDownLatch(1);
+        CountDownLatch allowCompletion = new CountDownLatch(1);
+        costProvider.onNextExecution(() -> {
+            costStarted.countDown();
+            await(allowCompletion);
+        });
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            ConfigRevisionId removalRevision = new ConfigRevisionId("rank_up_target_operation_wins");
+            var removalHash = RevisionHasher.hashText("remove zero-reference rank-up target");
+            new SqliteConfigRevisionRepository(fixture.foundation()).insert(removalRevision, removalHash);
+            fixture.prepareConfigurationTransition(removalRevision, Optional.of(REVISION), removalHash, NOW);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            stages.insert(authorization(List.of(), List.of(), StageProjection.none()).state());
+            SqliteStageReferenceMigrationStore fence = new SqliteStageReferenceMigrationStore(fixture.foundation());
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                    () -> Optional.of(REVISION), new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    fence, Runnable::run);
+            CompletableFuture<net.maddkraft.maddprestige.core.plan.RankUpExecutionResult> executing =
+                    CompletableFuture.supplyAsync(() -> executor.execute(plan).toCompletableFuture().join());
+            assertTrue(costStarted.await(10, TimeUnit.SECONDS));
+
+            assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
+                    () -> fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                            Map.of(SECOND, ConfigurationStageReservationKind.REMOVED), Optional.empty(), actor(),
+                            "rank-up target operation owns transition", NOW));
+
+            allowCompletion.countDown();
+            assertEquals(RankUpExecutionStatus.COMPLETED, executing.get(10, TimeUnit.SECONDS).status());
+            assertEquals(SECOND, stages.find(player).orElseThrow().stageId());
+            assertEquals(new BigDecimal("75"), costProvider.balance(player));
+            assertTrue(fence.leases(10).isEmpty());
         }
     }
 
@@ -505,7 +685,10 @@ class RankUpEngineTest {
             stages.insert(authorization.state());
             RankUpOperationExecutor executor = new RankUpOperationExecutor(
                     new SqliteOperationRepository(fixture.foundation()), providers, () -> Optional.of(REVISION),
-                    new RepositoryStageTransitionCommitter(stages, CLOCK), Runnable::run);
+                    new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    new net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore(
+                            fixture.foundation()),
+                    Runnable::run);
 
             assertEquals(RankUpExecutionStatus.COMPLETED,
                     executor.execute(plan).toCompletableFuture().join().status());
@@ -619,7 +802,10 @@ class RankUpEngineTest {
             stages.insert(authorization.state());
             RankUpOperationExecutor executor = new RankUpOperationExecutor(
                     new SqliteOperationRepository(fixture.foundation()), providers, () -> Optional.of(REVISION),
-                    new RepositoryStageTransitionCommitter(stages, CLOCK), Runnable::run);
+                    new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    new net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore(
+                            fixture.foundation()),
+                    Runnable::run);
             assertEquals(RankUpExecutionStatus.COMPLETED,
                     executor.execute(plan).toCompletableFuture().join().status());
             assertEquals(SECOND, stages.find(player).orElseThrow().stageId());
@@ -1007,11 +1193,22 @@ class RankUpEngineTest {
             SqliteOperationRepository operations,
             net.maddkraft.maddprestige.core.plan.StageTransitionCommitter committer) {
         return new RankUpOperationExecutor(operations, providers, () -> Optional.of(REVISION), committer,
-                Runnable::run);
+                new InMemoryStageTransitionFence(), Runnable::run);
     }
 
     private static void prepareRevision(DisposableSqliteFixture fixture) {
         new SqliteConfigRevisionRepository(fixture.foundation()).insert(REVISION, RevisionHasher.hashText("r3"));
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for deterministic race release");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
+        }
     }
 
     private MutableRankAdapter registerRankAdapter() {

@@ -36,7 +36,7 @@ class SqliteStageHistoryActorTest {
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite,
                 new FileBackupService(database, temporaryDirectory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseFour());
+                Clock.systemUTC()).migrate(SqliteMigrations.phaseSix());
         new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("stage history actor"));
         repository = new SqlitePlayerStageRepository(sqlite);
     }

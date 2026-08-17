@@ -1,5 +1,6 @@
 package net.maddkraft.maddprestige.persistence.plan;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -32,6 +33,9 @@ import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
 import net.maddkraft.maddprestige.core.plan.RankUpPlan;
 import net.maddkraft.maddprestige.core.plan.StageTransitionCommitter;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
+import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
+import net.maddkraft.maddprestige.core.stage.StageTransitionFence;
+import net.maddkraft.maddprestige.core.stage.StageTransitionPermit;
 import net.maddkraft.maddprestige.persistence.OperationRepository;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 
@@ -42,6 +46,7 @@ public final class RankUpOperationExecutor {
     private final ProviderRegistry providers;
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
     private final StageTransitionCommitter stageCommitter;
+    private final StageTransitionFence transitionFence;
     private final Executor workerExecutor;
 
     public RankUpOperationExecutor(
@@ -49,11 +54,13 @@ public final class RankUpOperationExecutor {
             ProviderRegistry providers,
             Supplier<Optional<ConfigRevisionId>> activeRevision,
             StageTransitionCommitter stageCommitter,
+            StageTransitionFence transitionFence,
             Executor workerExecutor) {
         this.operations = Objects.requireNonNull(operations, "operation repository");
         this.providers = Objects.requireNonNull(providers, "provider registry");
         this.activeRevision = Objects.requireNonNull(activeRevision, "active revision supplier");
         this.stageCommitter = Objects.requireNonNull(stageCommitter, "stage committer");
+        this.transitionFence = Objects.requireNonNull(transitionFence, "stage transition fence");
         this.workerExecutor = Objects.requireNonNull(workerExecutor, "worker executor");
     }
 
@@ -76,18 +83,49 @@ public final class RankUpOperationExecutor {
         }
         var duplicate = operations.findByIdempotency(plan.operationPlan().operationType(), plan.playerId(),
                 plan.operationPlan().idempotencyKey());
-        if (duplicate.isPresent()) {
+        if (duplicate.isPresent()
+                && (!duplicate.orElseThrow().operationId().equals(plan.operationId())
+                        || duplicate.orElseThrow().state() != OperationState.PREPARED)) {
             return result(plan, RankUpExecutionStatus.DUPLICATE,
-                    "Existing operation has the same idempotency tuple: " + duplicate.orElseThrow().operationId());
+                    "Existing operation has the same idempotency tuple: "
+                            + duplicate.orElseThrow().operationId());
         }
+        if (duplicate.isEmpty()) {
+            try {
+                operations.insertPrepared(plan.operationPlan());
+            } catch (PersistenceException exception) {
+                var raced = operations.findByIdempotency(plan.operationPlan().operationType(), plan.playerId(),
+                        plan.operationPlan().idempotencyKey());
+                if (raced.isEmpty() || !raced.orElseThrow().operationId().equals(plan.operationId())
+                        || raced.orElseThrow().state() != OperationState.PREPARED) {
+                    return result(plan, raced.isPresent()
+                            ? RankUpExecutionStatus.DUPLICATE : RankUpExecutionStatus.FAILED,
+                            "Could not persist immutable operation plan: " + exception.getMessage());
+                }
+            }
+        }
+        StageTransitionPermit permit;
         try {
-            operations.insertPrepared(plan.operationPlan());
-        } catch (PersistenceException exception) {
-            var raced = operations.findByIdempotency(plan.operationPlan().operationType(), plan.playerId(),
-                    plan.operationPlan().idempotencyKey());
-            return result(plan, raced.isPresent() ? RankUpExecutionStatus.DUPLICATE : RankUpExecutionStatus.FAILED,
-                    "Could not persist immutable operation plan: " + exception.getMessage());
+            permit = transitionFence.acquire(plan.operationId(), plan.sourceStage(), plan.targetStage(),
+                    plan.configRevision(), Instant.now());
+        } catch (StageTransitionBlockedException exception) {
+            failPrepared(plan.operationId());
+            return result(plan, RankUpExecutionStatus.BLOCKED,
+                    "Configuration transition fence denied source/target participation before effects: "
+                            + exception.getMessage());
         }
+        RankUpExecutionResult outcome = null;
+        try {
+            outcome = executeWhileFenced(plan);
+            return outcome;
+        } finally {
+            if (outcome != null && outcome.status() != RankUpExecutionStatus.NEEDS_RECONCILIATION) {
+                transitionFence.release(permit, Instant.now());
+            }
+        }
+    }
+
+    private RankUpExecutionResult executeWhileFenced(RankUpPlan plan) {
         if (!bindingsMatch(plan)) {
             operations.transition(plan.operationId(), OperationState.PREPARED, OperationState.FAILED);
             return result(plan, RankUpExecutionStatus.STALE_GENERATION,
@@ -97,7 +135,12 @@ public final class RankUpOperationExecutor {
         if (invalidProjection != null) {
             return invalidProjection;
         }
-        operations.transition(plan.operationId(), OperationState.PREPARED, OperationState.EXECUTING);
+        try {
+            operations.transition(plan.operationId(), OperationState.PREPARED, OperationState.EXECUTING);
+        } catch (PersistenceException exception) {
+            return result(plan, RankUpExecutionStatus.DUPLICATE,
+                    "Another owner already resumed this exact prepared operation");
+        }
         ArrayList<ExecutedCost> executedCosts = new ArrayList<>();
         for (PlannedCost cost : plan.costs()) {
             if (!bindingMatches(cost.definition().providerId(), cost.providerGeneration())) {
@@ -484,6 +527,14 @@ public final class RankUpOperationExecutor {
             RankUpExecutionStatus status,
             String detail) {
         return new RankUpExecutionResult(plan.operationId(), status, detail);
+    }
+
+    private void failPrepared(net.maddkraft.maddprestige.api.id.OperationId operationId) {
+        try {
+            operations.transition(operationId, OperationState.PREPARED, OperationState.FAILED);
+        } catch (PersistenceException ignored) {
+            // A concurrent exact owner may already have advanced it; its durable lease remains authoritative.
+        }
     }
 
     private static String rootMessage(Throwable failure) {

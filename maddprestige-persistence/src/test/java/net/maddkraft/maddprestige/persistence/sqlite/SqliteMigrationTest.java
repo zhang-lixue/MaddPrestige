@@ -12,11 +12,22 @@ import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Clock;
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
+import net.maddkraft.maddprestige.api.id.OperationId;
+import net.maddkraft.maddprestige.api.id.StageId;
+import net.maddkraft.maddprestige.core.config.RevisionHasher;
+import net.maddkraft.maddprestige.core.admin.config.ConfigurationStageReservationKind;
+import net.maddkraft.maddprestige.core.stage.PlayerStageState;
+import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.VerifiedBackup;
+import net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore;
 import net.maddkraft.maddprestige.persistence.migration.Migration;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
 import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
@@ -46,6 +57,80 @@ class SqliteMigrationTest {
                 + "WHERE type='index' AND name='mp_schema_migrations_applied_version_uq'")
                 .contains("WHERE result = 'APPLIED'"));
         assertTrue(Files.list(temporaryDirectory.resolve("fresh-backups")).findAny().isPresent());
+    }
+
+    @Test
+    @DisplayName("[A69] Migration 9 preserves only live journal ownership and requires source adoption")
+    void upgradesLegacyTransitionLeasesWithoutRetainingOrphans() {
+        Path database = temporaryDirectory.resolve("legacy-stage-leases.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        List<Migration> phaseSix = SqliteMigrations.phaseSix();
+        runner(sqlite, database).migrate(phaseSix.subList(0, 8));
+        ConfigRevisionId revision = new ConfigRevisionId("legacy_lease_revision");
+        new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("legacy lease"));
+        UUID live = UUID.randomUUID();
+        UUID terminal = UUID.randomUUID();
+        UUID orphan = UUID.randomUUID();
+        insertLegacyOperation(sqlite, live, "PREPARED", revision);
+        insertLegacyOperation(sqlite, terminal, "FAILED", revision);
+        insertLegacyLease(sqlite, live, revision);
+        insertLegacyLease(sqlite, terminal, revision);
+        insertLegacyLease(sqlite, orphan, revision);
+
+        runner(sqlite, database).migrate(phaseSix);
+
+        assertEquals("1", scalar(sqlite, "SELECT COUNT(*) FROM mp_stage_transition_leases"));
+        var fence = new SqliteStageReferenceMigrationStore(sqlite);
+        var legacy = fence.leases(10).getFirst();
+        assertTrue(legacy.sourceStage().isEmpty());
+        assertFalse(legacy.participationComplete());
+        var adopted = fence.acquire(new OperationId(live), new StageId("source"), new StageId("target"),
+                revision, java.time.Instant.parse("2026-08-16T00:00:01Z"));
+        assertEquals(live, adopted.leaseToken());
+        assertEquals(new StageId("source"), fence.leases(10).getFirst().sourceStage().orElseThrow());
+        execute(sqlite, "UPDATE mp_operations SET state='FAILED' WHERE operation_id='" + live + "'");
+        fence.release(adopted, java.time.Instant.parse("2026-08-16T00:00:02Z"));
+        assertEquals("0", scalar(sqlite, "SELECT COUNT(*) FROM mp_stage_transition_leases"));
+    }
+
+    @Test
+    @DisplayName("[A69] Migration 10 converts legacy remap authority to incomplete fail-closed recovery state")
+    void upgradesLegacyPendingRemapAsIncompleteConfigurationAuthority() {
+        Path database = temporaryDirectory.resolve("legacy-configuration-transition.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        List<Migration> phaseSix = SqliteMigrations.phaseSix();
+        runner(sqlite, database).migrate(phaseSix.subList(0, 9));
+        ConfigRevisionId revision = new ConfigRevisionId("legacy_configuration_transition");
+        var hash = RevisionHasher.hashText("legacy candidate");
+        new SqliteConfigRevisionRepository(sqlite).insert(revision, hash);
+        execute(sqlite, "INSERT INTO mp_configuration_revisions_v2 (revision_id, canonical_content_hash, "
+                + "actor_type, actor_name, source_surface, reason, validation_summary, diff_summary, "
+                + "application_status, created_at) VALUES ('" + revision.value() + "','" + hash.value()
+                + "','console','Owner','legacy-test','pending migration','valid','legacy','ATTEMPTED',"
+                + "'2026-08-16T00:00:00Z')");
+        UUID operation = UUID.randomUUID();
+        UUID player = UUID.randomUUID();
+        execute(sqlite, "INSERT INTO mp_stage_remap_operations (operation_id, config_revision_id, plan_revision, "
+                + "plan_hash, actor_type, actor_name, reason, status, migrated_players, created_at, updated_at, "
+                + "detail) VALUES ('" + operation + "','" + revision.value() + "','legacy-plan','" + hash.value()
+                + "','console','Owner','legacy remap','MIGRATED_PENDING_CONFIG',1,'2026-08-16T00:00:00Z',"
+                + "'2026-08-16T00:00:00Z','pending')");
+        execute(sqlite, "INSERT INTO mp_stage_remap_entries (operation_id, player_uuid, source_stage_id, "
+                + "target_stage_id, expected_state_revision, resulting_state_revision, source_config_revision_id) "
+                + "VALUES ('" + operation + "','" + player + "','b','c',0,1,'" + revision.value() + "')");
+
+        runner(sqlite, database).migrate(phaseSix);
+
+        var transition = new SqliteStageReferenceMigrationStore(sqlite).transitions(10).getFirst();
+        assertFalse(transition.scopeComplete());
+        assertEquals(ConfigurationStageReservationKind.UNKNOWN_LEGACY,
+                transition.reservedStages().get(new StageId("b")));
+        SqlitePlayerStageRepository players = new SqlitePlayerStageRepository(sqlite);
+        PlayerStageState unrelated = new PlayerStageState(UUID.randomUUID(), new StageId("unrelated"), 0,
+                revision, Instant.parse("2026-08-16T00:00:01Z"), Instant.parse("2026-08-16T00:00:01Z"),
+                Instant.parse("2026-08-16T00:00:01Z"), Optional.empty(), Optional.empty(), Optional.empty());
+        assertThrows(StageTransitionBlockedException.class, () -> players.insert(unrelated),
+                "unknown legacy scope must block globally rather than guess which zero-reference stages were unsafe");
     }
 
     @Test
@@ -289,6 +374,22 @@ class SqliteMigrationTest {
     private static Migration simpleMigration(long version) {
         return Migration.of(version, "test migration " + version,
                 List.of("CREATE TABLE mp_test_migration_" + version + " (value TEXT)"));
+    }
+
+    private static void insertLegacyOperation(
+            SqliteFoundation sqlite, UUID operationId, String state, ConfigRevisionId revision) {
+        execute(sqlite, "INSERT INTO mp_operations (operation_id, operation_type, target_uuid, idempotency_key, "
+                + "state, expected_state_revision, config_revision_id, provider_generations, redacted_preview, "
+                + "created_at, updated_at) VALUES ('" + operationId + "','legacy-test','" + UUID.randomUUID()
+                + "','" + operationId + "','" + state + "',0,'" + revision.value()
+                + "','','','2026-08-16T00:00:00Z','2026-08-16T00:00:00Z')");
+    }
+
+    private static void insertLegacyLease(
+            SqliteFoundation sqlite, UUID operationId, ConfigRevisionId revision) {
+        execute(sqlite, "INSERT INTO mp_stage_transition_leases (operation_id, target_stage_id, "
+                + "config_revision_id, acquired_at) VALUES ('" + operationId + "','target','"
+                + revision.value() + "','2026-08-16T00:00:00Z')");
     }
 
     private static Connection restorationFailingConnection(

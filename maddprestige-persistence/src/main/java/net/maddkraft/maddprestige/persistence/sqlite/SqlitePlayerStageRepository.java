@@ -38,7 +38,7 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
     private final ConnectionProvider connections;
 
     public SqlitePlayerStageRepository(ConnectionProvider connections) {
-        this.connections = connections;
+        this.connections = java.util.Objects.requireNonNull(connections, "connection provider");
     }
 
     @Override
@@ -77,20 +77,32 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
         String sql = "UPDATE mp_player_stage_state SET stage_id = ?, state_revision = ?, config_revision_id = ?, "
                 + "stage_entered_at = ?, updated_at = ?, last_reconciled_at = ?, last_provider_generation = ?, "
                 + "imported_at = ? WHERE player_uuid = ? AND state_revision = ?";
-        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, replacement.stageId().value());
-            statement.setLong(2, replacement.stateRevision());
-            statement.setString(3, replacement.configRevision().value());
-            statement.setString(4, replacement.stageEnteredAt().toString());
-            statement.setString(5, replacement.updatedAt().toString());
-            setOptionalInstant(statement, 6, replacement.lastReconciledAt());
-            setOptionalLong(statement, 7, replacement.lastProviderGeneration());
-            setOptionalInstant(statement, 8, replacement.importedAt());
-            statement.setString(9, replacement.playerId().toString());
-            statement.setLong(10, expectedRevision);
-            if (statement.executeUpdate() != 1) {
-                throw new StalePlayerStageStateException(
-                        "Player stage compare-and-set failed for " + replacement.playerId());
+        try (Connection connection = connections.open()) {
+            SqliteStageTransitionGuard.beginImmediate(connection);
+            try {
+                StageId sourceStage = currentStage(connection, replacement.playerId(), expectedRevision);
+                SqliteStageTransitionGuard.requireNoPendingRemap(
+                        connection, java.util.List.of(sourceStage, replacement.stageId()));
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    statement.setString(1, replacement.stageId().value());
+                    statement.setLong(2, replacement.stateRevision());
+                    statement.setString(3, replacement.configRevision().value());
+                    statement.setString(4, replacement.stageEnteredAt().toString());
+                    statement.setString(5, replacement.updatedAt().toString());
+                    setOptionalInstant(statement, 6, replacement.lastReconciledAt());
+                    setOptionalLong(statement, 7, replacement.lastProviderGeneration());
+                    setOptionalInstant(statement, 8, replacement.importedAt());
+                    statement.setString(9, replacement.playerId().toString());
+                    statement.setLong(10, expectedRevision);
+                    if (statement.executeUpdate() != 1) {
+                        throw new StalePlayerStageStateException(
+                                "Player stage compare-and-set failed for " + replacement.playerId());
+                    }
+                }
+                SqliteStageTransitionGuard.commit(connection);
+            } catch (SQLException | RuntimeException exception) {
+                SqliteStageTransitionGuard.rollback(connection, exception);
+                throw exception;
             }
         } catch (StalePlayerStageStateException exception) {
             throw exception;
@@ -114,13 +126,16 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
             throw new IllegalArgumentException("Replacement revision must increment expected revision exactly once");
         }
         try (Connection connection = connections.open()) {
-            connection.setAutoCommit(false);
+            SqliteStageTransitionGuard.beginImmediate(connection);
             try {
+                StageId sourceStage = currentStage(connection, replacement.playerId(), expectedRevision);
+                SqliteStageTransitionGuard.requireNoPendingRemap(
+                        connection, java.util.List.of(sourceStage, replacement.stageId()));
                 update(connection, replacement, expectedRevision);
                 insertHistory(connection, history);
-                connection.commit();
+                SqliteStageTransitionGuard.commit(connection);
             } catch (SQLException | RuntimeException exception) {
-                connection.rollback();
+                SqliteStageTransitionGuard.rollback(connection, exception);
                 throw exception;
             }
         } catch (StalePlayerStageStateException exception) {
@@ -175,11 +190,39 @@ public final class SqlitePlayerStageRepository implements PlayerStageRepository 
 
     private boolean insertInternal(PlayerStageState state, boolean ignoreExisting) {
         String sql = ignoreExisting ? IMPORT_ONCE_INSERT_SQL : INSERT_SQL;
-        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
-            bind(statement, state);
-            return statement.executeUpdate() == 1;
+        try (Connection connection = connections.open()) {
+            SqliteStageTransitionGuard.beginImmediate(connection);
+            try {
+                SqliteStageTransitionGuard.requireNoPendingRemap(connection, java.util.List.of(state.stageId()));
+                boolean inserted;
+                try (PreparedStatement statement = connection.prepareStatement(sql)) {
+                    bind(statement, state);
+                    inserted = statement.executeUpdate() == 1;
+                }
+                SqliteStageTransitionGuard.commit(connection);
+                return inserted;
+            } catch (SQLException | RuntimeException exception) {
+                SqliteStageTransitionGuard.rollback(connection, exception);
+                throw exception;
+            }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not insert player stage state", exception);
+        }
+    }
+
+    private static StageId currentStage(Connection connection, UUID playerId, long expectedRevision)
+            throws SQLException {
+        String sql = "SELECT stage_id FROM mp_player_stage_state WHERE player_uuid = ? AND state_revision = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            statement.setLong(2, expectedRevision);
+            try (ResultSet row = statement.executeQuery()) {
+                if (!row.next()) {
+                    throw new StalePlayerStageStateException(
+                            "Player stage compare-and-set failed for " + playerId);
+                }
+                return new StageId(row.getString(1));
+            }
         }
     }
 

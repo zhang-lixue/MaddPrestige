@@ -1,9 +1,12 @@
 package net.maddkraft.maddprestige.persistence.rank;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.time.Clock;
@@ -16,7 +19,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.audit.AuditOutcome;
@@ -40,6 +45,7 @@ import net.maddkraft.maddprestige.api.result.ErrorCategory;
 import net.maddkraft.maddprestige.api.result.Result;
 import net.maddkraft.maddprestige.api.result.StructuredError;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
+import net.maddkraft.maddprestige.core.admin.config.ConfigurationStageReservationKind;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistration;
 import net.maddkraft.maddprestige.core.rank.RankOperationExecutionStatus;
@@ -53,6 +59,7 @@ import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 import net.maddkraft.maddprestige.core.stage.StageConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.stage.StageDefinition;
 import net.maddkraft.maddprestige.core.stage.StageProjection;
+import net.maddkraft.maddprestige.core.stage.StageRemapPlan;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
 import net.maddkraft.maddprestige.persistence.AuditRepository;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
@@ -60,6 +67,7 @@ import net.maddkraft.maddprestige.persistence.sqlite.SqliteAuditRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteConfigRevisionRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteFoundation;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteMigrations;
+import net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteOperationRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerStageRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -84,14 +92,16 @@ class RankProjectionOperationExecutorTest {
     private List<AuditRecord> auditRecords;
     private Clock fixedClock;
     private UUID playerId;
+    private SqliteFoundation sqlite;
+    private SqliteStageReferenceMigrationStore transitionFence;
 
     @BeforeEach
     void setUp() {
         Path database = temporaryDirectory.resolve("rank-operation.db");
-        SqliteFoundation sqlite = new SqliteFoundation(database);
+        sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite,
                 new FileBackupService(database, temporaryDirectory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseTwo());
+                Clock.systemUTC()).migrate(SqliteMigrations.phaseSix());
         ConfigRevisionId revision = new ConfigRevisionId("revision_1");
         new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("revision one"));
         operations = new SqliteOperationRepository(sqlite);
@@ -110,8 +120,10 @@ class RankProjectionOperationExecutorTest {
             persistedAudit.append(record);
         };
         fixedClock = Clock.fixed(NOW.plusSeconds(10), ZoneOffset.UTC);
+        transitionFence = new SqliteStageReferenceMigrationStore(sqlite);
         executor = new RankProjectionOperationExecutor(operations, playerStages, audit,
-                providers, () -> Optional.ofNullable(active.get()), Runnable::run,
+                providers, () -> Optional.ofNullable(active.get()), transitionFence,
+                Runnable::run,
                 fixedClock);
         playerId = UUID.randomUUID();
         PlayerStageState state = playerState(revision);
@@ -149,6 +161,131 @@ class RankProjectionOperationExecutorTest {
                 operations.find(operation.plan().id()).orElseThrow().state());
         assertEquals(ActionState.UNCERTAIN,
                 operations.findAction(operation.plan().id(), "rank-projection").orElseThrow().state());
+    }
+
+    @Test
+    @DisplayName("[A69] Rank projection sourced from a removed stage is fenced before external mutation")
+    void sourceStageFenceBlocksProjectionBeforeAdapterEffects() {
+        RankProjectionOperation operation = operation("source-stage-removal");
+        ConfigRevisionId removalRevision = new ConfigRevisionId("rank_projection_removal");
+        var removalHash = RevisionHasher.hashText("remove first");
+        new SqliteConfigRevisionRepository(sqlite).insert(removalRevision, removalHash);
+        prepareConfigurationOwner(removalRevision, active.get().revisionId(), removalHash.value());
+        var snapshot = transitionFence.capture(Optional.of(new StageRemapPlan("remove_projection_source",
+                Map.of(new StageId("first"), new StageId("replacement_first"))))).remap().orElseThrow();
+        transitionFence.beginTransition(removalRevision, Optional.of(active.get().revisionId()), removalHash,
+                Map.of(new StageId("first"), ConfigurationStageReservationKind.REMOVED), Optional.of(snapshot),
+                new Actor("console", Optional.empty(), "Owner"),
+                "pause projection source removal before activation", NOW.plusSeconds(1));
+
+        var result = executor.execute(operation, adapter).toCompletableFuture().join();
+
+        assertEquals(RankOperationExecutionStatus.FAILED, result.status());
+        assertEquals(0, adapter.projectionCalls.get());
+        assertEquals(new StageId("replacement_first"), playerStages.find(playerId).orElseThrow().stageId());
+        assertEquals(OperationState.FAILED, operations.find(operation.plan().id()).orElseThrow().state());
+        assertTrue(transitionFence.leases(10).isEmpty());
+    }
+
+    @Test
+    @DisplayName("[A69] Zero-reference target reservation blocks projection before external mutation")
+    void zeroReferenceTargetReservationBlocksProjectionBeforeAdapterEffects() {
+        RankProjectionOperation operation = operation("zero-reference-target-removal");
+        ConfigRevisionId removalRevision = new ConfigRevisionId("rank_projection_target_removal");
+        var removalHash = RevisionHasher.hashText("remove zero-reference second");
+        new SqliteConfigRevisionRepository(sqlite).insert(removalRevision, removalHash);
+        prepareConfigurationOwner(removalRevision, active.get().revisionId(), removalHash.value());
+        transitionFence.beginTransition(removalRevision, Optional.of(active.get().revisionId()), removalHash,
+                Map.of(new StageId("second"), ConfigurationStageReservationKind.REMOVED), Optional.empty(),
+                new Actor("console", Optional.empty(), "Owner"), "reserve projection target", NOW.plusSeconds(1));
+
+        var result = executor.execute(operation, adapter).toCompletableFuture().join();
+
+        assertEquals(RankOperationExecutionStatus.FAILED, result.status());
+        assertEquals(0, adapter.projectionCalls.get());
+        assertEquals(new StageId("first"), playerStages.find(playerId).orElseThrow().stageId());
+        assertEquals(OperationState.FAILED, operations.find(operation.plan().id()).orElseThrow().state());
+    }
+
+    @Test
+    @DisplayName("[A69] Zero-reference stale source plan is fenced before projection effects")
+    void zeroReferenceSourceReservationBlocksStalePlanBeforeAdapterEffects() throws Exception {
+        RankProjectionOperation operation = operation("zero-reference-source-removal");
+        try (Connection connection = sqlite.open(); PreparedStatement statement = connection.prepareStatement(
+                "DELETE FROM mp_player_stage_state WHERE player_uuid = ?")) {
+            statement.setString(1, playerId.toString());
+            assertEquals(1, statement.executeUpdate());
+        }
+        ConfigRevisionId removalRevision = new ConfigRevisionId("rank_projection_stale_source_removal");
+        var removalHash = RevisionHasher.hashText("remove zero-reference first");
+        new SqliteConfigRevisionRepository(sqlite).insert(removalRevision, removalHash);
+        prepareConfigurationOwner(removalRevision, active.get().revisionId(), removalHash.value());
+        transitionFence.beginTransition(removalRevision, Optional.of(active.get().revisionId()), removalHash,
+                Map.of(new StageId("first"), ConfigurationStageReservationKind.DISABLED), Optional.empty(),
+                new Actor("console", Optional.empty(), "Owner"), "reserve stale projection source",
+                NOW.plusSeconds(1));
+
+        var result = executor.execute(operation, adapter).toCompletableFuture().join();
+
+        assertEquals(RankOperationExecutionStatus.FAILED, result.status());
+        assertEquals(0, adapter.projectionCalls.get());
+        assertEquals(OperationState.FAILED, operations.find(operation.plan().id()).orElseThrow().state());
+    }
+
+    @Test
+    @DisplayName("[A69] Projection target lease wins before zero-reference configuration removal")
+    void projectionTargetOperationWinsBeforeConfigurationReservation() throws Exception {
+        RankProjectionOperation operation = operation("projection-target-operation-wins");
+        ConfigRevisionId removalRevision = new ConfigRevisionId("projection_target_operation_wins");
+        var removalHash = RevisionHasher.hashText("remove projection target after operation start");
+        new SqliteConfigRevisionRepository(sqlite).insert(removalRevision, removalHash);
+        prepareConfigurationOwner(removalRevision, active.get().revisionId(), removalHash.value());
+        CountDownLatch projectionStarted = new CountDownLatch(1);
+        CountDownLatch allowProjection = new CountDownLatch(1);
+        adapter.afterProjection = () -> {
+            projectionStarted.countDown();
+            try {
+                if (!allowProjection.await(10, TimeUnit.SECONDS)) {
+                    throw new AssertionError("Timed out waiting to resume projection");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(exception);
+            }
+        };
+        CompletableFuture<net.maddkraft.maddprestige.core.rank.RankOperationExecution> executing =
+                CompletableFuture.supplyAsync(() -> executor.execute(operation, adapter).toCompletableFuture().join());
+        assertTrue(projectionStarted.await(10, TimeUnit.SECONDS));
+
+        assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
+                () -> transitionFence.beginTransition(removalRevision, Optional.of(active.get().revisionId()),
+                        removalHash, Map.of(new StageId("second"), ConfigurationStageReservationKind.REMOVED),
+                        Optional.empty(), new Actor("console", Optional.empty(), "Owner"),
+                        "projection target lease wins", NOW.plusSeconds(1)));
+
+        allowProjection.countDown();
+        assertEquals(RankOperationExecutionStatus.COMPLETED, executing.get(10, TimeUnit.SECONDS).status());
+        assertEquals(new StageId("second"), playerStages.find(playerId).orElseThrow().stageId());
+        assertTrue(transitionFence.leases(10).isEmpty());
+    }
+
+    private void prepareConfigurationOwner(
+            ConfigRevisionId revision,
+            ConfigRevisionId parent,
+            String contentHash) {
+        String sql = "INSERT INTO mp_configuration_revisions_v2 (revision_id, parent_revision_id, "
+                + "canonical_content_hash, actor_type, actor_name, source_surface, reason, validation_summary, "
+                + "diff_summary, application_status, created_at) VALUES (?, ?, ?, 'console', 'Owner', "
+                + "'test', 'stage transition test', 'valid', 'test', 'ATTEMPTED', ?)";
+        try (Connection connection = sqlite.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, revision.value());
+            statement.setString(2, parent.value());
+            statement.setString(3, contentHash);
+            statement.setString(4, NOW.toString());
+            statement.executeUpdate();
+        } catch (java.sql.SQLException exception) {
+            throw new AssertionError(exception);
+        }
     }
 
     @Test

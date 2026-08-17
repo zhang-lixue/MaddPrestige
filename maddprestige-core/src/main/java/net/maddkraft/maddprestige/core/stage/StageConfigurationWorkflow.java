@@ -87,9 +87,11 @@ public final class StageConfigurationWorkflow {
         StageConfiguration prior = active().map(StageConfigurationSnapshot::configuration)
                 .orElse(StageConfiguration.inactive());
         StageChangeImpact impact = impactAnalyzer.analyze(prior, configuration, playerReferences, remapPlan);
+        ValidationReport remapCapability = impact.explicitRemapRequired()
+                ? ValidationReport.of(java.util.List.of(remapExecutionFinding())) : ValidationReport.VALID;
         var phaseThreeProviderValidation = phaseThreeValidator.validate(
                 phaseThreeCompilation.configuration(), configuration, providers);
-        var localValidation = stageCompilation.validation().combine(impact.validation())
+        var localValidation = stageCompilation.validation().combine(impact.validation()).combine(remapCapability)
                 .combine(phaseThreeCompilation.validation()).combine(phaseThreeProviderValidation.report());
         if (stageCompilation.configuration().isEmpty() || localValidation.hasErrors()) {
             return CompletableFuture.completedFuture(new StageConfigurationCandidate(
@@ -163,5 +165,13 @@ public final class StageConfigurationWorkflow {
         return new ValidationFinding(code, ValidationSeverity.ERROR, "progression.stages", explanation,
                 "External validation is pinned to one provider generation.",
                 "Restore the provider and prepare the draft again before apply.");
+    }
+
+    private static ValidationFinding remapExecutionFinding() {
+        return new ValidationFinding("stage.change.remap_execution_required", ValidationSeverity.ERROR,
+                "progression.stages",
+                "This legacy configuration workflow cannot execute a persisted player-stage remap.",
+                "No referenced stage deletion or disablement can activate through a read-only workflow.",
+                "Use the Phase 6 administration workflow backed by StageReferenceMigrationStore.");
     }
 }

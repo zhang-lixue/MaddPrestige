@@ -79,6 +79,118 @@ public final class LosslessYamlDocument {
         return replaceRange(requireScalar(path), canonicalDecimal);
     }
 
+    public List<String> sequenceScalars(YamlPath path) {
+        Node node = requireNode(path);
+        if (!(node instanceof SequenceNode sequence)) {
+            throw new IllegalArgumentException("YAML path does not reference a sequence: " + path);
+        }
+        return sequence.getValue().stream().map(value -> {
+            if (!(value instanceof ScalarNode scalar)) {
+                throw new IllegalArgumentException("Sequence contains a structured value: " + path);
+            }
+            return scalar.getValue();
+        }).toList();
+    }
+
+    public List<String> mappingKeys(YamlPath path) {
+        Node node = requireNode(path);
+        if (!(node instanceof MappingNode mapping)) {
+            throw new IllegalArgumentException("YAML path does not reference a mapping: " + path);
+        }
+        return mapping.getValue().stream().map(tuple -> {
+            if (!(tuple.getKeyNode() instanceof ScalarNode scalar)) {
+                throw new IllegalArgumentException("Mapping contains a non-scalar key: " + path);
+            }
+            return scalar.getValue();
+        }).toList();
+    }
+
+    public LosslessYamlDocument appendSequenceString(YamlPath path, String value) {
+        Objects.requireNonNull(value, "value");
+        Node node = requireNode(path);
+        if (!(node instanceof SequenceNode sequence)) {
+            throw new IllegalArgumentException("YAML path does not reference a sequence: " + path);
+        }
+        if (sequenceScalars(path).contains(value)) {
+            throw new IllegalArgumentException("Sequence already contains value: " + value);
+        }
+        String encoded = encodeString(ScalarStyle.PLAIN, value);
+        if (sequence.getValue().isEmpty()) {
+            return expandEmptyCollection(node, " ".repeat(parentIndent(node) + 2) + "- " + encoded);
+        }
+        Node last = sequence.getValue().getLast();
+        int insertion = nodeLineEnd(last);
+        int indent = lineIndent(utf16Offset(last.getStartMark().orElseThrow()));
+        return insert(insertion, " ".repeat(indent) + "- " + encoded + lineEnding());
+    }
+
+    public LosslessYamlDocument removeSequenceString(YamlPath path, String value) {
+        Objects.requireNonNull(value, "value");
+        Node node = requireNode(path);
+        if (!(node instanceof SequenceNode sequence)) {
+            throw new IllegalArgumentException("YAML path does not reference a sequence: " + path);
+        }
+        for (Node item : sequence.getValue()) {
+            if (item instanceof ScalarNode scalar && scalar.getValue().equals(value)) {
+                if (sequence.getValue().size() == 1) {
+                    return emptyCollection(sequence, "[]");
+                }
+                return removeLines(item);
+            }
+        }
+        throw new IllegalArgumentException("Sequence does not contain value: " + value);
+    }
+
+    public LosslessYamlDocument appendMappingBlock(YamlPath path, String key, List<String> valueLines) {
+        Objects.requireNonNull(key, "key");
+        valueLines = List.copyOf(Objects.requireNonNull(valueLines, "value lines"));
+        if (valueLines.isEmpty() || valueLines.stream().anyMatch(line -> line.isBlank() || line.contains("\r")
+                || line.contains("\n"))) {
+            throw new IllegalArgumentException("Mapping block lines must be nonblank single lines");
+        }
+        Node node = requireNode(path);
+        if (!(node instanceof MappingNode mapping)) {
+            throw new IllegalArgumentException("YAML path does not reference a mapping: " + path);
+        }
+        if (mappingKeys(path).contains(key)) {
+            throw new IllegalArgumentException("Mapping already contains key: " + key);
+        }
+        String encodedKey = encodeString(ScalarStyle.PLAIN, key);
+        int indent;
+        int insertion;
+        if (mapping.getValue().isEmpty()) {
+            indent = parentIndent(node) + 2;
+            return expandEmptyCollection(node, mappingBlock(indent, encodedKey, valueLines));
+        }
+        NodeTuple last = mapping.getValue().getLast();
+        indent = last.getKeyNode().getStartMark().orElseThrow().getColumn();
+        insertion = nodeLineEnd(last.getValueNode());
+        return insert(insertion, mappingBlock(indent, encodedKey, valueLines) + lineEnding());
+    }
+
+    public LosslessYamlDocument removeMappingEntry(YamlPath path, String key) {
+        Objects.requireNonNull(key, "key");
+        Node node = requireNode(path);
+        if (!(node instanceof MappingNode mapping)) {
+            throw new IllegalArgumentException("YAML path does not reference a mapping: " + path);
+        }
+        for (int index = 0; index < mapping.getValue().size(); index++) {
+            NodeTuple tuple = mapping.getValue().get(index);
+            if (tuple.getKeyNode() instanceof ScalarNode scalar && scalar.getValue().equals(key)) {
+                if (mapping.getValue().size() == 1) {
+                    return emptyCollection(mapping, "{}");
+                }
+                int start = lineStart(utf16Offset(tuple.getKeyNode().getStartMark().orElseThrow()));
+                int end = index + 1 < mapping.getValue().size()
+                        ? lineStart(utf16Offset(mapping.getValue().get(index + 1).getKeyNode()
+                                .getStartMark().orElseThrow()))
+                        : nodeLineEnd(tuple.getValueNode());
+                return replaceRange(start, end, "");
+            }
+        }
+        throw new IllegalArgumentException("Mapping does not contain key: " + key);
+    }
+
     private LosslessYamlDocument replaceRange(ScalarNode node, String encoded) {
         Mark startMark = node.getStartMark().orElseThrow(() -> new IllegalStateException("Scalar has no start mark"));
         Mark endMark = node.getEndMark().orElseThrow(() -> new IllegalStateException("Scalar has no end mark"));
@@ -88,8 +200,63 @@ public final class LosslessYamlDocument {
             throw new IllegalStateException("SnakeYAML returned an invalid scalar source range");
         }
         requireSurgicallyEditable(node, start, end);
-        String updated = source.substring(0, start) + encoded + source.substring(end);
-        return parse(updated);
+        return replaceRange(start, end, encoded);
+    }
+
+    private LosslessYamlDocument expandEmptyCollection(Node node, String block) {
+        int start = utf16Offset(node.getStartMark().orElseThrow());
+        int end = utf16Offset(node.getEndMark().orElseThrow());
+        int newline = source.indexOf('\n', end);
+        int lineContentEnd = newline < 0 ? source.length()
+                : newline > 0 && source.charAt(newline - 1) == '\r' ? newline - 1 : newline;
+        String suffix = source.substring(end, lineContentEnd);
+        if (!suffix.isBlank() && !suffix.stripLeading().startsWith("#")) {
+            throw new IllegalArgumentException("Empty collection has unsupported trailing syntax");
+        }
+        String preservedComment = suffix.isBlank() ? "" : suffix;
+        return replaceRange(start, lineContentEnd, preservedComment + lineEnding() + block);
+    }
+
+    private LosslessYamlDocument emptyCollection(Node node, String emptyFlow) {
+        int start = utf16Offset(node.getStartMark().orElseThrow());
+        int end = utf16Offset(node.getEndMark().orElseThrow());
+        if (start < source.length() && (source.charAt(start) == '[' || source.charAt(start) == '{')) {
+            return replaceRange(start, end, emptyFlow);
+        }
+        int firstChildLine = lineStart(start);
+        if (firstChildLine == 0) {
+            throw new IllegalArgumentException("Block collection has no owning mapping line");
+        }
+        int ownerStart = lineStart(firstChildLine - 1);
+        int ownerEnd = firstChildLine;
+        String owner = source.substring(ownerStart, ownerEnd);
+        int contentEnd = owner.endsWith("\r\n") ? owner.length() - 2
+                : owner.endsWith("\n") ? owner.length() - 1 : owner.length();
+        String content = owner.substring(0, contentEnd);
+        int comment = content.indexOf('#');
+        int searchEnd = comment < 0 ? content.length() : comment;
+        int colon = content.lastIndexOf(':', Math.max(0, searchEnd - 1));
+        if (colon < 0 || !content.substring(colon + 1, searchEnd).isBlank()) {
+            throw new IllegalArgumentException("Block collection owning line is not surgically editable");
+        }
+        String preservedComment = comment < 0 ? "" : " " + content.substring(comment).stripLeading();
+        String replacement = content.substring(0, colon + 1) + " " + emptyFlow + preservedComment + lineEnding();
+        return replaceRange(ownerStart, nodeLineEnd(node), replacement);
+    }
+
+    private LosslessYamlDocument removeLines(Node node) {
+        return replaceRange(lineStart(utf16Offset(node.getStartMark().orElseThrow())), nodeLineEnd(node), "");
+    }
+
+    private LosslessYamlDocument insert(int offset, String value) {
+        return replaceRange(offset, offset, value);
+    }
+
+    private LosslessYamlDocument replaceRange(int start, int end, String encoded) {
+        if (start < 0 || end < start || end > source.length()) {
+            throw new IllegalArgumentException("YAML source edit range is invalid");
+        }
+        return parse(source.substring(0, start) + encoded + source.substring(end));
     }
 
     private int utf16Offset(Mark mark) {
@@ -121,6 +288,14 @@ public final class LosslessYamlDocument {
     }
 
     private ScalarNode requireScalar(YamlPath path) {
+        Node current = requireNode(path);
+        if (!(current instanceof ScalarNode scalarNode)) {
+            throw new IllegalArgumentException("YAML path does not reference a scalar: " + path);
+        }
+        return scalarNode;
+    }
+
+    private Node requireNode(YamlPath path) {
         Objects.requireNonNull(path, "path");
         if (path.documentIndex() >= documents.size()) {
             throw new IllegalArgumentException("YAML document index is out of range: " + path.documentIndex());
@@ -133,10 +308,54 @@ public final class LosslessYamlDocument {
                 current = sequenceValue(current, index.value());
             }
         }
-        if (!(current instanceof ScalarNode scalarNode)) {
-            throw new IllegalArgumentException("YAML path does not reference a scalar: " + path);
+        return current;
+    }
+
+    private int parentIndent(Node node) {
+        int start = utf16Offset(node.getStartMark().orElseThrow());
+        int line = lineStart(start);
+        int indent = 0;
+        while (line + indent < source.length() && source.charAt(line + indent) == ' ') {
+            indent++;
         }
-        return scalarNode;
+        return indent;
+    }
+
+    private int lineStart(int offset) {
+        int newline = source.lastIndexOf('\n', Math.max(0, offset - 1));
+        return newline < 0 ? 0 : newline + 1;
+    }
+
+    private int lineIndent(int offset) {
+        int start = lineStart(offset);
+        int indent = 0;
+        while (start + indent < source.length() && source.charAt(start + indent) == ' ') {
+            indent++;
+        }
+        return indent;
+    }
+
+    private int lineEnd(int offset) {
+        int newline = source.indexOf('\n', offset);
+        return newline < 0 ? source.length() : newline + 1;
+    }
+
+    private int nodeLineEnd(Node node) {
+        int end = utf16Offset(node.getEndMark().orElseThrow());
+        return end == lineStart(end) ? end : lineEnd(end);
+    }
+
+    private String lineEnding() {
+        return source.contains("\r\n") ? "\r\n" : "\n";
+    }
+
+    private String mappingBlock(int indent, String key, List<String> lines) {
+        String lineEnding = lineEnding();
+        StringBuilder result = new StringBuilder(" ".repeat(indent)).append(key).append(':').append(lineEnding);
+        for (String line : lines) {
+            result.append(" ".repeat(indent + 2)).append(line).append(lineEnding);
+        }
+        return result.substring(0, result.length() - lineEnding.length());
     }
 
     private static Node mappingValue(Node node, String key) {

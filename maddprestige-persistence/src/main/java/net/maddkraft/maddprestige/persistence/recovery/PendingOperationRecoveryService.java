@@ -14,6 +14,7 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.reward.NativeRecoverableRewardProvider;
 import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
+import net.maddkraft.maddprestige.core.stage.StageTransitionFence;
 import net.maddkraft.maddprestige.persistence.OperationRepository;
 import net.maddkraft.maddprestige.persistence.PrestigeLifecycleRepository;
 import net.maddkraft.maddprestige.persistence.RecoveryEvent;
@@ -28,13 +29,14 @@ public final class PendingOperationRecoveryService {
     private final RecoveryEventRepository events;
     private final Clock clock;
     private final ProviderRegistry providers;
+    private final Optional<StageTransitionFence> transitionFence;
 
     public PendingOperationRecoveryService(
             OperationRepository operations,
             PrestigeLifecycleRepository prestige,
             RecoveryEventRepository events,
             Clock clock) {
-        this(operations, prestige, events, clock, new ProviderRegistry());
+        this(operations, prestige, events, clock, new ProviderRegistry(), Optional.empty());
     }
 
     public PendingOperationRecoveryService(
@@ -43,20 +45,66 @@ public final class PendingOperationRecoveryService {
             RecoveryEventRepository events,
             Clock clock,
             ProviderRegistry providers) {
+        this(operations, prestige, events, clock, providers, Optional.empty());
+    }
+
+    public PendingOperationRecoveryService(
+            OperationRepository operations,
+            PrestigeLifecycleRepository prestige,
+            RecoveryEventRepository events,
+            Clock clock,
+            ProviderRegistry providers,
+            StageTransitionFence transitionFence) {
+        this(operations, prestige, events, clock, providers,
+                Optional.of(java.util.Objects.requireNonNull(transitionFence, "stage transition fence")));
+    }
+
+    private PendingOperationRecoveryService(
+            OperationRepository operations,
+            PrestigeLifecycleRepository prestige,
+            RecoveryEventRepository events,
+            Clock clock,
+            ProviderRegistry providers,
+            Optional<StageTransitionFence> transitionFence) {
         this.operations = java.util.Objects.requireNonNull(operations, "operation repository");
         this.prestige = java.util.Objects.requireNonNull(prestige, "Prestige lifecycle repository");
         this.events = java.util.Objects.requireNonNull(events, "recovery event repository");
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
         this.providers = java.util.Objects.requireNonNull(providers, "provider registry");
+        this.transitionFence = java.util.Objects.requireNonNull(transitionFence, "stage transition fence");
     }
 
     public List<RecoveryOutcome> recover(int limit) {
+        transitionFence.ifPresent(fence -> fence.releaseTerminalLeases(clock.instant()));
         ArrayList<RecoveryOutcome> result = new ArrayList<>();
         for (StoredOperation operation : operations.findIncomplete(limit)) {
             result.add("prestige".equals(operation.operationType())
                     ? recoverPrestige(operation) : recoverGeneric(operation));
         }
         return List.copyOf(result);
+    }
+
+    /** Records an evidence-backed terminal reconciliation and releases its durable stage participation. */
+    public RecoveryOutcome resolve(
+            net.maddkraft.maddprestige.api.id.OperationId operationId,
+            OperationState terminalState,
+            String detail) {
+        if (!terminal(terminalState)) {
+            throw new IllegalArgumentException("Reconciliation resolution must be terminal");
+        }
+        if (detail == null || detail.isBlank() || detail.length() > 2048) {
+            throw new IllegalArgumentException("Reconciliation detail must contain 1-2048 characters");
+        }
+        StoredOperation operation = operations.find(operationId).orElseThrow(() ->
+                new IllegalArgumentException("Unknown operation: " + operationId));
+        if (operation.state() != OperationState.NEEDS_RECONCILIATION) {
+            throw new IllegalStateException("Operation does not require reconciliation: " + operationId);
+        }
+        operations.transition(operationId, OperationState.NEEDS_RECONCILIATION, terminalState);
+        if ("prestige".equals(operation.operationType())) {
+            prestige.recordResult(operationId, terminalState.name());
+        }
+        return outcome(operation, terminalState, "evidence-backed-terminal-resolution", detail, true);
     }
 
     private RecoveryOutcome recoverPrestige(StoredOperation operation) {
@@ -373,6 +421,14 @@ public final class PendingOperationRecoveryService {
             events.append(new RecoveryEvent(UUID.randomUUID(), operation.operationId(), operation.state(),
                     resultingState, decision, detail, clock.instant()));
         }
+        if (terminal(resultingState)) {
+            transitionFence.ifPresent(fence -> fence.release(operation.operationId(), clock.instant()));
+        }
         return new RecoveryOutcome(operation.operationId(), resultingState, decision, detail);
+    }
+
+    private static boolean terminal(OperationState state) {
+        return state == OperationState.COMPLETED || state == OperationState.COMPENSATED
+                || state == OperationState.FAILED;
     }
 }
