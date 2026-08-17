@@ -42,6 +42,16 @@ import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteStageTransitionGuard;
 
 public final class SqliteStageReferenceMigrationStore implements StageReferenceMigrationStore, StageTransitionFence {
+    private static final String DELETE_TERMINAL_OPERATION_LEASE =
+            "DELETE FROM mp_stage_transition_leases WHERE operation_id = ? "
+                    + "AND EXISTS (SELECT 1 FROM mp_operations operation "
+                    + "WHERE operation.operation_id = mp_stage_transition_leases.operation_id "
+                    + "AND operation.state IN ('COMPLETED','COMPENSATED','FAILED'))";
+    private static final String DELETE_TERMINAL_OPERATION_LEASE_BY_TOKEN =
+            "DELETE FROM mp_stage_transition_leases WHERE operation_id = ? AND lease_token = ? "
+                    + "AND EXISTS (SELECT 1 FROM mp_operations operation "
+                    + "WHERE operation.operation_id = mp_stage_transition_leases.operation_id "
+                    + "AND operation.state IN ('COMPLETED','COMPENSATED','FAILED'))";
     private final ConnectionProvider connections;
 
     public SqliteStageReferenceMigrationStore(ConnectionProvider connections) {
@@ -825,17 +835,18 @@ public final class SqliteStageReferenceMigrationStore implements StageReferenceM
         try (Connection connection = connections.open()) {
             SqliteStageTransitionGuard.beginImmediate(connection);
             try {
-                String sql = "DELETE FROM mp_stage_transition_leases WHERE operation_id = ? "
-                        + (leaseToken.isPresent() ? "AND lease_token = ? " : "")
-                        + "AND EXISTS (SELECT 1 FROM mp_operations operation "
-                        + "WHERE operation.operation_id = mp_stage_transition_leases.operation_id "
-                        + "AND operation.state IN ('COMPLETED','COMPENSATED','FAILED'))";
-                try (PreparedStatement statement = connection.prepareStatement(sql)) {
-                    statement.setString(1, operationId.toString());
-                    if (leaseToken.isPresent()) {
+                if (leaseToken.isPresent()) {
+                    try (PreparedStatement statement = connection.prepareStatement(
+                            DELETE_TERMINAL_OPERATION_LEASE_BY_TOKEN)) {
+                        statement.setString(1, operationId.toString());
                         statement.setString(2, leaseToken.orElseThrow().toString());
+                        statement.executeUpdate();
                     }
-                    statement.executeUpdate();
+                } else {
+                    try (PreparedStatement statement = connection.prepareStatement(DELETE_TERMINAL_OPERATION_LEASE)) {
+                        statement.setString(1, operationId.toString());
+                        statement.executeUpdate();
+                    }
                 }
                 SqliteStageTransitionGuard.commit(connection);
             } catch (SQLException | RuntimeException exception) {

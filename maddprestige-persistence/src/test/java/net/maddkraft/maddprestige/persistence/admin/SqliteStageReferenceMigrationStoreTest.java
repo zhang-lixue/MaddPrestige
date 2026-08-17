@@ -27,6 +27,7 @@ import net.maddkraft.maddprestige.core.config.ContentHash;
 import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.core.stage.StageRemapPlan;
 import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
+import net.maddkraft.maddprestige.core.stage.StageTransitionPermit;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.StalePlayerStageStateException;
@@ -239,6 +240,36 @@ class SqliteStageReferenceMigrationStoreTest {
         CompletableFuture.allOf(first, second).join();
 
         assertEquals("0", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"));
+    }
+
+    @Test
+    @DisplayName("[R2][S3][A69] Both static terminal-release statements bind exact ownership evidence")
+    void terminalReleaseQueryShapesPreservePlaceholderAndOwnershipParity() throws Exception {
+        OperationId tokenOwner = operation();
+        journal(tokenOwner, "PREPARED");
+        StageTransitionPermit permit = migrations.acquire(tokenOwner, new StageId("b"), new StageId("c"),
+                SOURCE_REVISION, NOW);
+
+        migrations.release(permit, NOW.plusSeconds(1));
+        assertEquals("1", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"),
+                "nonterminal evidence must retain exact-token authority");
+        terminal(tokenOwner, "FAILED");
+        StageTransitionPermit wrongToken = new StageTransitionPermit(permit.operationId(), permit.sourceStage(),
+                permit.targetStage(), permit.configurationRevision(), UUID.randomUUID());
+        migrations.release(wrongToken, NOW.plusSeconds(2));
+        assertEquals("1", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"),
+                "a different bound lease token must remain data and cannot release authority");
+        migrations.release(permit, NOW.plusSeconds(3));
+        assertEquals("0", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"));
+
+        OperationId recoveryOwner = operation();
+        journal(recoveryOwner, "PREPARED");
+        migrations.acquire(recoveryOwner, new StageId("d"), new StageId("e"), SOURCE_REVISION,
+                NOW.plusSeconds(4));
+        terminal(recoveryOwner, "COMPENSATED");
+        migrations.release(recoveryOwner, NOW.plusSeconds(5));
+        assertEquals("0", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"),
+                "operation-only recovery release must bind its one-placeholder shape exactly");
     }
 
     @Test

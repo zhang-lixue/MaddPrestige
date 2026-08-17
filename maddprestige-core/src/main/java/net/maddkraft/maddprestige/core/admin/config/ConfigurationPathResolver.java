@@ -22,23 +22,52 @@ public final class ConfigurationPathResolver {
 
     public Optional<ResolvedPath> resolve(String canonicalPath) {
         Objects.requireNonNull(canonicalPath, "canonical path");
-        if (!canonicalPath.matches("[a-z0-9_-]+(?:\\.[a-z0-9_-]+)*")) {
+        List<String> segments = parseSegments(canonicalPath);
+        if (segments.isEmpty()) {
             return Optional.empty();
         }
-        List<String> segments = List.of(canonicalPath.split("\\."));
         DocumentRoot root = ROOTS.get(segments.getFirst());
         if (root == null) {
             return Optional.empty();
         }
-        ArrayList<String> yamlSegments = new ArrayList<>(segments);
-        if (root.stripFirstSegment()) {
-            yamlSegments.removeFirst();
+        int firstYamlSegment = root.stripFirstSegment() ? 1 : 0;
+        ArrayList<YamlPath.Segment> yamlSegments = new ArrayList<>(segments.size() - firstYamlSegment);
+        for (int index = firstYamlSegment; index < segments.size(); index++) {
+            yamlSegments.add(new YamlPath.Key(segments.get(index)));
         }
-        YamlPath yamlPath = YamlPath.document(0);
-        for (String segment : yamlSegments) {
-            yamlPath = yamlPath.key(segment);
+        return Optional.of(new ResolvedPath(root.documentName(), new YamlPath(0, yamlSegments)));
+    }
+
+    private static List<String> parseSegments(String canonicalPath) {
+        if (canonicalPath.isEmpty()) {
+            return List.of();
         }
-        return Optional.of(new ResolvedPath(root.documentName(), yamlPath));
+        ArrayList<String> segments = new ArrayList<>();
+        int segmentStart = 0;
+        for (int index = 0; index < canonicalPath.length(); index++) {
+            char current = canonicalPath.charAt(index);
+            if (current == '.') {
+                if (index == segmentStart) {
+                    return List.of();
+                }
+                segments.add(canonicalPath.substring(segmentStart, index));
+                segmentStart = index + 1;
+            } else if (!isSegmentCharacter(current)) {
+                return List.of();
+            }
+        }
+        if (segmentStart == canonicalPath.length()) {
+            return List.of();
+        }
+        segments.add(canonicalPath.substring(segmentStart));
+        return List.copyOf(segments);
+    }
+
+    private static boolean isSegmentCharacter(char value) {
+        return value >= 'a' && value <= 'z'
+                || value >= '0' && value <= '9'
+                || value == '_'
+                || value == '-';
     }
 
     public record ResolvedPath(String documentName, YamlPath yamlPath) {

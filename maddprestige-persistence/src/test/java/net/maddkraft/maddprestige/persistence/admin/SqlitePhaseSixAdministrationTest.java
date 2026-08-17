@@ -79,6 +79,39 @@ class SqlitePhaseSixAdministrationTest {
     }
 
     @Test
+    @DisplayName("[S1][S2] History query variants bind unusual runtime text without changing SQL structure")
+    void historyQueriesKeepAdversarialTextAsBoundData() {
+        SqliteConfigurationHistoryStore history = new SqliteConfigurationHistoryStore(migrated("history-data.db"));
+        String unusual = "O'Brien'; DROP TABLE mp_configuration_revisions_v2; -- %_ /* */ 雪 😀\nsecond line";
+        CompiledConfiguration content = compiled(Map.of("progression.yml", "reason: \"" + unusual + "\"\n"));
+        StoredConfigurationRevision first = new StoredConfigurationRevision(
+                new ConfigRevisionId("bound_data_one"), Optional.empty(), Optional.empty(), content,
+                new Actor("console", Optional.empty(), "Owner ' -- 😀"), "command;--", unusual,
+                ValidationReport.VALID, unusual, ConfigurationApplicationStatus.ATTEMPTED, NOW,
+                Optional.empty(), Optional.empty());
+        StoredConfigurationRevision second = new StoredConfigurationRevision(
+                new ConfigRevisionId("bound_data_two"), Optional.of(first.id()), Optional.empty(), content,
+                new Actor("console", Optional.empty(), "Owner %_ 雪"), "gui/*data*/", unusual + " later",
+                ValidationReport.VALID, unusual + " later", ConfigurationApplicationStatus.ATTEMPTED,
+                NOW.plusSeconds(1), Optional.empty(), Optional.empty());
+        history.append(first);
+        history.replaceOutcome(first.withOutcome(ConfigurationApplicationStatus.APPLIED,
+                Optional.of(NOW), Optional.empty()));
+        history.append(second);
+        history.replaceOutcome(second.withOutcome(ConfigurationApplicationStatus.FAILED,
+                Optional.empty(), Optional.of(unusual)));
+
+        StoredConfigurationRevision loadedFirst = history.find(first.id()).orElseThrow();
+        StoredConfigurationRevision loadedSecond = history.find(second.id()).orElseThrow();
+        assertEquals(unusual, loadedFirst.reason());
+        assertEquals(unusual, loadedFirst.diffSummary());
+        assertEquals(content, loadedFirst.compiled());
+        assertEquals(Optional.of(unusual), loadedSecond.failure());
+        assertEquals(List.of(second.id(), first.id()), history.recent(2).stream()
+                .map(StoredConfigurationRevision::id).toList());
+    }
+
+    @Test
     @DisplayName("[A57] Manual Prestige CAS and complete actor/target/old/new/time audit commit atomically")
     void manualPrestigeAdjustmentIsFullyAudited() throws Exception {
         SqliteFoundation sqlite = migrated("prestige.db");

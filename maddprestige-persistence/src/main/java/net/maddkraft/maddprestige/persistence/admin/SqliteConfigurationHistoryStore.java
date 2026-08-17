@@ -30,6 +30,17 @@ import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 
 public final class SqliteConfigurationHistoryStore implements ConfigurationHistoryStore {
     private static final int MAX_LIMIT = 1000;
+    private static final String SELECT_BY_REVISION_ID =
+            "SELECT revision_id, parent_revision_id, rollback_source_revision_id, canonical_content_hash, "
+                    + "actor_type, actor_uuid, actor_name, source_surface, reason, validation_summary, diff_summary, "
+                    + "application_status, created_at, applied_at, failure_detail "
+                    + "FROM mp_configuration_revisions_v2 WHERE revision_id = ?";
+    private static final String SELECT_RECENT_REVISIONS =
+            "SELECT revision_id, parent_revision_id, rollback_source_revision_id, canonical_content_hash, "
+                    + "actor_type, actor_uuid, actor_name, source_surface, reason, validation_summary, diff_summary, "
+                    + "application_status, created_at, applied_at, failure_detail "
+                    + "FROM mp_configuration_revisions_v2 "
+                    + "ORDER BY created_at DESC, revision_id DESC LIMIT ?";
     private final ConnectionProvider connections;
 
     public SqliteConfigurationHistoryStore(ConnectionProvider connections) {
@@ -95,8 +106,8 @@ public final class SqliteConfigurationHistoryStore implements ConfigurationHisto
 
     @Override
     public Optional<StoredConfigurationRevision> find(ConfigRevisionId revisionId) {
-        String sql = select() + " WHERE revision_id = ?";
-        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection = connections.open();
+                PreparedStatement statement = connection.prepareStatement(SELECT_BY_REVISION_ID)) {
             statement.setString(1, revisionId.value());
             try (ResultSet row = statement.executeQuery()) {
                 return row.next() ? Optional.of(read(connection, row)) : Optional.empty();
@@ -111,8 +122,8 @@ public final class SqliteConfigurationHistoryStore implements ConfigurationHisto
         if (limit < 1 || limit > MAX_LIMIT) {
             throw new IllegalArgumentException("Configuration history limit must be between 1 and " + MAX_LIMIT);
         }
-        String sql = select() + " ORDER BY created_at DESC, revision_id DESC LIMIT ?";
-        try (Connection connection = connections.open(); PreparedStatement statement = connection.prepareStatement(sql)) {
+        try (Connection connection = connections.open();
+                PreparedStatement statement = connection.prepareStatement(SELECT_RECENT_REVISIONS)) {
             statement.setInt(1, limit);
             try (ResultSet rows = statement.executeQuery()) {
                 ArrayList<StoredConfigurationRevision> result = new ArrayList<>();
@@ -236,12 +247,6 @@ public final class SqliteConfigurationHistoryStore implements ConfigurationHisto
             throw new PersistenceException("Configuration history revision has no documents");
         }
         return Map.copyOf(documents);
-    }
-
-    private static String select() {
-        return "SELECT revision_id, parent_revision_id, rollback_source_revision_id, canonical_content_hash, "
-                + "actor_type, actor_uuid, actor_name, source_surface, reason, validation_summary, diff_summary, "
-                + "application_status, created_at, applied_at, failure_detail FROM mp_configuration_revisions_v2";
     }
 
     private static String validation(ValidationReport report) {
