@@ -35,10 +35,10 @@ public final class PhaseFiveIntegrationCompiler {
             }
             Map<?, ?> root = loaded instanceof Map<?, ?> map ? map : Map.of();
             rejectUnknown(root, Set.of("schema-version", "vault", "mcmmo", "placeholderapi", "economyshopgui",
-                    "quickshop"), "integrations");
+                    "quickshop", "griefprevention", "worldguard", "craftengine"), "integrations");
             int schema = integer(root, "schema-version", "integrations.schema-version", 5);
-            if (schema != 5) {
-                throw invalid("integrations.schema-version", "Expected schema version 5 but was " + schema);
+            if (schema != 5 && schema != 7) {
+                throw invalid("integrations.schema-version", "Expected schema version 5 or 7 but was " + schema);
             }
             Map<?, ?> vault = mapping(root, "vault", "integrations.vault");
             Map<?, ?> mcMmo = mapping(root, "mcmmo", "integrations.mcmmo");
@@ -50,6 +50,9 @@ public final class PhaseFiveIntegrationCompiler {
             Map<?, ?> quickShop = mapping(root, "quickshop", "integrations.quickshop");
             Map<?, ?> quickShopProgression = mapping(quickShop, "progression-credit",
                     "integrations.quickshop.progression-credit");
+            Map<?, ?> griefPrevention = mapping(root, "griefprevention", "integrations.griefprevention");
+            Map<?, ?> worldGuard = mapping(root, "worldguard", "integrations.worldguard");
+            Map<?, ?> craftEngine = mapping(root, "craftengine", "integrations.craftengine");
             rejectUnknown(vault, Set.of("enabled"), "integrations.vault");
             rejectUnknown(mcMmo, Set.of("enabled"), "integrations.mcmmo");
             rejectUnknown(papi, Set.of("output", "inputs"), "integrations.placeholderapi");
@@ -61,6 +64,13 @@ public final class PhaseFiveIntegrationCompiler {
             rejectUnknown(quickShop, Set.of("compatibility-enabled", "progression-credit"),
                     "integrations.quickshop");
             rejectUnknown(quickShopProgression, Set.of("enabled"), "integrations.quickshop.progression-credit");
+            rejectUnknown(griefPrevention, Set.of("enabled"), "integrations.griefprevention");
+            rejectUnknown(worldGuard, Set.of("enabled"), "integrations.worldguard");
+            rejectUnknown(craftEngine, Set.of("enabled", "reward-maximum-quantity"),
+                    "integrations.craftengine");
+            if (schema == 5 && (!griefPrevention.isEmpty() || !worldGuard.isEmpty() || !craftEngine.isEmpty())) {
+                throw invalid("integrations.schema-version", "Phase 7 integration sections require schema version 7");
+            }
             Map<String, PhaseFiveIntegrationConfiguration.PlaceholderInput> inputs = inputs(papi);
             boolean economyShopProgressionEnabled = bool(economyShopProgression, "enabled",
                     "integrations.economyshopgui.progression-credit.enabled");
@@ -82,18 +92,23 @@ public final class PhaseFiveIntegrationCompiler {
                             "integrations.economyshopgui.compatibility-enabled"),
                     economyShopProgressionEnabled,
                     bool(quickShop, "compatibility-enabled", "integrations.quickshop.compatibility-enabled"),
-                    quickShopProgressionEnabled);
+                    quickShopProgressionEnabled,
+                    bool(griefPrevention, "enabled", "integrations.griefprevention.enabled"),
+                    bool(worldGuard, "enabled", "integrations.worldguard.enabled"),
+                    bool(craftEngine, "enabled", "integrations.craftengine.enabled"),
+                    boundedInteger(craftEngine, "reward-maximum-quantity",
+                            "integrations.craftengine.reward-maximum-quantity", 2304, 1, 2304));
             return new PhaseFiveIntegrationCompilation(result, ValidationReport.VALID);
         } catch (ConfigurationException exception) {
             findings.add(new ValidationFinding("phase5.integrations.invalid", ValidationSeverity.ERROR,
                     exception.path(), exception.getMessage(), "Integration configuration cannot be activated.",
-                    "Use schema-version 5 and the exact documented YAML value types at the reported path."));
+                    "Use schema-version 5 or 7 and the exact documented YAML value types at the reported path."));
             return new PhaseFiveIntegrationCompilation(PhaseFiveIntegrationConfiguration.disabled(),
                     ValidationReport.of(findings));
         } catch (RuntimeException exception) {
             findings.add(new ValidationFinding("phase5.integrations.invalid", ValidationSeverity.ERROR,
                     "integrations.yml", exception.getMessage(), "Integration configuration cannot be activated.",
-                    "Use schema-version 5, documented fields, and keep QuickShop progression credit disabled."));
+                    "Use schema-version 5 or 7, documented fields, and keep deferred capabilities disabled."));
             return new PhaseFiveIntegrationCompilation(PhaseFiveIntegrationConfiguration.disabled(),
                     ValidationReport.of(findings));
         }
@@ -170,6 +185,15 @@ public final class PhaseFiveIntegrationCompiler {
             throw wrongType(path, "integer", value);
         }
         return integer;
+    }
+
+    private static int boundedInteger(
+            Map<?, ?> parent, String key, String path, int fallback, int minimum, int maximum) {
+        int value = integer(parent, key, path, fallback);
+        if (value < minimum || value > maximum) {
+            throw invalid(path, "Expected an integer between " + minimum + " and " + maximum);
+        }
+        return value;
     }
 
     private static String requiredString(Map<?, ?> parent, String key, String path) {

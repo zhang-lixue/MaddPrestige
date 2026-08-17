@@ -15,10 +15,14 @@ public record PhaseFiveIntegrationConfiguration(
         boolean economyShopGuiCompatibilityEnabled,
         boolean economyShopGuiProgressionCreditEnabled,
         boolean quickShopCompatibilityEnabled,
-        boolean quickShopProgressionCreditEnabled) {
+        boolean quickShopProgressionCreditEnabled,
+        boolean griefPreventionEnabled,
+        boolean worldGuardEnabled,
+        boolean craftEngineEnabled,
+        int craftEngineRewardMaximumQuantity) {
     public PhaseFiveIntegrationConfiguration {
-        if (schemaVersion != 5) {
-            throw new IllegalArgumentException("Integration schema version must be 5");
+        if (schemaVersion != 5 && schemaVersion != 7) {
+            throw new IllegalArgumentException("Integration schema version must be 5 or 7");
         }
         placeholderInputs = Map.copyOf(Objects.requireNonNull(placeholderInputs, "placeholder inputs"));
         if (economyShopGuiProgressionCreditEnabled) {
@@ -28,10 +32,14 @@ public record PhaseFiveIntegrationConfiguration(
         if (quickShopProgressionCreditEnabled) {
             throw new IllegalArgumentException("QuickShop progression credit is unsupported; compatibility is zero-credit");
         }
+        if (craftEngineRewardMaximumQuantity < 1 || craftEngineRewardMaximumQuantity > 2304) {
+            throw new IllegalArgumentException("CraftEngine reward maximum quantity must be between 1 and 2304");
+        }
     }
 
     public static PhaseFiveIntegrationConfiguration disabled() {
-        return new PhaseFiveIntegrationConfiguration(5, false, false, false, Map.of(), false, false, false, false);
+        return new PhaseFiveIntegrationConfiguration(5, false, false, false, Map.of(), false, false, false, false,
+                false, false, false, 2304);
     }
 
     public record PlaceholderInput(String placeholder, MetricValueType valueType, Duration maximumAge) {

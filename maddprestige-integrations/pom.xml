@@ -12,6 +12,14 @@
         <dependency><groupId>me.clip</groupId><artifactId>placeholderapi</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>com.github.Gypopo</groupId><artifactId>EconomyShopGUI-API</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>com.ghostchu</groupId><artifactId>quickshop-api</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.github.TechFortress</groupId><artifactId>GriefPrevention</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldguard</groupId><artifactId>worldguard-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldguard</groupId><artifactId>worldguard-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldedit</groupId><artifactId>worldedit-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldedit</groupId><artifactId>worldedit-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>net.momirealms</groupId><artifactId>craft-engine-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>net.momirealms</groupId><artifactId>craft-engine-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><scope>test</scope></dependency>
     </dependencies>
 </project>

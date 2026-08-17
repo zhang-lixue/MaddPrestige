@@ -4,8 +4,21 @@
     <dependencies>
         <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-api</artifactId></dependency>
         <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-core</artifactId></dependency>
+        <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-persistence</artifactId></dependency>
+        <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-integrations</artifactId></dependency>
         <dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><version>${paper.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>com.github.MilkBowl</groupId><artifactId>VaultAPI</artifactId><scope>provided</scope></dependency>
+        <dependency><groupId>com.gmail.nossr50.mcMMO</groupId><artifactId>mcMMO</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>me.clip</groupId><artifactId>placeholderapi</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.github.Gypopo</groupId><artifactId>EconomyShopGUI-API</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.ghostchu</groupId><artifactId>quickshop-api</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.github.TechFortress</groupId><artifactId>GriefPrevention</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldguard</groupId><artifactId>worldguard-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldguard</groupId><artifactId>worldguard-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldedit</groupId><artifactId>worldedit-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>com.sk89q.worldedit</groupId><artifactId>worldedit-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>net.momirealms</groupId><artifactId>craft-engine-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
+        <dependency><groupId>net.momirealms</groupId><artifactId>craft-engine-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
     </dependencies>
 </project>
