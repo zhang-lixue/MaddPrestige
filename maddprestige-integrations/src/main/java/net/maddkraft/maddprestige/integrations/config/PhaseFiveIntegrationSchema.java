@@ -18,6 +18,11 @@ public final class PhaseFiveIntegrationSchema {
 
     public static SchemaRegistry create() {
         SchemaRegistry registry = PhaseFourSchema.create();
+        extend(registry);
+        return registry;
+    }
+
+    public static void extend(SchemaRegistry registry) {
         registerMap(registry, "vault_integration", "integrations.vault", RiskLevel.CRITICAL,
                 "Strict Vault integration mapping; scalar, sequence and null values are rejected.");
         register(registry, "vault_integration_enabled", "integrations.vault.enabled", SchemaValueType.BOOLEAN,
@@ -75,7 +80,6 @@ public final class PhaseFiveIntegrationSchema {
                 "integrations.quickshop.progression-credit.enabled", SchemaValueType.BOOLEAN, Optional.of("false"),
                 AllowedValues.fixed("false"), RiskLevel.CRITICAL,
                 "Player-to-player QuickShop progression credit is unsupported and rejected.");
-        return registry;
     }
 
     private static void registerMap(

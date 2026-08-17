@@ -61,18 +61,24 @@ public final class StageChangeImpactAnalyzer {
         });
         ArrayList<ValidationFinding> findings = new ArrayList<>();
         boolean remapRequired = !affected.isEmpty();
+        if (!remapRequired && remapPlan.isPresent() && !remapPlan.orElseThrow().mappings().isEmpty()) {
+            findings.add(error("stage.change.remap_extra_source", "progression.stages",
+                    "The remap selects stages that have no affected persisted references: "
+                            + render(remapPlan.orElseThrow().mappings().keySet()),
+                    "Remove the remap or select it only after preview reports referenced missing stages."));
+        }
         if (remapRequired) {
-            boolean planComplete = coversAffected(remapPlan, affected.keySet(), newConfiguration, findings);
+            boolean planComplete = coversAffected(remapPlan, affected.keySet(), oldConfiguration,
+                    newConfiguration, findings);
             if (!planComplete) {
                 findings.add(error("stage.change.remap_required", "progression.stages",
                         "Referenced stages would be removed or disabled: " + renderCounts(affected),
                         "Attach an explicit revisioned remap plan covering every referenced stage."));
             } else {
-                findings.add(error("stage.change.remap_execution_required", "progression.stages",
-                        "The remap plan is complete, but persisted player rows still reference stages being removed "
-                                + "or disabled: " + renderCounts(affected),
-                        "Execute and verify an atomic player-stage remap in a later authorized phase, then prepare "
-                                + "the configuration again after the reference counts reach zero."));
+                findings.add(acknowledgement("stage.change.remap_migration", "progression.stages",
+                        "Applying this revision migrates persisted player stage references before deleting or "
+                                + "disabling stages: " + renderCounts(affected),
+                        "Review the exact source-to-replacement plan and affected player count, then confirm it."));
             }
         }
         if (!oldConfiguration.order().equals(newConfiguration.order())) {
@@ -107,19 +113,55 @@ public final class StageChangeImpactAnalyzer {
     private static boolean coversAffected(
             Optional<StageRemapPlan> plan,
             Set<StageId> affected,
+            StageConfiguration oldConfiguration,
             StageConfiguration newConfiguration,
             List<ValidationFinding> findings) {
         if (plan.isEmpty()) {
             return false;
         }
         boolean valid = true;
+        Set<StageId> extraSources = new LinkedHashSet<>(plan.orElseThrow().mappings().keySet());
+        extraSources.removeAll(affected);
+        if (!extraSources.isEmpty()) {
+            findings.add(error("stage.change.remap_extra_source", "progression.stages",
+                    "The remap includes stages that have no affected persisted references: " + render(extraSources),
+                    "Remove unrelated mappings so the migration authority covers only the previewed references."));
+            valid = false;
+        }
         for (StageId source : affected) {
             StageId target = plan.orElseThrow().mappings().get(source);
-            StageDefinition targetDefinition = target == null ? null : newConfiguration.stages().get(target);
-            if (targetDefinition == null || !targetDefinition.enabled() || !newConfiguration.order().contains(target)) {
+            StageDefinition candidateTarget = target == null ? null : newConfiguration.stages().get(target);
+            if (target == null || source.equals(target) || candidateTarget == null || !candidateTarget.enabled()
+                    || !newConfiguration.order().contains(target)) {
                 findings.add(error("stage.change.remap_invalid", "progression.stages." + source.value(),
-                        "Remap target is missing, disabled, or unordered for referenced stage '" + source.value() + "'.",
-                        "Map it explicitly to an enabled ordered stage in the candidate configuration."));
+                        "Remap target is missing, unchanged, disabled, or unordered for referenced stage '"
+                                + source.value() + "'.",
+                        "Map it to a different enabled ordered stage in the candidate configuration."));
+                valid = false;
+                continue;
+            }
+            StageDefinition sourceDefinition = oldConfiguration.stages().get(source);
+            StageDefinition fallbackTarget = oldConfiguration.stages().get(target);
+            if (fallbackTarget == null || !fallbackTarget.enabled() || !oldConfiguration.order().contains(target)) {
+                findings.add(error("stage.change.remap_fallback_invalid",
+                        "progression.stages." + source.value(),
+                        "The replacement is not an enabled ordered stage in the currently authoritative "
+                                + "fallback configuration.",
+                        "Choose a replacement that is already valid under both the current and candidate "
+                                + "configurations."));
+                valid = false;
+                continue;
+            }
+            if (sourceDefinition != null
+                    && (!sourceDefinition.projection().equals(fallbackTarget.projection())
+                            || !sourceDefinition.projection().equals(candidateTarget.projection())
+                            || !fallbackTarget.projection().equals(candidateTarget.projection()))) {
+                findings.add(error("stage.change.remap_projection_incompatible",
+                        "progression.stages." + source.value(),
+                        "The replacement does not preserve external projection semantics under both current "
+                                + "fallback and candidate authority.",
+                        "Choose a replacement whose current and candidate projection exactly matches the source, "
+                                + "or use an explicitly recoverable provider-aware workflow."));
                 valid = false;
             }
         }
@@ -139,6 +181,11 @@ public final class StageChangeImpactAnalyzer {
 
     private static String render(List<StageId> order) {
         return order.stream().map(StageId::value).reduce((left, right) -> left + " -> " + right).orElse("(empty)");
+    }
+
+    private static String render(Set<StageId> stages) {
+        return stages.stream().map(StageId::value).sorted()
+                .reduce((left, right) -> left + ", " + right).orElse("none");
     }
 
     private static Set<StageId> difference(Set<StageId> left, Set<StageId> right) {

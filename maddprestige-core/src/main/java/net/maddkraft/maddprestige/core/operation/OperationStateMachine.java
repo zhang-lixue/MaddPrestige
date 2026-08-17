@@ -46,6 +46,8 @@ public final class OperationStateMachine {
                 EnumSet.of(OperationState.COMPLETED, OperationState.NEEDS_RECONCILIATION));
         transitions.put(OperationState.COMPENSATING,
                 EnumSet.of(OperationState.COMPENSATED, OperationState.FAILED, OperationState.NEEDS_RECONCILIATION));
+        transitions.put(OperationState.NEEDS_RECONCILIATION,
+                EnumSet.of(OperationState.COMPLETED, OperationState.COMPENSATED, OperationState.FAILED));
         return Map.copyOf(transitions);
     }
 

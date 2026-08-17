@@ -205,3 +205,127 @@ PlaceholderAPI output registers the official persistent expansion but performs o
 EconomyShopGUI uses the official public `PostTransactionEvent` artifact solely for optional compatibility diagnostics. It exposes no metric, manual-progress handle, cost or reward and always has zero progression credit. Progression is deferred because a scalar price cannot truthfully combine Vault money, XP, levels, item currency, points or custom economy totals, especially for multi-economy sale events. The compiler rejects enabling progression. QuickShop likewise uses its public `ShopSuccessPurchaseEvent` solely for compatibility diagnostics. No QuickShop amount or player identity is connected to a progression handle; even self/circular/wash traffic has hard zero progression credit and the compiler rejects enabling it.
 
 PlayTimeManager is intentionally absent. Its tested installed version has no necessary dedicated public service contract, and `VanillaStatisticsProvider` already supplies Paper's authoritative playtime statistic. All third-party API dependencies are Maven `provided` with transitive exclusions where appropriate, so distribution shading does not bundle plugin implementations. The frozen V1 bootstrap and plugin descriptor remain unchanged; production V2 composition belongs to the later authorized runtime phase.
+
+## Phase 6 administration architecture
+
+Phase 6 introduces an administration application layer in generic core. `PhaseSixCommandService`, `GuiSessionService`, `SetupWizardService`, configuration introspection, diagnostics, player inspection, operation preview/confirmation and manual Prestige administration depend on accepted V2 contracts only. Paper code translates a command sender into a permission snapshot, moves blocking work to the configured administration executor, returns rendering to the server thread and maps opaque GUI actions to inventory presentation. It does not compile configuration, evaluate requirements, authorize progression or issue persistence writes itself.
+
+```text
+YAML candidate   command draft   GUI mutation   setup wizard
+      \              |               |               /
+       +-------------+---------------+--------------+
+                             |
+             ConfigurationAdministrationService
+                             |
+       complete canonical compile + provider extensions
+                             |
+           immutable prepared snapshot + history attempt
+                             |
+             atomic active-revision pointer switch
+                             |
+                immutable runtime publication
+```
+
+The active configuration is a complete immutable multi-document snapshot. A draft carries its source revision and independent lossless documents; editing it cannot publish state. Scalar replacement routes through `LosslessConfigurationEditor`, preserving comments, order, line endings and unknown keys. Structural operations are accepted only when a purpose-built canonical operation can state their semantics, such as setup generation or a stage-remap callback. A candidate is always recompiled in full, including Phase 5 integration schema and provider-specific validation, before preparation or activation.
+
+`AtomicConfigurationFileStore` writes each revision into a new immutable directory with UTF-8 documents and a manifest containing exact content hashes and canonical configuration hash. Preparation verifies every persisted byte before returning. Activation replaces only the small `active-revision` pointer atomically; incomplete revision directories cannot become active. `SqliteConfigurationHistoryStore` separately records `ATTEMPTED`, `APPLIED` or `FAILED` outcome with actor/source/timestamp/detail and the exact document bytes. The attempt precedes file preparation, so a crash leaves understandable evidence. Rollback reads an exact prior valid snapshot, recompiles it against current provider capabilities and creates a new forward revision. It never rewinds or mutates history.
+
+Setup is a session model over the same workflow. Discovery reports current rank/metric provider capabilities and never invokes a creation API. External group names are operator-selected existing targets and are validated through the retained `RankAdapter` at preview/apply. The minimal generated configuration is intentionally conservative: arbitrary stages are supported, but requirements, costs, rewards, Prestige, seasons and optional integrations remain disabled unless the operator subsequently enables and validates them.
+
+Command completion uses an explicitly refreshed immutable `CompletionCatalog`. Provider enumeration and metric descriptor calls happen during refresh on the administration worker, not during keystroke completion. Suggestions are filtered by the same permission model used during execution. Search, get, explain, validate and diff use `SchemaRegistry`, configuration documents and metric descriptors rather than separate help metadata. Unknown paths, ambiguous leaf aliases, bounded query violations and unsupported shapes return actionable errors.
+
+`DoctorService` runs independent bounded read-only probes and orders findings deterministically by severity/component/path. Configuration history identifies failed or abandoned attempts, database health supplies operational state, provider diagnostics report activation/health/capability detail, and rank-target diagnostics identify the exact stage/group/provider without creating anything. `WhyService` accepts only the canonical `RankUpAuthorization`; its blockers, target and recursive explanation therefore cannot disagree with simulation/execution logic.
+
+```text
+canonical authorization/simulation
+              |
+     zero-write OperationPreview
+              |
+ opaque server-side PreparedConfirmation
+ actor + kind + expiry + active revision + sealed plan
+              |
+       consume once and revalidate
+              |
+ accepted RankUp/Prestige executor boundary
+```
+
+Confirmation IDs are high-entropy opaque values and their server-side records are actor-bound, expiring and single-use. Consumption removes authority before dispatch and rejects a changed active revision. The record retains the accepted sealed authorization/plan; command arguments, chat text, inventory material, lore and item metadata do not reconstruct a consequential operation. Rank-up simulation permission does not imply rank-up execution permission, and Prestige has its own preview/execute permissions.
+
+GUI sessions are likewise server-side and revision-bound. Each rendered slot contains only a label/material associated with an opaque action ID held by `GuiSessionService`. Action execution rechecks audience permission, expected revision and any required stage replacement. `PaperGuiInventoryGuard` blocks top/bottom inventory transfer, shift-click, number keys, offhand swap, double-click and drag paths. The GUI can expose canonical callbacks, but it owns no alternative progression/configuration model.
+
+Manual Prestige administration is a separate explicit authority from normal Prestige execution. The service validates non-negative bounded current/lifetime values, expected state revision, actor, reason and permission. The SQLite store selects the current row, performs an optimistic update and appends a complete audit event in the same transaction. A stale concurrent edit rolls back without an audit row; a successful edit cannot commit without one.
+
+SQLite migration 6 adds exact configuration revision/document history with indexes for revision, status and time. The filesystem remains the immutable payload/activation authority; SQLite is the queryable audit/history authority. Their transition order is deliberate and diagnostics expose an incomplete attempt instead of guessing success. No dynamic caller-provided SQL, destructive production configuration access or live player database was introduced in Phase 6 tests.
+
+### Phase 6 correction-pass authority and recovery
+
+Correction Pass 4 makes destructive configuration ownership a first-class persistence concept. The candidate's complete unsafe set is every stage removed or changed from referenceable to disabled, regardless of the current reference count. `PhaseSixConfigurationWorkflow.beginStageTransition` does not derive this set from a remap. The exact candidate configuration-history revision in `ATTEMPTED` state owns it.
+
+```text
+ATTEMPTED history + prepared immutable snapshot
+                     │
+                     v
+SQLite BEGIN IMMEDIATE
+  ├─ reject another unresolved configuration transition
+  ├─ reject operation source/target leases intersecting any unsafe stage
+  ├─ insert declared REMOVED/DISABLED scope + active per-stage reservations
+  ├─ revalidate every unsafe-stage count and exact remap snapshot
+  └─ migrate every referenced source, if required
+                     │
+                     v
+activate pointer → publish runtime → record APPLIED/FAILED history
+                     │
+                     v
+terminal-gated reservation/remap release, or NEEDS_RECONCILIATION
+```
+
+Configuration reservations and operation leases are deliberately distinct. An operation journal owns one source/current plus target/result lease and controls its terminal recovery. A configuration-history revision owns a set of stages that will become invalid for durable references. `SqliteStageReferenceMigrationStore` and `SqliteStageTransitionGuard` make them conflict under the same immediate-write protocol. Healthy non-overlapping operations remain allowed; malformed/incomplete configuration authority blocks globally because its true stage scope is unknowable.
+
+Every remap target is validated against two immutable server-owned authorities before migration: the current/prior compiled configuration and the candidate compiled configuration. It must exist, be enabled and ordered in both, and its exact projection must match the source and remain unchanged between authorities. Normal apply and rollback use the same analyzer and acquisition path. This is intentionally more conservative than reverse migration: no candidate-only stage can become durable fallback state.
+
+Migration 10 stores `mp_configuration_stage_transitions`, immutable `mp_configuration_transition_stages` and active `mp_configuration_stage_reservations`. Acquisition inserts the complete scope and performs any reference migration atomically. Direct player insert/import/CAS/history writes, the Prestige lifecycle reset and operation-lease acquisition check active reservations within their own `BEGIN IMMEDIATE` transaction. Bidirectional declared-scope/reservation integrity and exact `ATTEMPTED` ownership are required; missing/extra rows, terminal-owner residue and ownerless legacy remap authority fail globally closed.
+
+Release requires durable terminal configuration evidence. `CONFIG_APPLIED` requires `APPLIED` history after candidate pointer/runtime publication. `CONFIG_FAILED_SAFE` requires `FAILED` history after coherent prior pointer/runtime authority is retained or restored. Recovery compares history, the filesystem pointer and canonical runtime; it never expires a reservation by age. A disagreement remains `NEEDS_RECONCILIATION`, continues blocking unsafe writes and appears as blocked Doctor evidence. A complete short-lived `RESERVED` owner is only a warning.
+
+`ConfigurationAdministrationService` is the single mutation authority for direct, command and visual configuration work. Draft identity is `(draft ID, server version, actor, base revision, content hash, required apply kind)`. Every edit increments the version and invalidates preview. Preview also seals the exact validation finding set and server-selected persisted-stage remap. Apply repeats full preparation, compares seals, then CAS-claims the same draft before durable work. The claim prevents edit/cancel/apply races from reviving or discarding newer state.
+
+```text
+direct admin ─┐
+command tokens ├─> ConfigurationAdministrationService ─> PhaseSixConfigurationWorkflow
+opaque GUI ───┘          │                                  │
+                         ├─ exact draft/version/finding seal ├─ provider pins
+                         ├─ server acknowledgement authority └─ persisted remap seal
+                         └─ history/snapshot apply
+```
+
+`CanonicalGuiMutationExecutor` interprets only server-created `GuiMutationContext`; it never parses inventory lore/NBT into mutations. `CommandResponse` may contain a real `GuiSessionView`, and `PaperPhaseSixCommandAdapter` requests `PaperPhaseSixGuiController.open` on the server thread when bound. The adapter boundary is therefore concrete even though the frozen V1 bootstrap does not register it.
+
+Referenced-stage replacement uses two coordinated durable stores. SQLite migration 7 journals the sealed remap and CAS-migrates every exact player row in one immediate transaction. The immutable configuration directory is then reverified byte-for-byte immediately before atomic pointer selection. These stores cannot share one ACID transaction, so the permitted recovery state is explicit: only projection-equivalent replacements are accepted, meaning a committed player B→C remap remains semantically valid under the prior configuration if pointer activation fails. The journal records `MIGRATED_PENDING_CONFIG`, `CONFIG_APPLIED`, or `CONFIG_FAILED_SAFE`; Doctor surfaces every non-applied reconciliation record. A deleted-stage/current-reference orphan state is never an allowed transition.
+
+SQLite migration 8 introduced `mp_stage_transition_leases`; migration 9 upgrades it to exact operation-owned source-and-target participation. The same `SqliteStageReferenceMigrationStore` implements remap migration and `StageTransitionFence`. Acquisition and remap start both use `BEGIN IMMEDIATE`. A journaled operation that wins first owns `(operation ID, source/current stage, target/result stage, configuration revision, lease token)`, so removal of either participating stage fails before any player row moves. A remap that wins first commits `MIGRATED_PENDING_CONFIG`; the pending remap rejects a later lease whose source or target touches the removed stage before cost or projection execution. The fence is a database-level start barrier, not a late CAS assertion.
+
+The operation journal is created as `PREPARED` before durable participation. Lease acquisition refuses an absent or terminal journal owner, so a crash before journal creation cannot leave a lease. An exact restarted operation adopts the existing token; a different source, target or revision cannot steal it. Release is terminal-state-gated and idempotent: nested/nonterminal release retains the outer authority, while `COMPLETED`, `COMPENSATED` or `FAILED` permits exact deletion. `NEEDS_RECONCILIATION` deliberately retains the row. `PendingOperationRecoveryService` removes terminal evidence at startup, releases on automatic terminal recovery and exposes an evidence-backed `NEEDS_RECONCILIATION` terminal-resolution route that records the recovery event before release. No lease is deleted merely because it is old.
+
+Migration 9 preserves a migration-8 row only when its operation journal is nonterminal. Such a row has an unknown source and is marked incomplete, which blocks destructive remap globally until the same operation supplies and adopts its exact source participation. Rows with absent or terminal owners are deterministically discarded during migration. Doctor reports a normal short-lived active owner as a warning and reports incomplete, absent-owner, terminal-owner or unresolved-reconciliation authority as blocked operational work.
+
+Direct `SqlitePlayerStageRepository` insert/import/update/update-with-history paths and `SqlitePrestigeLifecycleRepository`'s internal commit do not mint durable random-owner leases. Each opens the shared immediate transaction, derives the current source where applicable, checks source plus target against pending remap state, and writes in that same transaction. This serializes import/bootstrap and any direct/manual repository caller against remap without creating crash-orphanable authority. The nested Prestige repository transaction cannot release the outer executor's journal-owned lease.
+
+Rank-up and Prestige ordering is: sealed authorization/config/provider check; duplicate lookup; `PREPARED` journal creation; source-and-target lease acquire/adopt; binding/target recheck; `PREPARED`→`EXECUTING` claim; costs; full binding recheck; external projection; internal CAS/atomic commit; rewards; terminal operation state; terminal-gated lease release. The standalone projection executor follows the same journal→lease→binding→execution pattern and derives its source from the expected authoritative player state. If lease acquisition loses to remap, the still-effect-free prepared journal becomes `FAILED`.
+
+Draft remaps are accumulated per source. Selecting a mapping merges/replaces only that source and removing a mapping leaves other sources intact. The complete map is recompiled and checked immediately: every source must be absent and every target must exist, be enabled and occur in the candidate order. The source-scoped command and opaque GUI mutations increment draft version and invalidate stale preview/candidate/acknowledgement authority. Preview then seals all matching persisted B and D rows together, and apply migrates the complete set in the existing all-or-nothing remap transaction.
+
+Every authoritative current-stage path consumes this boundary. The three executors create or find `PREPARED` journal ownership before acquiring/adopting source+target participation, and acquire before any consequential effect. Direct `SqlitePlayerStageRepository` and nested `SqlitePrestigeLifecycleRepository` paths use the shared transaction guard rather than minting durable authority. The remap writer checks every lease and direct-write transaction before moving a row. Terminal journal evidence releases an exact token even after restart adoption; uncertain/reconciliation outcomes retain it. Phase 6 has no separate manual-current-stage service, so direct repository mutation is the manual boundary and is transaction-guarded.
+
+The durable remap state names are `MIGRATED_PENDING_CONFIG`, `CONFIG_APPLIED` and `CONFIG_FAILED_SAFE`. Pending survives restart and continues to fence every removed source stage. `CONFIG_APPLIED` clears that fence because the new configuration is authoritative. `CONFIG_FAILED_SAFE` clears it only when the old pointer/runtime is safely authoritative and migrated references point to a valid projection-equivalent replacement. If runtime publication fails after pointer activation and restoring the prior pointer also fails, the status deliberately remains pending; Doctor/reconciliation must resolve the pointer/runtime mismatch before old-stage entry can resume. This is coordinated recovery across SQLite, filesystem and memory, not a claim of cross-store atomicity.
+
+Prepared configuration activation checks exact manifest text, flat file names, every document byte and the canonical hash at the last responsible moment. Revision directories, exact configuration documents, history outcomes, player stage history and remap journals are retained. Phase 6 owns no retention deletion because cleanup in the activation path would weaken recovery evidence.
+
+Opaque configuration acknowledgements bind actor, draft version/hash, base revision, immutable apply kind and exact finding seal for five minutes. Draft creation assigns `NORMAL`, `ROLLBACK` or `SETUP`; their permissions are `CONFIG_APPLY`, `CONFIG_ROLLBACK` and `SETUP`. Callers cannot select the acknowledgement kind. Direct, command and GUI paths derive it from live draft state and recheck the exact current permission at final mutation. Operation confirmations use the same actor-before-consume and conditional compare/remove principles. Draft/setup sessions expire at two hours; GUI/operation confirmation lifetime is bounded by construction. Expired authority is pruned opportunistically and is never usable.
+
+`GuiConfigurationAuthority` lets GUI sessions query only the server-owned draft/acknowledgement kind. High-risk rollback therefore produces a rollback-labelled action, issues a rollback acknowledgement and dispatches the rollback apply method; setup stays in the setup-owned route. The older contextless destructive stage editor no longer exists. Stage-remap selection requires actor-owned draft context, verifies that the replacement exists and is enabled in that candidate, increments the draft version and invalidates preview. `preview` no longer accepts a caller-provided remap plan.
+
+Completion remains an immutable cached view populated through explicit refresh methods outside the keystroke path. The service/adapter contract and executable-route parity are tested, but automatic live provider/draft/revision refresh is not claimed while the V2 production bootstrap remains intentionally disconnected.
+
+Doctor declares every Phase 6-owned diagnostic domain. A missing domain produces an explicit deferred not-checked finding, preventing a false complete-health claim. The operational probe covers schema, exact provider references, pending/reconciliation state, orphan/duplicate/integrity checks, Placeholder, scheduler/cache, flush state and unsupported capabilities in addition to database, history and rank-target probes.
+
+The Paper command and GUI adapters remain disconnected from the frozen V1 production bootstrap and `plugin.yml`. This preserves the explicit V1 protection boundary and avoids falsely qualifying a live V2 deployment. The module-level Phase 6 services/adapters are complete and tested; an authorized composition phase must still register them, bind actual runtime repositories/executors, and run live Paper/LuckPerms qualification before A01/A02 or a V2-default release can be marked satisfied.

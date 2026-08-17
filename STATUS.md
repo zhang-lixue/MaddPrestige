@@ -1,94 +1,115 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 5 correction pass 2 complete; stopped for third owner review
+**Current phase:** Phase 6 Owner Review Correction Pass 4 complete; stopped for fifth owner review
 
 **Last updated:** 2026-08-16
 
-**Branch:** `v2/phase-5`
+**Branch:** `v2/phase-6`
 
-**Starting baseline/current HEAD:** `38cde9a084712a3f8c06edb0e77dc31333204374`
+**Starting baseline/current HEAD:** `2a9532fe48b82a24b716d060bfebfc6d69682c41`
 
-**Worktree:** intentionally unstaged and uncommitted
+**Worktree:** intentionally unstaged and uncommitted at `C:\Users\zhang\Documents\MC Development\MaddPrestige-Phase6`
 
 ## Outcome
 
-Phase 5 implements optional real public-API boundaries for Vault, mcMMO, PlaceholderAPI, EconomyShopGUI and QuickShop-Hikari while preserving the generic Phase 2–4 provider registry, health, activation, generation and canonical authorization architecture. `integrations.yml` schema 5 is strict and dormant by default: every present configuration object must be a mapping, primitives retain their declared YAML types, Placeholder input keys use canonical `MetricId`, and malformed paths fail actionably rather than becoming disabled defaults. Registry activation is now strictly configuration reachability and mutable health is strictly operational truth. Discovery/config reconciliation never promote health; removal/re-addition preserves every outage state and unchanged bindings keep their generation. Exact successful recovery restores only the current binding, while unregister/rebind advances generation. Only `AVAILABLE` and `ACTIVE` are usable. Unrelated dormant integrations remain isolated.
+Phase 6 adds the platform-neutral administration and operator-experience layer for V2. Commands, GUI actions, setup, configuration introspection, diagnostics, simulation, confirmation, player inspection and manual Prestige administration now delegate to canonical services rather than carrying interface-local rules.
 
-Vault supplies separate cost/reward/balance providers over one immutable service binding, controlled server-thread scheduling, exact decimal representability, coherent player/operation/revision/generation aggregate zero-mutation preflight and truthful external uncertainty. Mixed batches and non-usable health fail before any Vault call. mcMMO public current skill/power metrics are truthfully non-monotonic and externally owned. Final-event cumulative XP still uses the existing authenticated/batched monotonic manual provider, but every mutation now requires an exact active healthy registration generation. PlaceholderAPI output remains a bounded immutable cache-only expansion; input refresh rechecks exact registration/activation/health inside the scheduled task, so outage races and stale generations make zero PAPI calls. Requirement reads never invoke PAPI. Every Placeholder token is checked against the `maddprestige` expansion identifier case-insensitively.
+Configuration is edited as an isolated named draft over an immutable active snapshot. Scalar edits use the accepted comment/order/unknown-key-preserving document editor. Apply validates the complete multi-document candidate through the canonical compiler and provider extensions, prepares an immutable hash-verified filesystem snapshot, records an exact SQLite history attempt, atomically switches the active pointer and only then publishes runtime state. Rollback recompiles an earlier exact document set and activates it as a new audited revision. Invalid or stale candidates cannot become active.
 
-EconomyShopGUI progression is intentionally deferred because its scalar/multi-price events can represent incomparable Vault money, XP, levels, items, points and custom economies. Its verified official post-event remains optional diagnostics-only with no progression handle and hard zero credit. QuickShop is likewise compatibility-only: it owns no progression provider/handle and every observed transaction receives hard zero credit. Configuration attempting to enable either shop progression path is rejected. PlayTimeManager remains deferred because its tested artifact offers no needed dedicated public service and the existing Paper statistic provider is more authoritative.
+Correction Pass 1 completes referenced-stage replacement, real command/GUI/config parity, executable completion parity, secure high-risk acknowledgement, complete simple setup and truthful Doctor coverage. A referenced deletion now seals every affected persisted row, journals and CAS-migrates it in SQLite migration 7, then activates the byte-reverified immutable configuration. Only a valid projection-equivalent replacement is accepted; stale rows/faults roll back, and cross-store activation failure is recoverable without an orphan.
 
-The frozen V1 production bootstrap/plugin descriptor remains active and unchanged. V2 adapters remain implementation-ready/testable but disconnected from runtime composition. No Phase 6 command/UI/bootstrap administration or Phase 7 plugin scope was started.
+Correction Pass 2 introduced the durable remap-to-activation fence. Correction Pass 3 completes it. SQLite migration 9 models exact journal-owned source/current plus target/result participation and a unique adoption token. Rank-up, Prestige and external projection now persist `PREPARED`, acquire both stages before effects, then claim execution. Remap start rejects a lease touching a removed stage in either role. Restart adopts the exact token; nonterminal/nested release retains authority; terminal completion/recovery releases idempotently; `NEEDS_RECONCILIATION` remains fenced until evidence-backed terminal resolution. Legacy absent/terminal owners are discarded during migration while a live incomplete owner must adopt its source.
 
-## Acceptance classification
+Correction Pass 4 closes the remaining fallback and zero-reference classes. Remap replacements must be valid enabled ordered stages with identical source projection under both prior/current fallback and candidate authority; candidate-only, prior-disabled/unordered and projection-changed targets fail before migration. SQLite migration 10 gives the exact `ATTEMPTED` configuration revision durable ownership of every removed or disabled stage, not only referenced remap sources. Full scope reservation, operation-lease conflict checks, count/snapshot revalidation and any B→C/F→E row migration commit in one immediate transaction.
+
+Configuration reservations remain distinct from operation source/target leases but share their serialization boundary. If an operation wins, configuration acquisition fails before migration/activation. If configuration wins, rank-up, Prestige and projection stop before cost/external projection/reward, and direct insert/import/CAS/history/reset writers stop inside their write transaction. Unrelated stages remain usable. APPLIED+candidate or FAILED+prior pointer/runtime coherence is required for release; uncertainty stays `NEEDS_RECONCILIATION` across restart. Declared/active scope mismatch, terminal-owner residue and unknown legacy scope fail globally closed and are Doctor-visible.
+
+Direct player-stage and nested Prestige lifecycle writes now serialize with remap through a shared SQLite `BEGIN IMMEDIATE` transaction guard and create no random durable owner. The source stage is read and checked inside the write transaction. Deterministic operation-wins/remap-wins tests for rank-up B→C and Prestige B→A prove the loser stops before cost, projection, commit or reward. A committed `MIGRATED_PENDING_CONFIG` journal still survives restart until activation succeeds or prior authority is known safely restored; failed pointer restore remains pending and fenced.
+
+Draft remap selection now accumulates a server-owned map. Selecting or updating one source preserves the others; `config unmap` and the opaque GUI removal action remove one source; invalid additions leave the prior map unchanged. A B→C plus D→E integration applies both sealed row sets atomically, leaves zero B/D references and persists across reopen. Doctor now classifies complete active leases as warnings and incomplete, missing/terminal-owner or unresolved reconciliation authority as blocked operational findings.
+
+Drafts now immutably seal `NORMAL`, `ROLLBACK` or `SETUP` provenance. Acknowledgement and final apply derive this kind and recheck `CONFIG_APPLY`, `CONFIG_ROLLBACK` or `SETUP` respectively. GUI rollback uses true rollback acknowledgement/apply authority, the contextless destructive stage-editor route is removed, and command/GUI can select a missing-stage replacement only on an exact actor-owned draft. Public preview no longer accepts a client-provided remap plan. Completion refresh remains a tested adapter contract awaiting later production bootstrap composition rather than an automatic-live-refresh claim.
+
+The setup service discovers registered capabilities; accepts arbitrary ordered stages and existing external group names; configures baseline, a simple requirement/cost/reward and enabled/disabled Prestige reset semantics; previews every consequence through canonical validation; and applies through the same secure acknowledgement/revision workflow. It never creates LuckPerms groups. Sessions are owner-bound, resumable, cancellable and expiring.
+
+Simulation returns the exact sealed rank-up or Prestige authorization with zero mutation. Consequential operation and configuration confirmations are opaque, actor-bound, expiring, conditionally consumed exactly once and stale revisions/drafts fail before dispatch. `/why` renders canonical authorization. `/doctor` declares 18 domains and emits deferred not-checked findings for absent coverage; it cannot claim broad health over blind spots. Completion snapshots schema/path/stage/provider/metric/draft/revision authority outside the keystroke path and advertises only executable positions.
+
+GUI inventories are display-only. Opaque server-side session/action IDs, permission and revision checks authorize work; transfer/drag/number-key/offhand/double-click paths are blocked. View-only staff can inspect but cannot edit/apply/execute. Manual Prestige administration performs optimistic CAS and writes the full actor/target/old/new/reason/timestamp audit in the same SQLite transaction.
+
+The frozen V1 source, tests, resources, runtime bootstrap and plugin descriptor remain unchanged. New Paper adapters are compiled and contract-tested but deliberately not registered into that frozen production entry point. Live Paper/LuckPerms composition and final V2 default qualification are therefore still outstanding; A01 and A02 remain `Partial`. Phase 7+ scope was not started.
+
+## Phase 6 acceptance classification
 
 | Acceptance | Classification | Evidence summary |
 |---|---|---|
-| A24 | Satisfied | Real Vault coherent aggregate preflight is zero-write and mixed batches make zero calls; one authorized execute makes one exact debit; generic journal blocks duplicate authority |
-| A48 | Satisfied | Real mcMMO 2.2.053 current values accept decreases; metadata is `NON_MONOTONIC`/`NOT_APPLICABLE` |
-| A49 | Satisfied | Official final XP event requires exact active healthy registration; stale/outage/config-off listeners cannot mutate |
-| A50 | Satisfied | Config activation cannot heal outages; full state/toggle/canonical-consumer/recovery/rebind matrix passes |
-| A51 | Satisfied | Complete Vault health allowlist blocks before API calls; coherent/mixed preflight and uncertainty remain truthful |
-| A52 | Satisfied | Official persistent expansion performs immutable bounded cache lookup only; repeated-render proof |
-| A53 | Satisfied | Scheduled-task registration/health gate blocks outage races and stale generations before resolver calls; cache/recursion semantics retained |
-| A54 | Satisfied | Real QuickShop success event compatibility with no progression capability and compiler-enforced zero default credit |
+| A38 | Satisfied | Scalar and structural list/map/stage edits preserve comments, ordering, CRLF, unknown keys and untouched bytes; repeated sequence insertion remains correctly indented |
+| A39 | Satisfied | Versioned drafts are CAS-claimed; edit/cancel/concurrent apply races cannot activate stale work |
+| A40 | Satisfied | Invalid provider/metric/integration configuration cannot apply and returns exact findings |
+| A41 | Satisfied | Rollback uses the same dual-authority fallback validation, complete removed/disabled reservation, multi-source remap and evidence-based pointer/runtime recovery as normal apply |
+| A42 | Satisfied | Direct/command/opaque-GUI routes share canonical edits and source-scoped multi-remap select/update/remove semantics |
+| A43 | Satisfied | Cached positional/path-specific completion advertises only executable command routes |
+| A44 | Satisfied | Help explains units, scopes, reset behavior and operators from canonical descriptors |
+| A45 | Satisfied | Healthy Doctor requires complete declared-domain coverage; legitimate complete operation/configuration authority is a nonfatal warning |
+| A46 | Satisfied | Broken rank/provider/metric/cost/reward/operation/state/lease/reservation paths are exact and actionable |
+| A47 | Satisfied | Why output uses the canonical sealed authorization and exact blockers |
+| A56 | Satisfied | Immutable NORMAL/ROLLBACK/SETUP provenance rejects cross-kind and revoked-permission authority through final mutation |
+| A57 | Satisfied | Manual Prestige CAS and complete audit append commit atomically |
+| A69 | Satisfied | Source+target operation leases plus configuration-owned full removed/disabled scope serialize every stage route before effects/write, including zero references, rollback and restart |
 
-Canonical traceability totals are 35 Satisfied, 33 Partial and 8 Later. Earlier accepted classifications remain unchanged except A24 and A48–A54, whose new evidence is described in `docs/V2_TRACEABILITY.md`.
-
-## Public artifacts and supported roles
-
-- VaultAPI 1.7.1 against VaultUnlocked 2.20.2: `CostProvider`, `RewardProvider`, balance `MetricProvider`;
-- mcMMO 2.2.053: skill/power `MetricProvider`, adjusted-XP manual event source;
-- PlaceholderAPI 2.12.2 (2.12.3 surface checked): output expansion, optional generic input `MetricProvider`;
-- EconomyShopGUI API 1.10.1, binary-checked against runtime 7.2.0: compatibility diagnostics only; progression deferred;
-- QuickShop API/runtime 6.2.0.11: compatibility/self-transaction diagnostics only;
-- PlayTimeManager 3.6.5: explicitly deferred/unnecessary.
-
-All external dependencies are `provided`; wildcard transitive exclusions are used for implementation-heavy API graphs. The shaded distribution contains zero classes under the Vault, mcMMO, PlaceholderAPI, EconomyShopGUI or QuickShop package prefixes.
+Canonical traceability totals are 48 Satisfied, 21 Partial and 7 Later. A02 moves from Later to Partial because its complete service boundary exists but production Paper composition remains disconnected. Exact criterion-level evidence is in `docs/V2_TRACEABILITY.md`.
 
 ## Verification
 
-Two consecutive `.\mvnw.cmd --no-transfer-progress clean verify` runs completed successfully after correction pass 2 stabilization.
+Final reactor verification uses `.\mvnw.cmd --no-transfer-progress clean verify`.
 
-- 263 tests in 61 suites; 0 failures, 0 errors, 0 skipped;
-- 49 new Phase 5 tests: 46 integration tests and 3 Paper PlaceholderAPI tests;
-- correction pass 2 adds 12 focused regression tests in one new suite;
-- focused integration contract module: 53 tests, 0 failures/errors/skips;
-- real artifact contracts compiled/tested for VaultAPI 1.7.1, mcMMO 2.2.053, PlaceholderAPI 2.12.2, EconomyShopGUI API 1.10.1 and QuickShop API 6.2.0.11;
-- Checkstyle: 7 reports, 0 violations;
-- Maven Enforcer Java/Maven version, dependency convergence and duplicate dependency-version rules: PASS;
-- JaCoCo: 7 XML module reports generated;
-- aggregate CycloneDX 1.6: `target/bom.json`, 67 components including every Phase 5 API coordinate;
-- distribution SHA-256, identical on both final clean runs: `E8F91C7DA78000849D5CD291108680ACCA1B281D948858FA9A10882393D612DA`;
-- aggregate SBOM SHA-256, identical on both clean runs: `9A0CD953432F5682AE723B2ABA954A93B4D4B6DA0197E1742E5A89F20496FFEE`;
-- optional API package entries in shaded distribution: 0.
+- 360 tests in 72 suites; 0 failures, 0 errors, 0 skipped;
+- module totals: API 7/5, core 146/32, distribution 12/5, integrations 55/9, persistence 84/14, Paper 10/4, testkit 46/3 (tests/suites);
+- Checkstyle: 7 reports, 0 `<error>` elements;
+- Maven Enforcer Java/Maven version, convergence and duplicate-version rules: PASS;
+- JaCoCo: 7 XML module reports;
+- aggregate CycloneDX 1.6 SBOM: 67 components;
+- distribution SHA-256: `42E342B65DC3A73CEB00D1ADF1DAFAFEE7002BB2737B5F616644B97C16DC28C8`;
+- aggregate SBOM SHA-256: `9A0CD953432F5682AE723B2ABA954A93B4D4B6DA0197E1742E5A89F20496FFEE`.
 
-## Static/security audit
+Two consecutive post-fix clean verifications produced those identical distribution and aggregate-SBOM hashes.
 
-- `git diff --check`: clean after final documentation normalization;
-- protected V1 comparison against `38cde9a084712a3f8c06edb0e77dc31333204374`: 0 tracked/untracked changed paths under `src`, `baseline/v1` or `dist`;
-- concrete plugin imports in generic API/core/persistence/testkit: 0;
-- integration production reflection, process execution, command scraping, direct plugin SQL/file access: 0;
-- TeaLeaf/MADDHATTER names, LuckPerms group-creation calls, TODO/FIXME/HACK markers: 0;
-- Phase 6 and Phase 7/deferred integration production leakage: 0;
-- MaddKraft-name scan: one expected PlaceholderAPI expansion author metadata value, no gameplay/rank coupling;
-- EconomyShopGUI and QuickShop progression mutation/provider/handle paths: 0; hard returned credits: 0;
-- malformed mapping/type coercion paths silently accepted: 0 across the required root/nested regression matrix;
-- lifecycle outage states fabricated healthy by config activation/toggle: 0 across the complete state matrix;
-- stale/outage Placeholder resolver calls and stale/outage mcMMO event mutations: 0;
-- simulation/preflight external mutations: 0; mixed Vault batches also make 0 provider calls;
-- unsafe public authorization route and dynamic SQL: unchanged accepted Phase 4 boundaries; Phase 5 adds neither persistence nor an authorization issuer.
+Earlier exploratory full runs are retained in the correction narrative: one found two stale test fixtures that assumed destructive authority always included a remap, and the next found a schema-version assertion still expecting migration 9. The fixtures were corrected to model zero-reference authority without weakening the production read-only boundary, and the migration assertion now expects 10. The final two clean runs above are after all fixes.
+
+MySQL/MariaDB remain contract targets rather than locally qualified Phase 6 deployments. This phase adds only SQLite-specific administration persistence and does not expand the public backend support claim.
+
+## Static and scope audit
+
+- `git diff --check`: PASS;
+- Phase 6 HEAD remains the exact accepted baseline SHA; all Phase 6 changes are unstaged;
+- main worktree status: clean;
+- protected V1 changed paths under root `src`, `baseline/v1` or `dist`: 0;
+- production classes added under generic API: 0;
+- Paper/Bukkit/external-plugin imports in generic core/persistence: 0;
+- LuckPerms group-creation calls in Phase 6 production: 0;
+- SQL created from caller data: 0; persistence uses static prepared statements;
+- client inventory/item metadata used as authority: 0;
+- public caller-selected apply-kind or remap-preview authority routes: 0;
+- authoritative current-stage SQL mutation sites outside the guarded player-stage repository, guarded Prestige lifecycle commit and remap implementation: 0;
+- durable lease acquisition routes without an existing operation journal owner: 0;
+- configuration-transition acquisition routes outside the canonical `PhaseSixConfigurationWorkflow` → `SqliteStageReferenceMigrationStore.beginTransition` path: 0;
+- incomplete/mismatched reservation scopes or active terminal history owners permitted to write: 0;
+- reflection or process-execution calls in V2 production modules: 0;
+- TODO/FIXME/HACK markers in Phase 6 production surfaces: 0;
+- staged files, commits, pushes, PRs or merges created by Phase 6: 0;
+- Phase 7+ production scope additions: 0.
 
 ## Owner handoff
 
-- `docs/V2_PHASE5_IMPLEMENTATION.md`
-- `docs/V2_PHASE5_FILE_MANIFEST.md`
+- `docs/V2_PHASE6_IMPLEMENTATION.md`
+- `docs/V2_PHASE6_FILE_MANIFEST.md`
 - `docs/V2_ARCHITECTURE.md`
 - `docs/V2_TRACEABILITY.md`
 - `DECISIONS.md`
-- `PHASE5_OWNER_REVIEW_SUMMARY.txt`
-- `PHASE5_SECOND_OWNER_REVIEW_SUMMARY.txt`
-- `PHASE5_THIRD_OWNER_REVIEW_SUMMARY.txt`
-- `target/MaddPrestige_Phase5_Third_Owner_Review.zip`
+- `STATUS.md`
+- `PHASE6_SECOND_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_THIRD_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_FOURTH_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE6_FIFTH_OWNER_REVIEW_SUMMARY.txt`
+- `target/MaddPrestige_Phase6_Fifth_Owner_Review.zip`
 
-No file has been staged, committed, pushed or submitted as a PR. Main remains clean at the accepted SHA.
+No file has been staged, committed, pushed, submitted as a PR or merged. The main worktree remains clean at the accepted SHA.

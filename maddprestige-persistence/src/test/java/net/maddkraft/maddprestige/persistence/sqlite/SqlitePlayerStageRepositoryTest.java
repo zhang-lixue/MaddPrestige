@@ -6,6 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -37,14 +39,15 @@ class SqlitePlayerStageRepositoryTest {
     Path temporaryDirectory;
     private SqlitePlayerStageRepository repository;
     private ConfigRevisionId revision;
+    private SqliteFoundation sqlite;
 
     @BeforeEach
     void migrate() {
         Path database = temporaryDirectory.resolve("player-stage.db");
-        SqliteFoundation sqlite = new SqliteFoundation(database);
+        sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite,
                 new FileBackupService(database, temporaryDirectory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseTwo());
+                Clock.systemUTC()).migrate(SqliteMigrations.phaseSix());
         revision = new ConfigRevisionId("revision_1");
         new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("revision one"));
         repository = new SqlitePlayerStageRepository(sqlite);
@@ -119,6 +122,28 @@ class SqlitePlayerStageRepositoryTest {
         assertEquals(new StageId("second"), repository.find(playerId).orElseThrow().stageId());
     }
 
+    @Test
+    @DisplayName("[A69] Direct writes use crash-safe transaction serialization and never create durable leases")
+    void directWritesCannotStrandUnjournaledDurableLeases() throws Exception {
+        PlayerStageState original = state(UUID.randomUUID(), "first", false);
+        repository.insert(original);
+        repository.update(original.advanceTo(new StageId("second"), revision, 1,
+                original.updatedAt().plusSeconds(1)), 0);
+        assertEquals("0", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"));
+
+        try (Connection connection = sqlite.open(); PreparedStatement statement = connection.prepareStatement("""
+                CREATE TRIGGER reject_direct_stage_update BEFORE UPDATE ON mp_player_stage_state
+                BEGIN SELECT RAISE(ABORT, 'injected direct-write crash'); END
+                """)) {
+            statement.execute();
+        }
+        PlayerStageState current = repository.find(original.playerId()).orElseThrow();
+        assertThrows(PersistenceException.class, () -> repository.update(current.advanceTo(
+                new StageId("first"), revision, 1, current.updatedAt().plusSeconds(1)), 1));
+        assertEquals("0", scalar("SELECT COUNT(*) FROM mp_stage_transition_leases"));
+        assertEquals(new StageId("second"), repository.find(original.playerId()).orElseThrow().stageId());
+    }
+
     private PlayerStageState state(UUID playerId, String stage, boolean imported) {
         Instant now = Instant.parse("2026-08-15T00:00:00Z");
         return new PlayerStageState(playerId, new StageId(stage), 0, revision, now, now, now,
@@ -162,5 +187,13 @@ class SqlitePlayerStageRepositoryTest {
                   first: {enabled: true, display-name: First, projection: none}
                 order: [first]
                 """;
+    }
+
+    private String scalar(String sql) throws Exception {
+        try (Connection connection = sqlite.open(); PreparedStatement statement = connection.prepareStatement(sql);
+                var row = statement.executeQuery()) {
+            assertTrue(row.next());
+            return row.getString(1);
+        }
     }
 }

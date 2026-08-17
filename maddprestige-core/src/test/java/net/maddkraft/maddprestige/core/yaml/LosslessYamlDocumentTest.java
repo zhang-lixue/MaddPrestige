@@ -125,6 +125,84 @@ class LosslessYamlDocumentTest {
                 () -> document.replaceString(YamlPath.document(0).key("standard"), "changed"));
     }
 
+    @Test
+    @DisplayName("[A38][A42] Structural list/map edits preserve CRLF, comments, order, and empty collection type")
+    void structurallyEditsWithoutReformattingDocument() {
+        String source = "# owner\r\nstages: {} # stage note\r\norder: [] # order note\r\ntail: keep\r\n";
+        YamlPath stages = YamlPath.document(0).key("stages");
+        YamlPath order = YamlPath.document(0).key("order");
+
+        LosslessYamlDocument added = LosslessYamlDocument.parse(source)
+                .appendMappingBlock(stages, "member", java.util.List.of("enabled: true", "projection: none"))
+                .appendSequenceString(order, "member");
+
+        assertEquals("# owner\r\nstages:  # stage note\r\n  member:\r\n    enabled: true\r\n"
+                + "    projection: none\r\norder:  # order note\r\n  - member\r\ntail: keep\r\n", added.render());
+        assertEquals(java.util.List.of("member"), added.mappingKeys(stages));
+        assertEquals(java.util.List.of("member"), added.sequenceScalars(order));
+
+        LosslessYamlDocument removed = added.removeMappingEntry(stages, "member")
+                .removeSequenceString(order, "member");
+        assertEquals("# owner\r\nstages: {} # stage note\r\norder: [] # order note\r\ntail: keep\r\n",
+                removed.render());
+        assertEquals(java.util.List.of(), removed.mappingKeys(stages));
+        assertEquals(java.util.List.of(), removed.sequenceScalars(order));
+    }
+
+    @Test
+    @DisplayName("[A38][A42] Repeated block-sequence additions retain the owning list indentation")
+    void appendsMultipleSequenceValuesAtTheListIndent() {
+        YamlPath order = YamlPath.document(0).key("order");
+
+        LosslessYamlDocument edited = LosslessYamlDocument.parse("order: []\ntail: keep\n")
+                .appendSequenceString(order, "first")
+                .appendSequenceString(order, "second");
+
+        assertEquals("order: \n  - first\n  - second\ntail: keep\n", edited.render());
+        assertEquals(java.util.List.of("first", "second"), edited.sequenceScalars(order));
+    }
+
+    @Test
+    @DisplayName("[A42][A69] Removing a middle block mapping and sequence value retains neighboring stages")
+    void removesMiddleStructuralValuesExactly() {
+        String source = """
+                stages:
+                  a:
+                    enabled: true
+                    projection: none
+                  b:
+                    enabled: true
+                    projection: none
+                  c:
+                    enabled: true
+                    projection: none
+                order:
+                  - a
+                  - b
+                  - c
+                """;
+        String expected = """
+                stages:
+                  a:
+                    enabled: true
+                    projection: none
+                  c:
+                    enabled: true
+                    projection: none
+                order:
+                  - a
+                  - c
+                """;
+
+        LosslessYamlDocument removed = LosslessYamlDocument.parse(source)
+                .removeMappingEntry(YamlPath.document(0).key("stages"), "b")
+                .removeSequenceString(YamlPath.document(0).key("order"), "b");
+
+        assertEquals(expected, removed.render());
+        assertEquals(java.util.List.of("a", "c"), removed.mappingKeys(YamlPath.document(0).key("stages")));
+        assertEquals(java.util.List.of("a", "c"), removed.sequenceScalars(YamlPath.document(0).key("order")));
+    }
+
     private static String resource(String name) throws IOException, URISyntaxException {
         var resource = LosslessYamlDocumentTest.class.getResource("/golden/" + name);
         if (resource == null) {

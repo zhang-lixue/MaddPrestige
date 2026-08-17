@@ -19,6 +19,8 @@ import java.util.UUID;
 import java.util.EnumMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
@@ -51,6 +53,7 @@ import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
 import net.maddkraft.maddprestige.api.reward.RewardRepeatability;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.command.CommandActionPolicy;
+import net.maddkraft.maddprestige.core.admin.config.ConfigurationStageReservationKind;
 import net.maddkraft.maddprestige.core.competition.CompetitionConfiguration;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
@@ -100,6 +103,8 @@ import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 import net.maddkraft.maddprestige.core.stage.StageConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.stage.StageDefinition;
 import net.maddkraft.maddprestige.core.stage.StageProjection;
+import net.maddkraft.maddprestige.core.stage.StageRemapPlan;
+import net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
 import net.maddkraft.maddprestige.persistence.plan.PrestigeOperationExecutor;
 import net.maddkraft.maddprestige.persistence.recovery.PendingOperationRecoveryService;
@@ -432,7 +437,8 @@ class PhaseFourLifecycleTest {
                     .toCompletableFuture().join().plan().orElseThrow();
             assertEquals(MetricValue.decimal("150"), plan.simulation().baselineChanges().getFirst().value());
             PrestigeOperationExecutor executor = new PrestigeOperationExecutor(lifecycle,
-                    new SqliteOperationRepository(database.foundation()), providers, () -> Optional.of(REVISION), CLOCK);
+                    new SqliteOperationRepository(database.foundation()), providers, () -> Optional.of(REVISION),
+                    new InMemoryStageTransitionFence(), CLOCK);
             assertEquals(PrestigeExecutionStatus.COMPLETED, executor.execute(plan).status());
 
             ScopeId newScope = plan.simulation().prestigeScopeAfter();
@@ -586,6 +592,120 @@ class PhaseFourLifecycleTest {
 
             assertEquals(PrestigeExecutionStatus.COMPENSATED, fixture.executor().execute(plan).status());
             assertEquals(0, fixture.prestigeStates.find(fixture.playerId).orElseThrow().currentPrestige());
+        }
+    }
+
+    @Test
+    @DisplayName("[A69] Prestige sourced from a removed stage performs no cost, projection, commit, or reward")
+    void configurationFenceRechecksPrestigeBeforeEveryEffect() throws Exception {
+        try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
+            ProviderRegistry providers = new ProviderRegistry();
+            ProviderId costId = new ProviderId("fenced_prestige_cost");
+            ProviderId rankId = new ProviderId("fenced_prestige_rank");
+            ProviderId rewardId = new ProviderId("fenced_prestige_reward");
+            FakeCostProvider cost = new FakeCostProvider(costId);
+            CountingRankAdapter rank = new CountingRankAdapter(rankId);
+            FakeRewardProvider reward = new FakeRewardProvider(rewardId);
+            var costRegistration = providers.register("maddprestige-testkit", cost);
+            var rankRegistration = providers.register("maddprestige-testkit", rank);
+            var rewardRegistration = providers.register("maddprestige-testkit", reward);
+            providers.activate(costRegistration);
+            providers.activate(rankRegistration);
+            providers.activate(rewardRegistration);
+            RewardDefinition rewardDefinition = new RewardDefinition(new RewardId("fenced_reward"), rewardId,
+                    "generic", MetricValue.count(1), Map.of(), "Fenced reward", RewardFailurePolicy.REQUIRED,
+                    RewardRepeatability.ONCE_PER_OPERATION);
+            Fixture fixture = fixture(database, false, false, Optional.of(genericCost(costId)),
+                    Optional.of(rewardDefinition), Map.of(
+                            costId, costRegistration.generation(),
+                            rankId, rankRegistration.generation(),
+                            rewardId, rewardRegistration.generation()),
+                    providers, ResetPreservePolicy.safeDefaults(), StageProjection.group(rankId, "origin"));
+            cost.balance(fixture.playerId, "5");
+            PrestigePlan authorizedBeforeRemap = fixture.plan("fenced-prestige");
+            ConfigRevisionId removalRevision = new ConfigRevisionId("prestige_removal_revision");
+            var removalHash = RevisionHasher.hashText("remove prestige reset stage");
+            new SqliteConfigRevisionRepository(database.foundation()).insert(removalRevision, removalHash);
+            database.prepareConfigurationTransition(removalRevision, Optional.of(REVISION), removalHash, NOW);
+            SqliteStageReferenceMigrationStore fence = new SqliteStageReferenceMigrationStore(database.foundation());
+            var remap = fence.capture(Optional.of(new StageRemapPlan("remove_source_summit",
+                    Map.of(SUMMIT, new StageId("replacement_summit"))))).remap().orElseThrow();
+            fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                    Map.of(SUMMIT, ConfigurationStageReservationKind.REMOVED,
+                            ORIGIN, ConfigurationStageReservationKind.DISABLED), Optional.of(remap),
+                    new Actor("console", Optional.empty(), "Owner"), "pause before activation", NOW);
+
+            assertEquals(PrestigeExecutionStatus.UNAUTHORIZED,
+                    fixture.executor(fence).execute(authorizedBeforeRemap).status());
+            assertEquals(OperationState.FAILED,
+                    fixture.operations.find(authorizedBeforeRemap.operationId()).orElseThrow().state());
+            assertEquals(new java.math.BigDecimal("5"), cost.balance(fixture.playerId));
+            assertEquals(0, rank.projectionAttempts.get());
+            assertEquals(0, reward.executionAttempts());
+            assertEquals(new StageId("replacement_summit"),
+                    fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
+            assertEquals(0, fixture.prestigeStates.find(fixture.playerId).orElseThrow().currentPrestige());
+        }
+    }
+
+    @Test
+    @DisplayName("[A69] A Prestige source-stage lease wins before remap and releases after terminal completion")
+    void prestigeSourceOperationWinsThenRemapRetriesSafely() throws Exception {
+        try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
+            ProviderRegistry providers = new ProviderRegistry();
+            ProviderId costId = new ProviderId("operation_wins_prestige_cost");
+            FakeCostProvider cost = new FakeCostProvider(costId);
+            var registration = providers.register("maddprestige-testkit", cost);
+            providers.activate(registration);
+            Fixture fixture = fixture(database, false, false, Optional.of(genericCost(costId)), Optional.empty(),
+                    Map.of(costId, registration.generation()), providers);
+            cost.balance(fixture.playerId, "5");
+            PrestigePlan plan = fixture.plan("prestige-operation-wins");
+            UUID waitingPlayer = UUID.randomUUID();
+            fixture.stageStates.insert(new PlayerStageState(waitingPlayer, SUMMIT, 0, REVISION, NOW, NOW, NOW,
+                    Optional.empty(), Optional.empty(), Optional.empty()));
+            ConfigRevisionId removalRevision = new ConfigRevisionId("prestige_operation_wins_removal");
+            var removalHash = RevisionHasher.hashText("prestige source removal after operation");
+            new SqliteConfigRevisionRepository(database.foundation()).insert(removalRevision, removalHash);
+            database.prepareConfigurationTransition(removalRevision, Optional.of(REVISION), removalHash, NOW);
+            SqliteStageReferenceMigrationStore fence = new SqliteStageReferenceMigrationStore(database.foundation());
+            StageRemapPlan remapPlan = new StageRemapPlan("remove_summit_after_prestige",
+                    Map.of(SUMMIT, new StageId("replacement_summit")));
+            var staleSnapshot = fence.capture(Optional.of(remapPlan)).remap().orElseThrow();
+            CountDownLatch costStarted = new CountDownLatch(1);
+            CountDownLatch allowCompletion = new CountDownLatch(1);
+            cost.onNextExecution(() -> {
+                costStarted.countDown();
+                await(allowCompletion);
+            });
+            CompletableFuture<net.maddkraft.maddprestige.core.prestige.PrestigeExecutionResult> executing =
+                    CompletableFuture.supplyAsync(() -> fixture.executor(fence).execute(plan));
+            assertTrue(costStarted.await(10, TimeUnit.SECONDS));
+
+            assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
+                    () -> fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                            Map.of(ORIGIN, ConfigurationStageReservationKind.REMOVED), Optional.empty(),
+                            new Actor("console", Optional.empty(), "Owner"),
+                            "Prestige zero-reference reset target lease must win", NOW));
+            assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
+                    () -> fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                            Map.of(SUMMIT, ConfigurationStageReservationKind.REMOVED), Optional.of(staleSnapshot),
+                            new Actor("console", Optional.empty(), "Owner"),
+                            "Prestige source lease must win", NOW));
+            assertEquals(SUMMIT, fixture.stageStates.find(waitingPlayer).orElseThrow().stageId());
+            allowCompletion.countDown();
+            assertEquals(PrestigeExecutionStatus.COMPLETED, executing.get(10, TimeUnit.SECONDS).status());
+            assertEquals(ORIGIN, fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
+            assertEquals(new java.math.BigDecimal("4"), cost.balance(fixture.playerId));
+            assertTrue(fence.leases(10).isEmpty());
+
+            var freshSnapshot = fence.capture(Optional.of(remapPlan)).remap().orElseThrow();
+            fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
+                    Map.of(SUMMIT, ConfigurationStageReservationKind.REMOVED), Optional.of(freshSnapshot),
+                    new Actor("console", Optional.empty(), "Owner"),
+                    "retry after Prestige completion", NOW.plusSeconds(1));
+            assertEquals(new StageId("replacement_summit"),
+                    fixture.stageStates.find(waitingPlayer).orElseThrow().stageId());
         }
     }
 
@@ -821,6 +941,17 @@ class PhaseFourLifecycleTest {
         };
     }
 
+    private static void await(CountDownLatch latch) {
+        try {
+            if (!latch.await(10, TimeUnit.SECONDS)) {
+                throw new AssertionError("Timed out waiting for deterministic Prestige race release");
+            }
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError(exception);
+        }
+    }
+
     private record Fixture(
             UUID playerId,
             SqlitePlayerStageRepository stageStates,
@@ -836,8 +967,13 @@ class PhaseFourLifecycleTest {
         }
 
         private PrestigeOperationExecutor executor() {
+            return executor(new InMemoryStageTransitionFence());
+        }
+
+        private PrestigeOperationExecutor executor(
+                net.maddkraft.maddprestige.core.stage.StageTransitionFence transitionFence) {
             return new PrestigeOperationExecutor(lifecycle, operations, providers,
-                    () -> Optional.of(activeRevision.get()), CLOCK);
+                    () -> Optional.of(activeRevision.get()), transitionFence, CLOCK);
         }
     }
 
