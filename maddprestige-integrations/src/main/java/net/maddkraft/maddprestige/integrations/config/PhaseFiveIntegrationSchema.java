@@ -80,6 +80,25 @@ public final class PhaseFiveIntegrationSchema {
                 "integrations.quickshop.progression-credit.enabled", SchemaValueType.BOOLEAN, Optional.of("false"),
                 AllowedValues.fixed("false"), RiskLevel.CRITICAL,
                 "Player-to-player QuickShop progression credit is unsupported and rejected.");
+        registerMap(registry, "griefprevention_integration", "integrations.griefprevention", RiskLevel.HIGH,
+                "Strict GriefPrevention integration mapping.");
+        register(registry, "griefprevention_integration_enabled", "integrations.griefprevention.enabled",
+                SchemaValueType.BOOLEAN, Optional.of("false"), AllowedValues.fixed("true", "false"),
+                RiskLevel.HIGH, "Enables read-only claim metrics and the explicit bonus claim-block reward.");
+        registerMap(registry, "worldguard_integration", "integrations.worldguard", RiskLevel.HIGH,
+                "Strict WorldGuard read-only region integration mapping.");
+        register(registry, "worldguard_integration_enabled", "integrations.worldguard.enabled",
+                SchemaValueType.BOOLEAN, Optional.of("false"), AllowedValues.fixed("true", "false"),
+                RiskLevel.HIGH, "Enables exact read-only WorldGuard region predicates.");
+        registerMap(registry, "craftengine_integration", "integrations.craftengine", RiskLevel.CRITICAL,
+                "Strict CraftEngine 26.7.4 item integration mapping.");
+        register(registry, "craftengine_integration_enabled", "integrations.craftengine.enabled",
+                SchemaValueType.BOOLEAN, Optional.of("false"), AllowedValues.fixed("true", "false"),
+                RiskLevel.CRITICAL, "Enables exact custom-item count and reward providers.");
+        register(registry, "craftengine_reward_maximum",
+                "integrations.craftengine.reward-maximum-quantity", SchemaValueType.INTEGER,
+                Optional.of("2304"), AllowedValues.unrestricted(), RiskLevel.CRITICAL,
+                "Positive safety ceiling, at most 2304, for one custom-item reward action.");
     }
 
     private static void registerMap(

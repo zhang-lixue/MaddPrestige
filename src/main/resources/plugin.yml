@@ -1,7 +1,7 @@
 name: MaddPrestige
 version: '${project.version}'
-main: gg.maddkraft.prestige.MaddPrestigePlugin
-description: Player prestige, New Chapters, Legacy Stars, and The MaddHatter for MaddKraft.
+main: net.maddkraft.maddprestige.platform.paper.bootstrap.MaddPrestigeV2Plugin
+description: Generic, provider-driven MaddPrestige V2 progression platform.
 author: MaddKraft
 api-version: '26.1.2'
 load: POSTWORLD
@@ -30,6 +30,7 @@ softdepend:
   - voicechat
   - WorldEdit
   - WorldGuard
+  - CraftEngine
   - LuckPerms
   - Vault
   - mcMMO
@@ -55,55 +56,14 @@ softdepend:
   - ItemsAdder
   - Oraxen
 commands:
-  rankup:
-    description: View or advance MaddKraft's free progression ladder.
-    usage: /rankup [confirm]
-    permission: maddprestige.rankup
-  prestige:
-    description: View prestige progress and prestige rewards.
-    usage: /prestige [menu|settings|confirm|rewards|buy|top|history]
-    permission: maddprestige.prestige
-  season:
-    description: View the current New Chapter.
-    usage: /season [status]
-    permission: maddprestige.season
-  maddhatter:
-    description: View The MaddHatter and Hatter's Contest.
-    usage: /maddhatter [top|history|claim]
-    permission: maddprestige.maddhatter
   maddprestige:
     aliases: [mprestige, mp]
-    description: MaddPrestige administrative command.
-    usage: /maddprestige [gui|help]
-    permission: maddprestige.admin
+    description: MaddPrestige V2 status, diagnostics, providers, and configuration-authority guidance.
+    usage: /maddprestige [status|doctor|providers|reload]
 permissions:
-  maddprestige.rankup:
-    default: true
-  maddprestige.prestige:
-    default: true
-  maddprestige.season:
-    default: true
-  maddprestige.maddhatter:
-    default: true
   maddprestige.admin:
     default: op
     children:
-      maddprestige.admin.gui: true
-  maddprestige.admin.reload:
-    default: op
-  maddprestige.admin.inspect:
-    default: op
-  maddprestige.admin.modify:
-    default: op
-  maddprestige.admin.season:
-    default: op
-  maddprestige.admin.hatter:
-    default: op
-  maddprestige.admin.patron:
-    default: op
-  maddprestige.admin.gui:
-    description: Opens and uses the in-game staff control panel.
-    default: op
-  maddprestige.staff:
-    description: Excludes staff from MaddHatter contest scoring.
+      maddprestige.admin.config.apply: true
+  maddprestige.admin.config.apply:
     default: op

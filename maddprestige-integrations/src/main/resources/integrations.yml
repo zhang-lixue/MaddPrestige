@@ -1,4 +1,4 @@
-schema-version: 5
+schema-version: 7
 vault:
   enabled: false
 mcmmo:
@@ -15,3 +15,10 @@ quickshop:
   compatibility-enabled: false
   progression-credit:
     enabled: false
+griefprevention:
+  enabled: false
+worldguard:
+  enabled: false
+craftengine:
+  enabled: false
+  reward-maximum-quantity: 2304

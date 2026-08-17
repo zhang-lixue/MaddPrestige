@@ -23,8 +23,15 @@ jobs:
       - name: Verify frozen V1 source and artifacts
         shell: bash
         run: |
-          git diff --exit-code v1.2.0-baseline -- src dist baseline/v1/runtime baseline/v1/external
+          git diff --exit-code v1.2.0-baseline -- src dist baseline/v1/runtime baseline/v1/external ':(exclude)src/main/resources/plugin.yml'
           test -z "$(git status --porcelain -- src dist baseline/v1/runtime baseline/v1/external)"
+      - name: Verify authorized V2 production descriptor
+        shell: bash
+        run: |
+          descriptor=src/main/resources/plugin.yml
+          test "$(sed -n 's/^name:[[:space:]]*//p' "$descriptor")" = "MaddPrestige"
+          test "$(sed -n 's/^main:[[:space:]]*//p' "$descriptor")" = "net.maddkraft.maddprestige.platform.paper.bootstrap.MaddPrestigeV2Plugin"
+          test "$(sed -n 's/^load:[[:space:]]*//p' "$descriptor")" = "POSTWORLD"
       - name: Verify Phase 1 reactor
         run: bash ./mvnw --batch-mode --no-transfer-progress clean verify
       - name: Verify build did not dirty protected V1 paths

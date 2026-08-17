@@ -159,6 +159,53 @@ class LuckPermsRankAdapterTest {
         assertEquals(0, disabled.userSaves.get());
     }
 
+    @Test
+    @DisplayName("[A71][A72] Full owner ladder and Prestige reset preserve every unmanaged LuckPerms node")
+    void ownerLadderAndPrestigeResetPreserveEveryUnmanagedNode() {
+        Node permission = permission("maddkraft.owner.fixture");
+        InheritanceNode temporary = temporaryGroup("event_guest", Duration.ofMinutes(30));
+        InheritanceNode contextual = contextualGroup("build_team", "server", "survival");
+        Set<String> ladder = Set.of("wanderer", "curious", "dreamer", "tea_guest", "wonderlander", "madcap");
+        Harness harness = new Harness(true, ladder, List.of(group("curious"), group("mad_hatter"),
+                group("supporter"), temporary, contextual, permission));
+
+        LuckPermsRankAdapter adapter = harness.adapter(() -> true);
+        for (String stage : List.of("dreamer", "tea_guest", "wonderlander", "madcap")) {
+            var result = adapter.project(request(harness.playerId, ladder, Optional.of(stage)))
+                    .toCompletableFuture().join();
+            assertTrue(result.isSuccess(), result.errors().toString());
+            assertEquals(RankProjectionOutcome.APPLIED, result.value().orElseThrow().outcome());
+            assertEquals(Set.of(stage, "mad_hatter", "supporter", "event_guest", "build_team"),
+                    harness.inheritanceGroups());
+            assertUnmanagedSurvives(harness, permission, temporary, contextual);
+        }
+
+        var prestigeReset = adapter.project(request(harness.playerId, ladder, Optional.empty()))
+                .toCompletableFuture().join();
+        assertTrue(prestigeReset.isSuccess(), prestigeReset.errors().toString());
+        assertEquals(Set.of("mad_hatter", "supporter", "event_guest", "build_team"),
+                harness.inheritanceGroups());
+        assertUnmanagedSurvives(harness, permission, temporary, contextual);
+
+        Harness reopened = new Harness(false, ladder, List.copyOf(harness.nodes));
+        var afterReopen = reopened.adapter(() -> true).project(request(
+                reopened.playerId, ladder, Optional.of("curious"))).toCompletableFuture().join();
+        assertTrue(afterReopen.isSuccess(), afterReopen.errors().toString());
+        assertEquals(Set.of("curious", "mad_hatter", "supporter", "event_guest", "build_team"),
+                reopened.inheritanceGroups());
+        assertUnmanagedSurvives(reopened, permission, temporary, contextual);
+        assertEquals(0, harness.groupCreations.get());
+        assertEquals(0, reopened.groupCreations.get());
+    }
+
+    private static void assertUnmanagedSurvives(Harness harness, Node permission,
+            InheritanceNode temporary, InheritanceNode contextual) {
+        assertTrue(harness.nodes.contains(permission));
+        assertTrue(harness.nodes.contains(temporary));
+        assertTrue(harness.nodes.contains(contextual));
+        assertTrue(harness.inheritanceGroups().contains("mad_hatter"));
+    }
+
     private static RankProjectionRequest request(UUID playerId, Set<String> managed, Optional<String> desired) {
         return new RankProjectionRequest(playerId, OperationId.random(), new ConfigRevisionId("revision_1"),
                 1, managed, desired);

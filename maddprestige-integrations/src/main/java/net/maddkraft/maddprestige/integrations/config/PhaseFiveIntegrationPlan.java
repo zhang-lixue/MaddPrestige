@@ -29,6 +29,17 @@ public record PhaseFiveIntegrationPlan(
         if (!configuration.placeholderInputs().isEmpty()) {
             providers.add(new ProviderId("placeholder_input"));
         }
+        if (configuration.griefPreventionEnabled()) {
+            providers.add(new ProviderId("griefprevention_claims"));
+            providers.add(new ProviderId("griefprevention_claim_blocks_reward"));
+        }
+        if (configuration.worldGuardEnabled()) {
+            providers.add(new ProviderId("worldguard_region"));
+        }
+        if (configuration.craftEngineEnabled()) {
+            providers.add(new ProviderId("craftengine_item_count"));
+            providers.add(new ProviderId("craftengine_item_reward"));
+        }
         return new PhaseFiveIntegrationPlan(providers, configuration.placeholderOutputEnabled(),
                 configuration.mcMmoEnabled(), configuration.economyShopGuiCompatibilityEnabled(),
                 configuration.quickShopCompatibilityEnabled());
