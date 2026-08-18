@@ -11,6 +11,10 @@ import java.util.Optional;
 import java.util.UUID;
 import net.maddkraft.maddprestige.core.config.ContentHash;
 
+/**
+ * Byte-copy backup retained for already-quiesced test fixtures. It is not safe for a live SQLite database and is not
+ * used by production composition. Production uses {@code SqliteBackupService}, which coordinates through SQLite.
+ */
 public final class FileBackupService implements BackupService {
     private final Path source;
     private final Path backupDirectory;

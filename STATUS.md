@@ -1,16 +1,41 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 8B owner-accepted checkpoint; Phase 8C scope prepared but implementation not started
+**Current phase:** Phase 8C Owner Review Correction Pass 2 candidate complete, awaiting owner review; Phase 8D not started
 
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-18
 
 **Branch:** `v2/phase-8`
 
 **Frozen pre-Phase-8 HEAD:** `7fc5c3532f0614634933ff66ee0e03bf55b8e5cf`
 
-**Checkpoint scope:** documentation-only owner product-scope decision; accepted Phase 8B production behavior unchanged
+**Candidate scope:** SQLite persistence, migration, backup and recovery hardening; accepted Phase 1-8B behavior retained
 
 ## Outcome
+
+Phase 8C adds the production SQLite-native backup authority selected from the existing Xerial driver. A fair
+application-connection fence drains/fences MaddPrestige work while the backup API seals a unique snapshot; a partial
+artifact cannot be promoted until independent header/integrity/foreign-key/schema/history/configuration validation,
+streaming SHA-256 and an isolated same-path restore rehearsal pass. Format-1 durable manifests identify reason/source,
+source schema, active configuration revision, artifact, hash, validation/rehearsal outcomes and journal mode. Accepted
+revalidation binds the UUID to its canonical artifact and re-observes every derivable field, including journal mode. Failed
+attempts preserve both live source and prior accepted backups.
+
+The exact migration chain is now schema 1 through 11. Populated fixtures exercise fresh and every historical prefix,
+then unchanged restart. Migration 11 backfills zero Prestige state only for historical stage-only players, preserving
+the accepted atomic stage/Prestige invariant. Validation reconstructs the claimed migration prefix and compares every
+MaddPrestige table, column/property, correctness UNIQUE/partial-UNIQUE authority, foreign key and database-enforced
+table constraint. Its quote-aware SQL canonicalizer normalizes only unquoted case and external whitespace; quoted
+literal content, escaped quotes and internal whitespace remain exact correctness authority. Future, missing, gapped,
+duplicate or malformed history, impossible FAILED-attempt version/timestamp ordering, and APPLIED
+checksum/description mismatch fail closed. FAILED checksum/description text remains diagnostic rather than immutable
+migration-definition authority. The complete ordered APPLIED/FAILED attempt ledger is snapshotted before backup and
+must be unchanged afterward. Startup validates SQLite before service publication and rejects every
+pointer-dependent authority row when the filesystem pointer is absent, rather than repairing or reinterpreting it.
+
+The shaded distribution passed a two-boot Paper 26.1.2 process qualification from a populated schema-10 fixture: 8/8
+first-boot assertions and 3/3 unchanged-restart assertions. It independently validated the native backup and rehearsal,
+preserved existing player plus uncertainty/recovery evidence, backfilled a stage-only player, completed real rank-up and
+Prestige with distinct request/durable identities, and retained exact revisions/counts on restart.
 
 Phase 8B composes the accepted V2 engines into the active Paper runtime and presents the owner-accepted Phase 8 API
 candidate. `MaddPrestigeService` is published only through Paper `ServicesManager`, after migrations, provider
@@ -73,7 +98,8 @@ JARs remain outside the review bundle; sanitized evidence is `PHASE8B_PAPER_QUAL
 
 ## Canonical remaining Phase 8 decomposition
 
-- Phase 8C: SQLite Persistence, Migration, Backup & Recovery Hardening.
+- Phase 8C: SQLite Persistence, Migration, Backup & Recovery Hardening — Owner Review Correction Pass 2 candidate
+  complete, awaiting owner review.
 - Phase 8D: i18n, a generic example, public documentation and admin UX.
 - Phase 8E: performance plus fault/dependency qualification.
 - Phase 8F: packaging and release hardening, including final compatibility-baseline responsibility.
@@ -96,6 +122,7 @@ deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not
 | A02 | Partial | Complete Phase 6 setup/admin/GUI composition is reachable live; independent Quick Start usability remains Phase 8D |
 | A61 | Partial | Durable internal/offline paths and live async LuckPerms composition exist; complete provider-by-provider live offline qualification remains |
 | A62 | Partial | Manual backpressure/health and cache-only rendering are corrected; per-player virtual-thread/SQLite fan-out still needs real Paper load/TPS qualification in Phase 8E |
+| A63 | Partial | Populated fresh/prefix migration, native backup, restore rehearsal, corruption/history failures and real Paper restart are qualified; Phase 9 retains actual MaddKraft clone/deployment migration qualification |
 | A64 | Later | MySQL/MariaDB production support and semantic parity are explicitly deferred post-2.0; no support or acceptance claim is made |
 | A65 | Partial | A separate live harness proves owner-attested SDK registration, admin-configured metric evaluation, unregister and rebind; the broader independent provider qualification matrix remains |
 | A66 | Partial | Live Paper proves correlation, distinct request/durable IDs, zero-effect cancellation and stale successful PRE, plus durable rank/Prestige POST; the complete uncertainty/listener-fault/reentrancy matrix remains |
@@ -103,27 +130,33 @@ deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not
 | A70 | Partial | Live generic LuckPerms/rank-up/Prestige composition now exists; the complete unbranded three-stage server exercise is not an 8B claim |
 | A76 | Partial | Live setup is reachable, but Quick Start documentation and independent fresh-admin qualification remain Phase 8D |
 
-The mechanically updated ledger is **54 Satisfied, 21 Partial and 1 Later**. A64 moved from `Partial` to `Later`; no
-criterion became `Satisfied`. Phase 8B does not claim any Phase 8C–8F gate.
+The mechanically audited ledger remains **54 Satisfied, 21 Partial and 1 Later**. A63 remains `Partial` because Phase 9
+retains the live MaddKraft clone/deployment gate; A64 remains `Later`. No Phase 8D-8F criterion is claimed.
 
 ## Verification
 
-The corrected implementation is sealed by two consecutive eight-module `clean verify` runs after source and
-documentation completion. Exact totals and reproducible hashes are recorded in `PHASE8B_OWNER_REVIEW_SUMMARY.txt` and
-the owner-review bundle.
+The Phase 8C candidate is sealed by two consecutive eight-module `clean verify` runs with no source or documentation
+edits between them. Their exact totals, module counts and reproducible hashes were then recorded in
+`PHASE8C_OWNER_REVIEW_SUMMARY.txt` and the owner-review bundle.
 
 ## Owner handoff
 
-- `docs/V2_PHASE8B_IMPLEMENTATION.md`
-- `docs/V2_PHASE8B_API_INVENTORY.md`
-- `docs/V2_PHASE8B_PAPER_API_INVENTORY.md`
+- `docs/V2_PHASE8C_IMPLEMENTATION.md`
+- `docs/V2_PHASE8C_MIGRATION_MATRIX.md`
+- `docs/V2_PHASE8C_BACKUP_RESTORE_EVIDENCE.md`
+- `docs/V2_PHASE8C_FIXTURE_METADATA.md`
+- `docs/V2_PHASE8C_FILE_MANIFEST.md`
 - `docs/V2_PHASE8_FAILURE_REGISTER.md`
 - `docs/V2_PHASE8B_STATIC_AUDIT.md`
 - `docs/V2_ARCHITECTURE.md`
 - `docs/V2_TRACEABILITY.md`
 - `DECISIONS.md`
-- `PHASE8B_OWNER_REVIEW_SUMMARY.txt`
-- `PHASE8B_PAPER_QUALIFICATION.log`
-- `target/MaddPrestige_Phase8B_Owner_Review.zip`
+- `PHASE8C_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE8C_PAPER_QUALIFICATION.log`
+- `PHASE8C_VERIFY_1.log`
+- `PHASE8C_VERIFY_2.log`
+- `target/MaddPrestige_Phase8C_Owner_Review.zip`
 
-Phase 8B Correction Pass 2 remains owner-accepted. This scope-preparation checkpoint contains no Phase 8C implementation.
+Phase 8B Correction Pass 2 remains owner-accepted and unchanged. Phase 8C Correction Pass 2 is a review candidate,
+not owner-accepted.
+Phase 8D has not started.

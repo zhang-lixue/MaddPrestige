@@ -636,4 +636,22 @@ public final class SqliteMigrations {
                         + "mp_configuration_stage_reservations(config_revision_id, stage_id)")));
         return List.copyOf(migrations);
     }
+
+    /** Phase 8C preserves the atomic stage+Prestige invariant when upgrading populated pre-Prestige databases. */
+    public static List<Migration> phaseEightC() {
+        ArrayList<Migration> migrations = new ArrayList<>(phaseSix());
+        migrations.add(Migration.of(11, "Phase 8C historical player Prestige-state compatibility", List.of(
+                """
+                INSERT INTO mp_player_prestige_state (
+                    player_uuid, current_prestige, lifetime_prestige, state_revision,
+                    config_revision_id, prestige_scope_id, last_prestiged_at, created_at, updated_at
+                )
+                SELECT stage.player_uuid, 0, 0, 0, stage.config_revision_id, 'global', NULL,
+                       stage.created_at, stage.updated_at
+                FROM mp_player_stage_state stage
+                LEFT JOIN mp_player_prestige_state prestige ON prestige.player_uuid = stage.player_uuid
+                WHERE prestige.player_uuid IS NULL
+                """)));
+        return List.copyOf(migrations);
+    }
 }

@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
 **Architecture baseline:** Phase 8B implementation, 2026-08-17
-**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; Phase 8C implementation has not started
+**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; the Phase 8C SQLite hardening candidate is implemented/qualified and awaits owner review
 
 ## Module graph
 
@@ -191,13 +191,47 @@ future external-SQL implementation can be built and qualified properly. Primitiv
 configuration do not constitute a support claim. No external-DB, shared-database or network/proxy-safe behavior is
 claimed.
 
-Phase 8C is **SQLite Persistence, Migration, Backup & Recovery Hardening**. It must replace unsafe blind live-file copy
-with a coordinated SQLite-safe backup path; persist and verify backup metadata, checksum and integrity; rehearse restore
-in a disposable environment; exercise populated old-schema-to-current-schema fixtures; handle interrupted/failed
-migrations plus schema checksum/gap/future-version states; diagnose corrupt/truncated backups or databases where
-practical; verify database/config compatibility and startup reporting; and qualify exact populated-state restart and
-recovery. Every accepted transaction, journal, lease, uncertainty, reconciliation and configuration-publication
-invariant remains binding.
+Phase 8C is **SQLite Persistence, Migration, Backup & Recovery Hardening**. The candidate uses a fair shared/exclusive
+boundary around every production-foundation connection: already admitted/queued MaddPrestige work drains, an exclusive
+holder seals a snapshot with Xerial's native SQLite backup API, and later application connections remain fenced until
+the snapshot completes. The product topology is one Paper process; this is deliberately not a shared-database or
+multi-process coordination claim. The old byte-copy service remains explicitly limited to closed/quiesced fixtures and
+is no longer production migration authority.
+
+Each candidate snapshot is a new UUID partial artifact. An independent read-only connection validates its SQLite
+header, exact `integrity_check`, foreign keys, contiguous APPLIED checksummed/described migration history and valid
+FAILED-attempt ordering. It reconstructs the claimed prefix from canonical migrations and compares every MaddPrestige
+table, column property, correctness UNIQUE/partial-UNIQUE index, foreign key and database-enforced table constraint;
+SQL canonicalization lowercases only unquoted text and collapses only external whitespace, preserving the exact
+content of single-quoted strings, doubled-quote escapes and whitespace inside quoted tokens. Representative populated
+reads remain data evidence rather than structural proof. Exact configuration
+document/canonical hashes and graph links are also checked. A
+format-1 forced manifest records reason/source/schema/active revision/artifact/SHA-256/validation/rehearsal/journal
+mode. Accepted revalidation binds the canonical backup UUID to `<backupId>.sqlite` and re-observes artifact/hash,
+schema, active config, PASS outcomes and journal mode; reason/source/time remain bounded historical metadata. The
+artifact is copied into a unique controlled rehearsal directory, opened through the same `MigrationRunner`
+and validator, required to reach schema 11, closed and removed. Only then are the database and manifest promoted; no
+existing known-good backup is overwritten or retention-pruned.
+
+Migration preflight now rejects every unknown history row, malformed identity/time/result or hash, duplicate APPLIED
+version, APPLIED checksum/description mismatch, version gap, schema-without-history ambiguity and FAILED attempt beyond
+the immediate next pending version. FAILED rows within the APPLIED prefix or at that next version are legitimate retry
+evidence only when their timestamps lie between the prior-version and same-version APPLIED completion boundaries;
+equal timestamps are allowed. Their checksum/description text is diagnostic rather than immutable definition
+authority. The inspection connection closes before the backup fence after sealing one immutable snapshot of the
+complete ordered APPLIED/FAILED attempt ledger and derived APPLIED prefix. After backup, a fresh connection must
+produce the identical full-ledger snapshot before any migration. SQLite statements and APPLIED evidence share one
+transaction. Rollback-confirmed failure may
+record a separate truthful FAILED attempt; commit acknowledgement/rollback uncertainty is not mislabeled. Migration 11
+backfills only missing zeroed Prestige rows for historical stage-only players so accepted atomic player initialization
+survives supported upgrades.
+
+Before service publication, production independently validates the database and compares its latest APPLIED config
+history to the checksum-verified filesystem pointer. It rejects unsupported/future configuration schema, absent pointer
+with authoritative rows, stale pointer, persisted unknown stages, and one-sided stage/Prestige rows. It never repairs or
+recreates authoritative player data automatically. Fatal persistence startup disables MaddPrestige before exposing an
+apparently healthy runtime and does not crash Paper. The complete protocol and evidence are in
+`V2_PHASE8C_IMPLEMENTATION.md` and `V2_PHASE8C_BACKUP_RESTORE_EVIDENCE.md`.
 
 HikariCP integration solely for MySQL/MariaDB, MySQL/MariaDB production repositories, three-backend parity suites,
 external row-lock/deadlock semantics, external-DB outage/failover qualification and multi-process/shared-database
@@ -382,7 +416,10 @@ The production root also binds the accepted Phase 6 plus Phase 5 integration sch
 doctor/why/player, manual Prestige and GUI services. Its immutable filesystem pointer is now a restart input:
 `activeDocuments()` validates the exact manifest, per-document checksums, aggregate hash and inventory, and startup
 requires matching durable APPLIED history. The exact stored revision is hydrated without a synthetic apply. Seed files
-are templates only; no pointer means dormant runtime with initial setup available.
+are templates only. No pointer is dormant only when live/config-dependent authority is absent; migration metadata,
+append-only audit rows and non-APPLIED configuration attempts/documents are the deliberate pointer-independent history.
+APPLIED config, progression/currency/requirement/season, operation/recovery, remap/lease or transition/reservation
+authority without the pointer rejects startup before service publication.
 
 Canonical apply temporarily withdraws operation publication, reconciles configuration-dependent optional integration
 state in deterministic order, hydrates the exact new revision, refreshes schema/completion/runtime snapshots, and only

@@ -35,12 +35,13 @@ import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompil
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompiler;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration;
 import net.maddkraft.maddprestige.integrations.luckperms.LuckPermsRankAdapter;
-import net.maddkraft.maddprestige.persistence.FileBackupService;
 import net.maddkraft.maddprestige.persistence.admin.AtomicConfigurationFileStore;
 import net.maddkraft.maddprestige.persistence.admin.SqliteConfigurationHistoryStore;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
 import net.maddkraft.maddprestige.persistence.recovery.PendingOperationRecoveryService;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteFoundation;
+import net.maddkraft.maddprestige.persistence.sqlite.SqliteBackupService;
+import net.maddkraft.maddprestige.persistence.sqlite.SqliteDatabaseValidator;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteMigrations;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteManualProgressRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteOperationRepository;
@@ -99,13 +100,16 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
                 Files.createFile(database);
             }
             SqliteFoundation foundation = new SqliteFoundation(database);
+            var migrations = SqliteMigrations.phaseEightC();
             new MigrationRunner(foundation,
-                    new FileBackupService(database, dataDirectory.resolve("backups"), clock), clock)
-                    .migrate(SqliteMigrations.phaseSix());
+                    new SqliteBackupService(foundation, dataDirectory.resolve("backups"), migrations, clock), clock)
+                    .migrate(migrations);
+            SqliteDatabaseValidator.validate(database, migrations);
             AtomicConfigurationFileStore snapshots = new AtomicConfigurationFileStore(
                     dataDirectory.resolve("configuration"), clock);
             Optional<net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision> startup =
                     StartupConfigurationLoader.load(snapshots, new SqliteConfigurationHistoryStore(foundation));
+            StartupPersistenceCompatibility.assess(foundation, startup);
 
             registry = new ProviderRegistry();
             scheduler = new BukkitPaperTaskScheduler(this);
@@ -145,7 +149,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             ready = true;
             getServer().getServicesManager().register(MaddPrestigeService.class, runtime.service(), this,
                     ServicePriority.Normal);
-            getLogger().info("MaddPrestige V2 Phase 8B ready; configuration is "
+            getLogger().info("MaddPrestige V2 Phase 8C candidate ready; configuration is "
                     + (runtime.operational() ? "active at " + runtime.revision().orElseThrow().value()
                             : runtime.authoritativeRevision().map(value ->
                                     "fail-closed pending compatible composition at " + value.value())

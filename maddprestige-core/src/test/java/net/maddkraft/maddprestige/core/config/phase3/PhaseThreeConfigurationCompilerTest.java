@@ -93,6 +93,20 @@ class PhaseThreeConfigurationCompilerTest {
                         && finding.path().contains("target")));
     }
 
+    @Test
+    @DisplayName("[A63] Unknown future requirement or reward schemas fail closed")
+    void rejectsFutureDocumentSchemas() {
+        var requirementFailure = compile(
+                validRequirements().replace("schema-version: 3", "schema-version: 99"), validRewards());
+        var rewardFailure = compile(
+                validRequirements(), validRewards().replace("schema-version: 3", "schema-version: 99"));
+
+        assertTrue(requirementFailure.validation().findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase3.schema.version")));
+        assertTrue(rewardFailure.validation().findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase3.schema.version")));
+    }
+
     private static PhaseThreeConfigurationCompilation compile(String requirements, String rewards) {
         Map<String, String> documents = Map.of("requirements.yml", requirements, "rewards.yml", rewards);
         return new PhaseThreeConfigurationCompiler().compile(

@@ -75,6 +75,9 @@ public final class PhaseThreeConfigurationCompiler {
                     ValidationReport.of(findings));
         }
         int schema = integer(requirementRoot.get("schema-version"), 3, "requirements.schema-version", findings);
+        validateSchema(compiled, REQUIREMENTS_DOCUMENT, schema, "requirements.schema-version", findings);
+        int rewardSchema = integer(rewardRoot.get("schema-version"), 3, "rewards.schema-version", findings);
+        validateSchema(compiled, REWARDS_DOCUMENT, rewardSchema, "rewards.schema-version", findings);
         int maximumDepth = integer(requirementRoot.get("maximum-depth"), 16,
                 "requirements.maximum-depth", findings);
         Map<RequirementId, RequirementDefinition> definitions = definitions(
@@ -575,6 +578,19 @@ public final class PhaseThreeConfigurationCompiler {
         } catch (RuntimeException exception) {
             findings.add(error("phase3.integer.invalid", path, "Expected an integer.", "Use a whole number."));
             return fallback;
+        }
+    }
+
+    private static void validateSchema(
+            CompiledConfiguration compiled,
+            String document,
+            int schema,
+            String path,
+            List<ValidationFinding> findings) {
+        if (compiled.documents().containsKey(document) && schema != 3) {
+            findings.add(error("phase3.schema.version", path,
+                    "Supported schema version is 3, but found " + schema + ".",
+                    "Migrate " + document + " to schema-version: 3 before activation."));
         }
     }
 

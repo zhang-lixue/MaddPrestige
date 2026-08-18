@@ -9,6 +9,11 @@ persistence backend. MySQL/MariaDB production support and semantic parity are de
 re-authorized. This narrows the release scope without weakening SQLite correctness or removing the backend-neutral
 boundaries retained for a proper future external-SQL implementation. A64 is deferred, not satisfied.
 
+**Phase 8C implementation note — 2026-08-17:** the owner-authorized review candidate implements coordinated
+SQLite-native backup, strict manifest/hash/integrity/history validation, disposable restore rehearsal, populated
+prefix-to-current migration qualification and DB/config startup compatibility. This is candidate evidence, not owner
+acceptance and not Phase 9 live MaddKraft migration evidence. A63 remains Partial; A64 remains Later.
+
 ---
 
 ## 0. Executive mandate

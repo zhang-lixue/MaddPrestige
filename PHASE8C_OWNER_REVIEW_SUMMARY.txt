@@ -1,0 +1,113 @@
+MaddPrestige V2 Phase 8C - Owner Review Summary
+Generated: 2026-08-18 America/Los_Angeles
+Branch: v2/phase-8
+Accepted starting HEAD: c71709ccd3e6c375bc6a9490856024979a66c17e
+Worktree policy: UNSTAGED / UNCOMMITTED; no push, PR, merge, or main change
+
+RESULT
+Phase 8C SQLite Persistence, Migration, Backup & Recovery Hardening is implemented and qualified as an owner-review
+candidate. Phase 8B remains owner-accepted. Phase 8D/8E/8F and Phase 9 were not started. No MySQL/MariaDB production
+implementation or HikariCP external-SQL integration was added.
+
+IMPLEMENTATION
+- Production migrations use Xerial's SQLite native backup API inside a fair foundation-wide connection fence.
+- Each unique partial snapshot must pass independent header/integrity/foreign-key/history/schema/configuration reads,
+  streaming SHA-256 and isolated same-path restore rehearsal before database+manifest promotion.
+- Existing accepted backups are never overwritten or retention-pruned; failed owned partial/rehearsal paths are cleaned.
+- A single migration-derived schema authority reconstructs every claimed prefix and checks all MaddPrestige tables,
+  columns/properties, correctness UNIQUE/partial-UNIQUE constraints, foreign keys and table constraints.
+- Migration history accepts only exact known contiguous APPLIED prefixes, immutable APPLIED checksum/description, and
+  causally ordered FAILED attempts within that prefix or at the immediate next pending version; later/unknown attempts,
+  a same-version failure after APPLIED, or a next-version failure before its predecessor fail closed. Equality is valid.
+- Schema SQL comparison normalizes only unquoted case and external whitespace. Quoted literal case, internal whitespace
+  and doubled-delimiter escapes remain exact correctness authority.
+- The complete ordered APPLIED/FAILED attempt ledger, not only the derived APPLIED prefix, must remain identical across
+  pre-migration backup sealing.
+- Migration statements and APPLIED record remain transactional; committed, rolled-back and uncertain failure classes
+  are diagnosed without inventing success/failure evidence.
+- Accepted backup manifests rebind canonical UUID/artifact identity, SHA, schema/config, PASS results and observed
+  journal mode; historical reason/source/time receive bounded syntax validation because they are not re-derivable.
+- Forward migration 11 restores atomic stage/Prestige pairing for historical stage-only players without rewriting
+  existing Prestige state.
+- Startup classifies persisted authority when the filesystem pointer is absent. It permits only migration metadata,
+  append-only audit rows and non-APPLIED configuration attempts/documents, and rejects every live/config-dependent
+  authority class before publishing MaddPrestigeService.
+
+PROCESS QUALIFICATION
+Paper 26.1.2 build 74 / Java 25 / actual shaded distribution:
+- populated schema-10 -> 11 first boot: 8/8 PASS
+- unchanged exact restart: 3/3 PASS
+- native backup manifest/hash/integrity/rehearsal independently revalidated
+- existing player, stage-only backfill, NEEDS_RECONCILIATION, UNCERTAIN action and recovery evidence preserved
+- real rank-up and Prestige completed with distinct request/durable identities
+- exact stage/Prestige revisions, operation/recovery counts and accepted backup count retained on restart
+Sanitized evidence: PHASE8C_PAPER_QUALIFICATION.log
+
+Focused correction evidence before the final reactor runs:
+- persistence correction-pass-2 migration/backup/schema tests: 42 PASS
+- Paper no-pointer/startup publication tests: 11 PASS
+- complete fresh/schema-prefix migration matrix: 4 PASS
+
+FINAL CONSECUTIVE CLEAN VERIFICATION
+Command (twice, with no intervening source/documentation edits):
+  .\mvnw.cmd --no-transfer-progress clean verify
+
+Run 1: BUILD SUCCESS
+Run 2: BUILD SUCCESS
+Aggregate: 476 tests / 90 suites / 0 failures / 0 errors / 0 skips
+Checkstyle: PASS, zero violations
+Maven Enforcer: PASS
+Dependency convergence: PASS
+
+Module totals:
+- maddprestige-api: 12 tests / 7 suites
+- maddprestige-core: 159 tests / 33 suites
+- maddprestige-persistence: 119 tests / 17 suites
+- maddprestige-integrations: 66 tests / 10 suites
+- maddprestige-platform-paper: 50 tests / 14 suites
+- maddprestige-testkit: 58 tests / 4 suites
+- maddprestige-distribution: 12 tests / 5 suites
+
+REPRODUCIBLE ARTIFACTS
+Distribution:
+- path: maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar
+- size: 16,393,824 bytes
+- verify 1 SHA-256: DC3FB83120485FA91FC9E07B6B84A03D89926B9964B1CC0030A32A7EE886FC92
+- verify 2 SHA-256: DC3FB83120485FA91FC9E07B6B84A03D89926B9964B1CC0030A32A7EE886FC92
+
+Aggregate SBOM:
+- path: target/bom.json
+- size: 191,041 bytes
+- verify 1 SHA-256: 91B9326A54B1E56D6B31437C2AE2D93B748FCB065CF0DE19AF9F2A51981346ED
+- verify 2 SHA-256: 91B9326A54B1E56D6B31437C2AE2D93B748FCB065CF0DE19AF9F2A51981346ED
+
+Evidence logs:
+- PHASE8C_VERIFY_1.log: 59,761 bytes; SHA-256
+  446BEF034DB7D339C80304F1221E2C617760D987EFEE60A6534B32B88EF4F138
+- PHASE8C_VERIFY_2.log: 59,761 bytes; SHA-256
+  868F4EA5A2258479E3F35B2742FA206BCFE5293AAA05E8FEDC88A78D3D8646D3
+- PHASE8C_PAPER_QUALIFICATION.log: 3,797 bytes; SHA-256
+  5D2CE39093A59C662B23CFB3801424A55B512C411699FAA8505F242770BD73F9
+
+ACCEPTANCE ACCOUNTING
+- A63: Partial. Phase 8C supplies populated synthetic/prefix and real-Paper SQLite hardening evidence; Phase 9 retains
+  actual MaddKraft clone/deployment migration qualification.
+- A64: Later / deferred post-2.0. No support claim.
+- Mechanical ledger: 54 Satisfied / 21 Partial / 1 Later (unchanged).
+
+FINAL AUDIT
+- git diff --check: PASS
+- staged paths: 0
+- protected V1 Java changes: 0
+- unsafe SQL dynamic values introduced: 0; fixture/harness variable values use prepared bindings
+- process execution/external sqlite3 dependency in production: 0
+- secrets/live MaddKraft data: 0
+- optional/vendor classes shaded beyond the accepted distribution set: 0
+- MySQL/MariaDB production implementation: 0
+- Phase 8D+ production work: 0
+
+OWNER BUNDLE
+target/MaddPrestige_Phase8C_Owner_Review.zip contains the qualified distribution, aggregate SBOM, this summary,
+sanitized Paper evidence, both verification logs, exact file manifest, authoritative updated documents, Phase 8C design
+and matrices, and first-party qualification harness source. It excludes third-party JARs, disposable runtime/world/DB
+data, Maven caches, secrets and live MaddKraft data.

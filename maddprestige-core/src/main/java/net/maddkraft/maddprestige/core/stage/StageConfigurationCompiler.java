@@ -59,6 +59,11 @@ public final class StageConfigurationCompiler {
         ArrayList<ValidationFinding> findings = new ArrayList<>();
         reportUnknownKeys(root, TOP_LEVEL_KEYS, "progression", findings);
         int schemaVersion = integer(root.get("schema-version"), "progression.schema-version", 2, findings);
+        if (schemaVersion < 2 || schemaVersion > 3) {
+            findings.add(error("stage.schema.version", "progression.schema-version",
+                    "Supported progression schema versions are 2 and 3, but found " + schemaVersion + ".",
+                    "Migrate the document to schema-version: 3 before activation."));
+        }
         boolean active = bool(root.get("active"), "progression.active", false, findings);
         ReconciliationPolicy reconciliation = reconciliation(root.get("reconciliation-policy"), findings);
         Map<StageId, StageDefinition> stages = stages(root.get("stages"), findings);
