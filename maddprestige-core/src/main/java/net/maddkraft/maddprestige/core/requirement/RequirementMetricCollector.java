@@ -36,6 +36,7 @@ public final class RequirementMetricCollector {
         LinkedHashMap<RequirementId, MetricSample> immediate = new LinkedHashMap<>();
         for (var entry : grouped.entrySet()) {
             ProviderId providerId = entry.getKey();
+            providers.refreshHealth(providerId);
             var snapshot = providers.find(providerId);
             var provider = providers.provider(providerId);
             Long pinnedGeneration = pinnedGenerations.get(providerId);

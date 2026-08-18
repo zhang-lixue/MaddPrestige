@@ -47,6 +47,19 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
         }
     }
 
+    /** Loads the exact checksum-verified active revision for production restart composition. */
+    public Optional<Map<String, String>> activeDocuments() {
+        try {
+            Optional<String> active = readPointer();
+            if (active.isEmpty()) {
+                return Optional.empty();
+            }
+            return Optional.of(readRevision(active.orElseThrow()).documents());
+        } catch (IOException exception) {
+            throw new PersistenceException("Could not load the active configuration revision", exception);
+        }
+    }
+
     @Override
     public PreparedConfigurationSnapshot prepare(
             ConfigRevisionId revisionId,
@@ -62,7 +75,7 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
                 throw new PersistenceException("Configuration revision directory already exists: "
                         + revisionId.value());
             }
-            Path temporary = inside(revisions.resolve(".tmp-" + revisionId.value() + "-" + UUID.randomUUID()));
+            Path temporary = inside(revisions.resolve(".tmp-" + UUID.randomUUID()));
             Files.createDirectory(temporary);
             try {
                 writeDocuments(temporary, configuration);
@@ -74,7 +87,8 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
             }
             return new Prepared(target, previous, backup, revisionId, configuration);
         } catch (IOException exception) {
-            throw new PersistenceException("Could not prepare atomic configuration revision", exception);
+            throw new PersistenceException("Could not prepare atomic configuration revision: "
+                    + exception.getClass().getSimpleName() + ": " + safeMessage(exception), exception);
         }
     }
 
@@ -93,39 +107,52 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
         if (previous.isEmpty()) {
             return new BackupMetadata("initial-empty", RevisionHasher.hashText(""), Instant.now(clock), true);
         }
-        Path prior = inside(revisions.resolve(previous.orElseThrow()));
+        RevisionContents contents = readRevision(previous.orElseThrow());
+        return new BackupMetadata("revision-" + previous.orElseThrow(), contents.hash(), Instant.now(clock), true);
+    }
+
+    private RevisionContents readRevision(String revision) throws IOException {
+        Path prior = inside(revisions.resolve(revision));
         Path manifest = inside(prior.resolve(MANIFEST));
         if (!Files.isRegularFile(manifest)) {
-            throw new PersistenceException("Previous active configuration manifest is missing");
+            throw new PersistenceException("Active configuration manifest is missing");
         }
         String manifestText = Files.readString(manifest, StandardCharsets.UTF_8);
         String hash = manifestText.lines().filter(line -> line.startsWith("content-hash="))
                 .map(line -> line.substring("content-hash=".length())).findFirst()
-                .orElseThrow(() -> new PersistenceException("Previous configuration manifest has no content hash"));
+                .orElseThrow(() -> new PersistenceException("Active configuration manifest has no content hash"));
         LinkedHashMap<String, String> documents = new LinkedHashMap<>();
         for (String line : manifestText.lines().filter(value -> value.startsWith("document=")).toList()) {
             int separator = line.lastIndexOf(':');
             if (separator <= "document=".length()) {
-                throw new PersistenceException("Previous configuration manifest has a malformed document entry");
+                throw new PersistenceException("Active configuration manifest has a malformed document entry");
             }
             String name = line.substring("document=".length(), separator);
             String expected = line.substring(separator + 1);
             validateDocumentName(name);
             Path document = inside(prior.resolve(name));
             if (!document.getParent().equals(prior) || !Files.isRegularFile(document)) {
-                throw new PersistenceException("Previous configuration document is missing: " + name);
+                throw new PersistenceException("Active configuration document is missing: " + name);
             }
             String content = Files.readString(document, StandardCharsets.UTF_8);
             if (!RevisionHasher.hashText(content).value().equals(expected)) {
-                throw new PersistenceException("Previous configuration document checksum failed: " + name);
+                throw new PersistenceException("Active configuration document checksum failed: " + name);
             }
             documents.put(name, content);
         }
         if (documents.isEmpty() || !RevisionHasher.hashDocuments(documents).value().equals(hash)) {
-            throw new PersistenceException("Previous configuration revision checksum failed");
+            throw new PersistenceException("Active configuration revision checksum failed");
         }
-        return new BackupMetadata("revision-" + previous.orElseThrow(), new ContentHash(hash), Instant.now(clock),
-                true);
+        java.util.Set<String> expectedNames = new java.util.LinkedHashSet<>(documents.keySet());
+        expectedNames.add(MANIFEST);
+        try (var entries = Files.list(prior)) {
+            java.util.Set<String> actualNames = entries.map(path -> path.getFileName().toString())
+                    .collect(java.util.stream.Collectors.toCollection(java.util.LinkedHashSet::new));
+            if (!actualNames.equals(expectedNames)) {
+                throw new PersistenceException("Active configuration revision inventory changed");
+            }
+        }
+        return new RevisionContents(new ContentHash(hash), Map.copyOf(documents));
     }
 
     private Optional<String> readPointer() throws IOException {
@@ -208,6 +235,17 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
             throw new PersistenceException("Configuration path escaped the MaddPrestige-owned root");
         }
         return normalized;
+    }
+
+    private static String safeMessage(IOException failure) {
+        String message = failure.getMessage();
+        if (message == null || message.isBlank()) {
+            return "no operating-system detail";
+        }
+        return message.length() > 300 ? message.substring(0, 300) : message;
+    }
+
+    private record RevisionContents(ContentHash hash, Map<String, String> documents) {
     }
 
     private final class Prepared implements PreparedConfigurationSnapshot {

@@ -34,6 +34,7 @@ class AtomicConfigurationFileStoreTest {
         first.activate();
 
         assertEquals(Optional.of(firstId), store.currentRevision());
+        assertEquals(Optional.of(Map.of("progression.yml", firstYaml)), store.activeDocuments());
         assertEquals(firstYaml, Files.readString(root.resolve("revisions").resolve(firstId.value())
                 .resolve("progression.yml"), StandardCharsets.UTF_8));
 
@@ -45,6 +46,7 @@ class AtomicConfigurationFileStoreTest {
         assertEquals(Optional.of(secondId), store.currentRevision());
         second.restorePrevious();
         assertEquals(Optional.of(firstId), store.currentRevision());
+        assertEquals(Optional.of(Map.of("progression.yml", firstYaml)), store.activeDocuments());
     }
 
     @Test
@@ -60,6 +62,7 @@ class AtomicConfigurationFileStoreTest {
                 compiled(Map.of("../outside.yml", "unsafe: true\n"))));
         Files.writeString(root.resolve("revisions").resolve(firstId.value()).resolve("progression.yml"),
                 "tampered: true\n", StandardCharsets.UTF_8);
+        assertThrows(PersistenceException.class, store::activeDocuments);
         assertThrows(PersistenceException.class, () -> store.prepare(new ConfigRevisionId("revision_three"),
                 compiled(Map.of("progression.yml", "active: true\n"))));
         assertEquals(Optional.of(firstId), store.currentRevision());
@@ -100,6 +103,19 @@ class AtomicConfigurationFileStoreTest {
                 StandardCharsets.UTF_8);
         assertThrows(PersistenceException.class, extra::activate);
         assertEquals(Optional.of(activeId), store.currentRevision());
+    }
+
+    @Test
+    @DisplayName("[OR8B-09] Snapshot temporary paths remain bounded under a deep disposable server root")
+    void supportsDeepDisposableServerRoot() {
+        Path root = temporaryDirectory.resolve("deep-server-root-1234567890123456789012345678901234567890")
+                .resolve("plugins").resolve("MaddPrestige").resolve("configuration");
+        AtomicConfigurationFileStore store = new AtomicConfigurationFileStore(root, Clock.systemUTC());
+        ConfigRevisionId revision = new ConfigRevisionId("r_12345678901234567890123456789012");
+
+        store.prepare(revision, compiled(Map.of("progression.yml", "active: true\n"))).activate();
+
+        assertEquals(Optional.of(revision), store.currentRevision());
     }
 
     private static Path revision(Path root, ConfigRevisionId id) {

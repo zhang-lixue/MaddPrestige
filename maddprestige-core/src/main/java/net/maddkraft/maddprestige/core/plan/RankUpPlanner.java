@@ -44,7 +44,7 @@ public final class RankUpPlanner {
             return CompletableFuture.failedFuture(new SecurityException(
                     "Caller-composed rank-up requests are not an authorization boundary"));
         }
-        OperationId operationId = OperationId.random();
+        OperationId operationId = distinctOperationId(request.requestId());
         ArrayList<String> blockers = new ArrayList<>();
         LinkedHashSet<ProviderId> unavailable = new LinkedHashSet<>();
         validateRequirementBinding(request, blockers);
@@ -59,6 +59,14 @@ public final class RankUpPlanner {
                 .toArray(CompletableFuture[]::new);
         return CompletableFuture.allOf(all).handle((ignored, failure) -> assemble(operationId, request, costs,
                 rewards, costFutures, rewardFutures, blockers, unavailable));
+    }
+
+    private static OperationId distinctOperationId(java.util.UUID requestId) {
+        OperationId candidate;
+        do {
+            candidate = OperationId.random();
+        } while (candidate.value().equals(requestId));
+        return candidate;
     }
 
     private static List<CompletableFuture<CostPreflight>> preflightCosts(List<ProposedCost> proposals) {
@@ -209,6 +217,7 @@ public final class RankUpPlanner {
             Set<ProviderId> unavailable,
             boolean required) {
         Long generation = request.pinnedProviderGenerations().get(providerId);
+        providers.refreshHealth(providerId);
         var snapshot = providers.find(providerId);
         if (generation == null || snapshot.isEmpty() || snapshot.orElseThrow().generation() != generation
                 || snapshot.orElseThrow().activation() != ActivationState.ACTIVE
@@ -308,7 +317,7 @@ public final class RankUpPlanner {
                         request.pinnedProviderGenerations(), evaluation, costs, rewards,
                         Optional.of(request.targetStage().projection()), projectionRequest, operationPlan)
                 : RankUpAuthorization.denied();
-        return new RankUpPlan(operationId, request.playerId(), request.playerState().stageId(),
+        return new RankUpPlan(operationId, request.requestId(), request.playerId(), request.playerState().stageId(),
                 request.targetStage().id(), request.playerState().stateRevision(),
                 request.playerState().configRevision(), request.configRevision(), request.pinnedProviderGenerations(),
                 evaluation, costs, rewards,

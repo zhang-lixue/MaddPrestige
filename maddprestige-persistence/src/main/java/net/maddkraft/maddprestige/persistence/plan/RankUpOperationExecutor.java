@@ -9,6 +9,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
 import net.maddkraft.maddprestige.api.action.ActionExecutionStatus;
@@ -32,6 +34,7 @@ import net.maddkraft.maddprestige.core.plan.RankUpExecutionResult;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
 import net.maddkraft.maddprestige.core.plan.RankUpPlan;
 import net.maddkraft.maddprestige.core.plan.StageTransitionCommitter;
+import net.maddkraft.maddprestige.core.event.OperationLifecycleListener;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
 import net.maddkraft.maddprestige.core.stage.StageTransitionFence;
@@ -48,6 +51,9 @@ public final class RankUpOperationExecutor {
     private final StageTransitionCommitter stageCommitter;
     private final StageTransitionFence transitionFence;
     private final Executor workerExecutor;
+    private final OperationLifecycleListener lifecycleEvents;
+    private final Predicate<RankUpPlan> eventRevalidator;
+    private final Consumer<RankUpPlan> postPreInitializer;
 
     public RankUpOperationExecutor(
             OperationRepository operations,
@@ -56,16 +62,59 @@ public final class RankUpOperationExecutor {
             StageTransitionCommitter stageCommitter,
             StageTransitionFence transitionFence,
             Executor workerExecutor) {
+        this(operations, providers, activeRevision, stageCommitter, transitionFence, workerExecutor,
+                OperationLifecycleListener.NONE, ignored -> true, ignored -> { });
+    }
+
+    public RankUpOperationExecutor(
+            OperationRepository operations,
+            ProviderRegistry providers,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionCommitter stageCommitter,
+            StageTransitionFence transitionFence,
+            Executor workerExecutor,
+            OperationLifecycleListener lifecycleEvents) {
+        this(operations, providers, activeRevision, stageCommitter, transitionFence, workerExecutor,
+                lifecycleEvents, ignored -> true, ignored -> { });
+    }
+
+    public RankUpOperationExecutor(
+            OperationRepository operations,
+            ProviderRegistry providers,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionCommitter stageCommitter,
+            StageTransitionFence transitionFence,
+            Executor workerExecutor,
+            OperationLifecycleListener lifecycleEvents,
+            Predicate<RankUpPlan> eventRevalidator) {
+        this(operations, providers, activeRevision, stageCommitter, transitionFence, workerExecutor, lifecycleEvents,
+                eventRevalidator, ignored -> { });
+    }
+
+    public RankUpOperationExecutor(
+            OperationRepository operations,
+            ProviderRegistry providers,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionCommitter stageCommitter,
+            StageTransitionFence transitionFence,
+            Executor workerExecutor,
+            OperationLifecycleListener lifecycleEvents,
+            Predicate<RankUpPlan> eventRevalidator,
+            Consumer<RankUpPlan> postPreInitializer) {
         this.operations = Objects.requireNonNull(operations, "operation repository");
         this.providers = Objects.requireNonNull(providers, "provider registry");
         this.activeRevision = Objects.requireNonNull(activeRevision, "active revision supplier");
         this.stageCommitter = Objects.requireNonNull(stageCommitter, "stage committer");
         this.transitionFence = Objects.requireNonNull(transitionFence, "stage transition fence");
         this.workerExecutor = Objects.requireNonNull(workerExecutor, "worker executor");
+        this.lifecycleEvents = Objects.requireNonNull(lifecycleEvents, "lifecycle events");
+        this.eventRevalidator = Objects.requireNonNull(eventRevalidator, "event revalidator");
+        this.postPreInitializer = Objects.requireNonNull(postPreInitializer, "post-PRE initializer");
     }
 
     public CompletionStage<RankUpExecutionResult> execute(RankUpPlan plan) {
-        return CompletableFuture.supplyAsync(() -> executeOnWorker(plan), workerExecutor);
+        return CompletableFuture.supplyAsync(() -> executeOnWorker(plan), workerExecutor)
+                .thenApply(result -> publishPostIfDurable(plan, result));
     }
 
     private RankUpExecutionResult executeOnWorker(RankUpPlan plan) {
@@ -81,15 +130,39 @@ public final class RankUpOperationExecutor {
             return result(plan, RankUpExecutionStatus.STALE_GENERATION,
                     "Configuration or provider generation changed before persistence/mutation");
         }
+        try {
+            if (!lifecycleEvents.beforeRankUp(plan)) {
+                return result(plan, RankUpExecutionStatus.BLOCKED,
+                        "Rank-up was cancelled by a pre-operation lifecycle listener");
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            return result(plan, RankUpExecutionStatus.BLOCKED,
+                    "Rank-up pre-operation listener failed; no journal or effect was created");
+        }
+        if (!postPreAuthorityMatches(plan)) {
+            return result(plan, RankUpExecutionStatus.STALE_GENERATION,
+                    "Player, configuration, or provider state changed during pre-operation event delivery");
+        }
+        RankUpExecutionResult duplicateBeforeInitialization = duplicate(plan);
+        if (duplicateBeforeInitialization != null) {
+            return duplicateBeforeInitialization;
+        }
+        try {
+            postPreInitializer.accept(plan);
+        } catch (RuntimeException | LinkageError failure) {
+            return result(plan, RankUpExecutionStatus.BLOCKED,
+                    "Player initialization failed after post-PRE revalidation and before journaling");
+        }
+        if (!postPreAuthorityMatches(plan)) {
+            return result(plan, RankUpExecutionStatus.STALE_GENERATION,
+                    "Player, configuration, or provider state changed before journal insertion");
+        }
+        RankUpExecutionResult duplicateAfterInitialization = duplicate(plan);
+        if (duplicateAfterInitialization != null) {
+            return duplicateAfterInitialization;
+        }
         var duplicate = operations.findByIdempotency(plan.operationPlan().operationType(), plan.playerId(),
                 plan.operationPlan().idempotencyKey());
-        if (duplicate.isPresent()
-                && (!duplicate.orElseThrow().operationId().equals(plan.operationId())
-                        || duplicate.orElseThrow().state() != OperationState.PREPARED)) {
-            return result(plan, RankUpExecutionStatus.DUPLICATE,
-                    "Existing operation has the same idempotency tuple: "
-                            + duplicate.orElseThrow().operationId());
-        }
         if (duplicate.isEmpty()) {
             try {
                 operations.insertPrepared(plan.operationPlan());
@@ -123,6 +196,27 @@ public final class RankUpOperationExecutor {
                 transitionFence.release(permit, Instant.now());
             }
         }
+    }
+
+    private boolean postPreAuthorityMatches(RankUpPlan plan) {
+        try {
+            return bindingsMatch(plan) && eventRevalidator.test(plan);
+        } catch (RuntimeException | LinkageError failure) {
+            return false;
+        }
+    }
+
+    private RankUpExecutionResult duplicate(RankUpPlan plan) {
+        var duplicate = operations.findByIdempotency(plan.operationPlan().operationType(), plan.playerId(),
+                plan.operationPlan().idempotencyKey());
+        if (duplicate.isPresent()
+                && (!duplicate.orElseThrow().operationId().equals(plan.operationId())
+                        || duplicate.orElseThrow().state() != OperationState.PREPARED)) {
+            return result(plan, RankUpExecutionStatus.DUPLICATE,
+                    "Existing operation has the same idempotency tuple: "
+                            + duplicate.orElseThrow().operationId());
+        }
+        return null;
     }
 
     private RankUpExecutionResult executeWhileFenced(RankUpPlan plan) {
@@ -270,6 +364,21 @@ public final class RankUpOperationExecutor {
         operations.transition(plan.operationId(), OperationState.STATE_COMMITTED, OperationState.COMPLETED);
         return result(plan, RankUpExecutionStatus.COMPLETED,
                 "Costs verified, external projection processed, authoritative stage committed, and rewards processed");
+    }
+
+    private RankUpExecutionResult publishPostIfDurable(RankUpPlan plan, RankUpExecutionResult result) {
+        boolean durableTerminal = operations.find(plan.operationId()).map(stored -> switch (stored.state()) {
+            case COMPLETED, COMPENSATED, FAILED, NEEDS_RECONCILIATION -> true;
+            default -> false;
+        }).orElse(false);
+        if (durableTerminal) {
+            try {
+                lifecycleEvents.afterRankUp(plan, result);
+            } catch (RuntimeException | LinkageError ignored) {
+                // Post-event failures cannot change the already durable terminal outcome.
+            }
+        }
+        return result;
     }
 
     private RankUpExecutionResult validateProjectionBeforeCosts(RankUpPlan plan) {
@@ -481,6 +590,7 @@ public final class RankUpOperationExecutor {
     }
 
     private boolean bindingMatches(ProviderId id, long generation) {
+        providers.refreshHealth(id);
         var snapshot = providers.find(id);
         return snapshot.isPresent() && snapshot.orElseThrow().generation() == generation
                 && snapshot.orElseThrow().activation() == ActivationState.ACTIVE

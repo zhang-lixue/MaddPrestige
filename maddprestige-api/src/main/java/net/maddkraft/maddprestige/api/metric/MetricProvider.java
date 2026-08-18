@@ -7,7 +7,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.provider.Provider;
+import net.maddkraft.maddprestige.api.annotation.Experimental;
 
+@Experimental
 public interface MetricProvider extends Provider {
     Collection<MetricDescriptor> metrics();
 

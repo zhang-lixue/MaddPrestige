@@ -26,6 +26,7 @@ import net.maddkraft.maddprestige.core.stage.StageProjection;
  */
 public record RankUpPlan(
         OperationId operationId,
+        UUID requestId,
         UUID playerId,
         StageId sourceStage,
         StageId targetStage,
@@ -45,6 +46,7 @@ public record RankUpPlan(
         RankUpAuthorization authorization) {
     public RankUpPlan {
         operationId = Objects.requireNonNull(operationId, "operation ID");
+        requestId = Objects.requireNonNull(requestId, "request ID");
         playerId = Objects.requireNonNull(playerId, "player ID");
         sourceStage = Objects.requireNonNull(sourceStage, "source stage");
         targetStage = Objects.requireNonNull(targetStage, "target stage");
@@ -67,6 +69,31 @@ public record RankUpPlan(
         if (executionAllowed != blockers.isEmpty()) {
             throw new IllegalArgumentException("Execution allowance must agree with blockers");
         }
+    }
+
+    public RankUpPlan(
+            OperationId operationId,
+            UUID playerId,
+            StageId sourceStage,
+            StageId targetStage,
+            long expectedStateRevision,
+            ConfigRevisionId expectedPlayerConfigRevision,
+            ConfigRevisionId configRevision,
+            Map<ProviderId, Long> providerGenerations,
+            BoundRequirementEvaluation requirementEvaluation,
+            List<PlannedCost> costs,
+            List<PlannedReward> rewards,
+            Optional<StageProjection> externalRankProjection,
+            Optional<RankProjectionRequest> rankProjectionRequest,
+            Set<ProviderId> unavailableProviders,
+            List<String> blockers,
+            boolean executionAllowed,
+            OperationPlan operationPlan,
+            RankUpAuthorization authorization) {
+        this(operationId, UUID.randomUUID(), playerId, sourceStage, targetStage, expectedStateRevision,
+                expectedPlayerConfigRevision, configRevision, providerGenerations, requirementEvaluation, costs,
+                rewards, externalRankProjection, rankProjectionRequest, unavailableProviders, blockers,
+                executionAllowed, operationPlan, authorization);
     }
 
     public RequirementEvaluationResult requirements() {

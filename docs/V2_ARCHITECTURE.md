@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
-**Architecture baseline:** Phase 7 correction pass 1, 2026-08-17
-**Runtime status:** the V2 Paper entry is active and composes accepted Phase 5 capabilities with Phase 7 native providers; the full Phase 6 setup/GUI adapter remains not live-bound, so A02 stays Partial
+**Architecture baseline:** Phase 8B implementation, 2026-08-17
+**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, public service/provider bridge, lifecycle events and Placeholder publisher; owner API review and later qualification remain
 
 ## Module graph
 
@@ -310,7 +310,81 @@ Migration 9 preserves a migration-8 row only when its operation journal is nonte
 
 Direct `SqlitePlayerStageRepository` insert/import/update/update-with-history paths and `SqlitePrestigeLifecycleRepository`'s internal commit do not mint durable random-owner leases. Each opens the shared immediate transaction, derives the current source where applicable, checks source plus target against pending remap state, and writes in that same transaction. This serializes import/bootstrap and any direct/manual repository caller against remap without creating crash-orphanable authority. The nested Prestige repository transaction cannot release the outer executor's journal-owned lease.
 
-Rank-up and Prestige ordering is: sealed authorization/config/provider check; duplicate lookup; `PREPARED` journal creation; source-and-target lease acquire/adopt; binding/target recheck; `PREPARED`→`EXECUTING` claim; costs; full binding recheck; external projection; internal CAS/atomic commit; rewards; terminal operation state; terminal-gated lease release. The standalone projection executor follows the same journal→lease→binding→execution pattern and derives its source from the expected authoritative player state. If lease acquisition loses to remap, the still-effect-free prepared journal becomes `FAILED`.
+## Phase 8B public boundary and live composition
+
+The live Paper entry point now places a small public boundary in front of the accepted engines:
+
+```text
+Paper ServicesManager
+  ├─ MaddPrestigeService (published last, removed first)
+  │    ├─ async player/currency/season read ───> SQLite materialized state
+  │    ├─ async rank/Prestige evaluation ──────> canonical side-effect-free simulation
+  │    ├─ async rank/Prestige request ─────────> canonical authorization/journal/executor
+  │    └─ sync stages()/providers() ───────────> immutable runtime caches only
+  └─ ProviderDeclaration (owned by registering plugin)
+       └─ PaperProviderBridge ─────────────> single internal ProviderRegistry
+              owner-attested namespace       internal generation/deadline/health
+```
+
+The service never exposes repositories, operation plans, registry registrations or provider implementation objects. It is registered only after pending recovery and full runtime/admin composition. Caller futures are detached from accepted durable work. Shutdown makes the service undiscoverable before closing its runtime.
+
+Provider metadata and callbacks cross a bounded adapter. The registered service owner and the implementation class's
+actual providing plugin must match; namespace normalization collisions are rejected. This supported public-API check
+prevents accidental/cross-plugin claims while keeping hostile installed plugins inside the trusted-server boundary.
+External metadata supplies only a canonical local ID of at most 31 characters and generation-free metric definitions.
+Every accepted local ID can therefore form the owner-qualified `ProviderId`. Metadata and health are cached
+outside the registry monitor. A bounded 2–8 thread callback executor applies two-second metadata/lifecycle and
+three-second read deadlines plus live cancellation. Duplicate or normalized-ambiguous metadata and result maps with
+extra, missing, null or type-incompatible entries fail closed. Internal generation/provenance is attached only after a
+result crosses back into the bridge. The exact handle cannot unregister a replacement.
+
+Operation event order is now:
+
+```text
+request UUID → readiness → canonical authorization → immediate state/binding check
+        → synchronous Paper PRE (no internal lock)
+        → cancel/exception: zero journal/lease/effect
+        → revalidate virtual-or-durable player/config/provider
+        → atomic unknown-player stage+Prestige initialization
+        → final exact validation/duplicate fence → PREPARED journal → execute
+        → durable terminal operation/state → synchronous Paper POST (same request UUID)
+        → isolate listener failure → complete caller future
+```
+
+Registered operation listeners are invoked directly on the Paper thread so PRE `EventException` is observable at the pre-journal boundary rather than swallowed by general event logging. A per-player dispatch marker rejects same-player recursive mutation at the public service while allowing reads and cross-player scheduling. POST event status represents `NEEDS_RECONCILIATION` rather than claiming clean success.
+
+Unknown players are represented by a virtual baseline stage and zero Prestige state during reads, authorization and
+PRE. Only after PRE succeeds and exact virtual state/config/provider authority revalidates does one SQLite transaction
+initialize stage and Prestige rows; a final exact check still precedes journaling. Consequently cancellation
+or listener failure cannot create player state. The live progress-context factory reads durable current/lifetime
+Prestige and active-season progress, derives scaling and catch-up from those accepted semantics, and supplies
+absolute/lifetime/stage/Prestige/season scope identities rather than placeholder constants.
+
+The production root also binds the accepted Phase 6 plus Phase 5 integration schema, administration, setup, completion,
+doctor/why/player, manual Prestige and GUI services. Its immutable filesystem pointer is now a restart input:
+`activeDocuments()` validates the exact manifest, per-document checksums, aggregate hash and inventory, and startup
+requires matching durable APPLIED history. The exact stored revision is hydrated without a synthetic apply. Seed files
+are templates only; no pointer means dormant runtime with initial setup available.
+
+Canonical apply temporarily withdraws operation publication, reconciles configuration-dependent optional integration
+state in deterministic order, hydrates the exact new revision, refreshes schema/completion/runtime snapshots, and only
+then emits `ConfigAppliedEvent`. Provider lifecycle transitions coalesce a Paper-thread recomposition of the same stored
+revision. Missing generations stay visibly fail-closed; late registration recovers without creating a new revision.
+
+Placeholder publication is separated from Placeholder rendering. A bounded one-in-flight-per-player publisher reads
+stage/Prestige asynchronously on join/periodic refresh and stores immutable cache snapshots; render remains cache-only.
+The virtual-thread/database fan-out still requires A62 load/TPS qualification. Internal manual progress similarly uses
+a single shared coalesced drain and bounded repository batches rather than one task per flush request. Failed drains
+retain dirty data, publish `DEGRADED` through existing provider health and rate-limit repeated logs; successful retry
+restores `AVAILABLE`.
+
+Rank-up and Prestige ordering is: sealed authorization/config/provider check; synchronous PRE; exact post-PRE authority
+check; duplicate lookup; atomic unknown-player initialization; final exact check/duplicate fence; `PREPARED` journal;
+source-and-target lease acquire/adopt; binding/target recheck; `PREPARED`→`EXECUTING` claim; costs; full binding recheck;
+external projection; internal CAS/atomic commit; rewards; terminal operation state; terminal-gated lease release. The
+standalone projection executor follows its existing journal→lease→binding→execution pattern and derives its source from
+the expected authoritative player state. If lease acquisition loses to remap, the still-effect-free prepared journal
+becomes `FAILED`.
 
 Draft remaps are accumulated per source. Selecting a mapping merges/replaces only that source and removing a mapping leaves other sources intact. The complete map is recompiled and checked immediately: every source must be absent and every target must exist, be enabled and occur in the candidate order. The source-scoped command and opaque GUI mutations increment draft version and invalidate stale preview/candidate/acknowledgement authority. Preview then seals all matching persisted B and D rows together, and apply migrates the complete set in the existing all-or-nothing remap transaction.
 

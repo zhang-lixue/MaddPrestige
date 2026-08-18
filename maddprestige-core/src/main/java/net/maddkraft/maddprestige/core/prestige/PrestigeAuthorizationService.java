@@ -213,7 +213,7 @@ public final class PrestigeAuthorizationService {
                     new RequirementEvaluator(descriptors));
             var evaluation = tree.isPresent() ? authorizer.evaluate(tree.orElseThrow(), populated)
                     : authorizer.noRequirements(populated);
-            OperationId operationId = OperationId.random();
+            OperationId operationId = distinctOperationId(intent.requestId());
             CompletionStage<PrestigeBoundaryCollection> boundaryStage = resetsScopedRequirementState(configuration)
                     ? collectBoundaryBaselines(intent.playerId(), boundaryDefinitions, pins)
                     : CompletableFuture.completedFuture(new PrestigeBoundaryCollection(List.of(), List.of()));
@@ -224,6 +224,14 @@ public final class PrestigeAuthorizationService {
                                     evaluation, boundary, milestoneConsequences, season, operationId, pins, preflight,
                                     now)));
         });
+    }
+
+    private static OperationId distinctOperationId(java.util.UUID requestId) {
+        OperationId candidate;
+        do {
+            candidate = OperationId.random();
+        } while (candidate.value().equals(requestId));
+        return candidate;
     }
 
     private PrestigeAuthorizationResult assemble(
@@ -285,7 +293,8 @@ public final class PrestigeAuthorizationService {
                 stageState.stateRevision(), prestigeState.stateRevision(), active.phaseFour().revisionId(),
                 operationPins, simulation, preflight.costs(), preflight.rewards(),
                 rankProviderId, projection, operationPlan) : PrestigeAuthorization.denied();
-        PrestigePlan plan = new PrestigePlan(operationId, intent.playerId(), stageState.stateRevision(),
+        PrestigePlan plan = new PrestigePlan(operationId, intent.requestId(), intent.playerId(),
+                stageState.stateRevision(),
                 prestigeState.stateRevision(), active.phaseFour().revisionId(),
                 operationPins, simulation, preflight.costs(), preflight.rewards(),
                 rankProviderId, projection, preflight.unavailableProviders(), blockers, allowed, operationPlan,

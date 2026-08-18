@@ -1,0 +1,59 @@
+MaddPrestige V2 Phase 8B Correction Pass 2 - sanitized disposable Paper qualification
+Date: 2026-08-17
+Runtime: Java 25.0.3; Paper 26.1.2 build 74
+Plugins: LuckPerms 5.5.58, MaddPrestige 2.0.0-SNAPSHOT, Phase8B-Harness 1.0.0, PlaceholderAPI 2.12.2
+Production artifact: 16,341,405 bytes; SHA-256 A9E2278F770C5705A6C6E7612ED2A813A2D461266EE7DD451E7AE17842103222
+Harness artifact: 28,908 bytes; SHA-256 8506470D890E4E6FE018BD72E1E25596D10291D428AA04D24700814B3042E3C1
+Harness source: qualification/phase8b-paper-harness
+Disposable runtime: target/q8 (excluded from owner-review bundle)
+
+FIRST BOOT - FRESH DATA
+[MaddPrestige] ready; configuration is safely dormant; recovery inspected 0 operations
+[Phase8B-Harness] PASS 1 fresh service is discoverable, dormant, correlated, and provider bridge is live
+[Phase8B-Harness] PASS 2 canonical setup discovery is available while dormant
+[Phase8B-Harness] PASS 3 canonical setup session started
+[Phase8B-Harness] PASS 4 internal rank provider selected
+[Phase8B-Harness] PASS 5 baseline stage added
+[Phase8B-Harness] PASS 6 target stage added
+[Phase8B-Harness] PASS 7 baseline selected
+[Phase8B-Harness] PASS 8 external requirement configured
+[Phase8B-Harness] PASS 9 Prestige lifecycle configured
+[Phase8B-Harness] PASS 10 setup preview compiled through canonical administration
+[Phase8B-Harness] PASS 11 setup activation risk explicitly acknowledged through canonical administration
+[Phase8B-Harness] PASS 12 acknowledged setup applied as exact revision r_76ead4fa6a0f4f1597cb5ae3dc05b2b0
+[Phase8B-Harness] PASS 13 public evaluation/progress/currency/season surfaces use live provider state
+[MaddPrestige] WARN required provider generation unavailable after intentional contract violation
+[Phase8B-Harness] PASS 14 incomplete multi-key provider result failed closed and exact response recovered
+[MaddPrestige] WARN required provider generation unavailable after intentional PRE authority invalidation
+[Phase8B-Harness] PASS 15 successful PRE authority invalidation stayed unjournaled and unmaterialized
+[Phase8B-Harness] PASS 16 PRE cancellation on unknown player had zero durable player-state effect
+[Phase8B-Harness] PASS 17 rank-up and Prestige preserved one request ID across PRE, POST, and result while using distinct durable IDs
+[PlaceholderAPI] registered internal expansion maddprestige 2.0.0-SNAPSHOT
+[Phase8B-Harness] PASS 18 canonical apply enabled production Placeholder output with materialized snapshot
+[Phase8B-Harness] PASS 19 canonical apply disabled and unregistered Placeholder output
+[PlaceholderAPI] registered internal expansion maddprestige 2.0.0-SNAPSHOT
+[Phase8B-Harness] PASS 20 canonical apply deterministically re-enabled Placeholder output
+[MaddPrestige] WARN required provider generation unavailable after intentional lifecycle removal
+[Phase8B-Harness] PASS 21 external provider unregister failed closed and rebind recovered exact revision
+[Phase8B-Harness] PASS 22 first boot evidence sealed for exact-revision restart
+[Phase8B-Harness] FIRST-BOOT COMPLETE revision=r_ab903b09c36146afa3982a942cca395a pass-count=22
+[Phase8B-Harness] clean shutdown pass-count=22
+
+SECOND BOOT - SAME DATA AND ARTIFACTS
+[PlaceholderAPI] registered internal expansion maddprestige 2.0.0-SNAPSHOT
+[MaddPrestige] WARN exact revision r_ab903b09c36146afa3982a942cca395a remained fail-closed until the harness provider enabled
+[MaddPrestige] ready; exact active revision retained; recovery inspected 0 operations
+[Phase8B-Harness] PASS 1 restart recovered exact revision, player state, providers, and Placeholder output
+[Phase8B-Harness] PASS 2 late provider registration recomposed the exact stored revision without synthetic apply
+[Phase8B-Harness] PASS 3 clean second-boot shutdown qualified
+[Phase8B-Harness] COMPLETE two-boot production qualification pass-count=3
+[Phase8B-Harness] clean shutdown pass-count=3
+
+RESULT
+PASS - 22/22 fresh-boot assertions and 3/3 unchanged-restart assertions.
+PASS - One public-ingress request UUID survived PRE, POST, and terminal result; every durable UUID was distinct.
+PASS - Successful PRE followed by deliberate provider-generation invalidation created no player rows or journal identity.
+PASS - A two-key external provider response omitting one requested key failed exceptionally and degraded service health.
+PASS - Exact final active revision remained r_ab903b09c36146afa3982a942cca395a across restart.
+PASS - No MaddPrestige ERROR occurred in either qualifying boot.
+PASS - Third-party JARs remained only in the disposable target directory and are not review-bundle inputs.

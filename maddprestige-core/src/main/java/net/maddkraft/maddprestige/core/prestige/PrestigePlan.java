@@ -16,6 +16,7 @@ import net.maddkraft.maddprestige.api.reward.PlannedReward;
 
 public record PrestigePlan(
         OperationId operationId,
+        UUID requestId,
         UUID playerId,
         long expectedStageRevision,
         long expectedPrestigeRevision,
@@ -33,6 +34,7 @@ public record PrestigePlan(
         PrestigeAuthorization authorization) {
     public PrestigePlan {
         operationId = Objects.requireNonNull(operationId, "operation ID");
+        requestId = Objects.requireNonNull(requestId, "request ID");
         playerId = Objects.requireNonNull(playerId, "player ID");
         if (expectedStageRevision < 0 || expectedPrestigeRevision < 0) {
             throw new IllegalArgumentException("Expected revisions cannot be negative");
@@ -54,5 +56,28 @@ public record PrestigePlan(
         if (rankProviderId.isPresent() != rankProjectionRequest.isPresent()) {
             throw new IllegalArgumentException("Rank provider and projection request must be present together");
         }
+    }
+
+    public PrestigePlan(
+            OperationId operationId,
+            UUID playerId,
+            long expectedStageRevision,
+            long expectedPrestigeRevision,
+            ConfigRevisionId configRevision,
+            Map<ProviderId, Long> providerGenerations,
+            PrestigeSimulation simulation,
+            List<PlannedCost> costs,
+            List<PlannedReward> rewards,
+            Optional<ProviderId> rankProviderId,
+            Optional<RankProjectionRequest> rankProjectionRequest,
+            Set<ProviderId> unavailableProviders,
+            List<String> blockers,
+            boolean executionAllowed,
+            OperationPlan operationPlan,
+            PrestigeAuthorization authorization) {
+        this(operationId, UUID.randomUUID(), playerId, expectedStageRevision, expectedPrestigeRevision,
+                configRevision, providerGenerations, simulation, costs, rewards, rankProviderId,
+                rankProjectionRequest, unavailableProviders, blockers, executionAllowed, operationPlan,
+                authorization);
     }
 }

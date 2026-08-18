@@ -21,7 +21,9 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
 import net.maddkraft.maddprestige.api.action.ActionExecutionStatus;
 import net.maddkraft.maddprestige.api.cost.CostDefinition;
@@ -57,6 +59,7 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationStageReservatio
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.event.OperationLifecycleListener;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationService;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
 import net.maddkraft.maddprestige.core.plan.RankUpIntent;
@@ -97,6 +100,8 @@ import net.maddkraft.maddprestige.persistence.plan.RankUpOperationExecutor;
 import net.maddkraft.maddprestige.persistence.plan.RepositoryStageTransitionCommitter;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteConfigRevisionRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteOperationRepository;
+import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerInitializationStore;
+import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerPrestigeRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerStageRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -182,6 +187,159 @@ class RankUpEngineTest {
                         List.of(reward("substitute")), "substituted-reward"))) {
             assertThrows(CompletionException.class,
                     () -> new RankUpPlanner(providers).plan(substituted).toCompletableFuture().join());
+        }
+    }
+
+    @Test
+    @DisplayName("[8B] PRE cancellation happens before journal insertion and every consequential effect")
+    void preEventCancellationHasZeroEffects() throws Exception {
+        MutableRankAdapter rank = new MutableRankAdapter();
+        providers.activate(providers.register("maddprestige-testkit", rank));
+        RankUpPlan plan = plan(List.of(cost("pre-cancel", "25")), List.of(reward()),
+                StageProjection.group(RANK_PROVIDER_ID, "new"));
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                    () -> Optional.of(REVISION), new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    new InMemoryStageTransitionFence(), Runnable::run,
+                    new OperationLifecycleListener() {
+                        @Override
+                        public boolean beforeRankUp(RankUpPlan ignored) {
+                            return false;
+                        }
+                    }, ignored -> true, ignored -> new SqlitePlayerInitializationStore(fixture.foundation())
+                            .initialize(player, FIRST, REVISION, new ScopeId("unknown_player_prestige"), NOW));
+
+            assertEquals(RankUpExecutionStatus.BLOCKED,
+                    executor.execute(plan).toCompletableFuture().join().status());
+            assertTrue(operations.find(plan.operationId()).isEmpty());
+            assertTrue(stages.find(player).isEmpty());
+            assertTrue(new SqlitePlayerPrestigeRepository(fixture.foundation()).find(player).isEmpty());
+            assertEquals(new BigDecimal("100"), costProvider.balance(player));
+            assertEquals(0, rewardProvider.executionCount());
+            assertEquals(0, rank.projectionCalls.get());
+        }
+    }
+
+    @Test
+    @DisplayName("[OR8B-02] PRE listener failure leaves an unknown player and every effect store empty")
+    void preEventFailureHasZeroEffectsForUnknownPlayer() throws Exception {
+        MutableRankAdapter rank = new MutableRankAdapter();
+        providers.activate(providers.register("maddprestige-testkit", rank));
+        RankUpPlan plan = plan(List.of(cost("pre-failure", "25")), List.of(reward()),
+                StageProjection.group(RANK_PROVIDER_ID, "new"));
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                    () -> Optional.of(REVISION), new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    new InMemoryStageTransitionFence(), Runnable::run, new OperationLifecycleListener() {
+                        @Override
+                        public boolean beforeRankUp(RankUpPlan ignored) {
+                            throw new IllegalStateException("fixture listener failure");
+                        }
+                    }, ignored -> true, ignored -> new SqlitePlayerInitializationStore(fixture.foundation())
+                            .initialize(player, FIRST, REVISION, new ScopeId("unknown_player_prestige"), NOW));
+
+            assertEquals(RankUpExecutionStatus.BLOCKED,
+                    executor.execute(plan).toCompletableFuture().join().status());
+            assertTrue(operations.find(plan.operationId()).isEmpty());
+            assertTrue(stages.find(player).isEmpty());
+            assertTrue(new SqlitePlayerPrestigeRepository(fixture.foundation()).find(player).isEmpty());
+            assertEquals(new BigDecimal("100"), costProvider.balance(player));
+            assertEquals(0, rewardProvider.executionCount());
+            assertEquals(0, rank.projectionCalls.get());
+        }
+    }
+
+    @Test
+    @DisplayName("[OR8B-10] PRE configuration invalidation precedes unknown-player materialization")
+    void postPreConfigurationRevalidationLeavesUnknownPlayerUnmaterialized() throws Exception {
+        MutableRankAdapter rank = new MutableRankAdapter();
+        providers.activate(providers.register("maddprestige-testkit", rank));
+        RankUpPlan plan = plan(List.of(cost("pre-config-stale", "25")), List.of(reward()),
+                StageProjection.group(RANK_PROVIDER_ID, "new"));
+        AtomicReference<ConfigRevisionId> active = new AtomicReference<>(REVISION);
+        OperationLifecycleListener events = new OperationLifecycleListener() {
+            @Override
+            public boolean beforeRankUp(RankUpPlan ignored) {
+                active.set(new ConfigRevisionId("revision_after_pre"));
+                return true;
+            }
+        };
+
+        assertPostPreStaleHasZeroEffects(plan, rank, events, () -> Optional.of(active.get()), ignored -> true);
+    }
+
+    @Test
+    @DisplayName("[OR8B-10] PRE provider invalidation precedes unknown-player materialization")
+    void postPreProviderRevalidationLeavesUnknownPlayerUnmaterialized() throws Exception {
+        MutableRankAdapter rank = new MutableRankAdapter();
+        ProviderRegistration registration = providers.register("maddprestige-testkit", rank);
+        providers.activate(registration);
+        RankUpPlan plan = plan(List.of(cost("pre-provider-stale", "25")), List.of(reward()),
+                StageProjection.group(RANK_PROVIDER_ID, "new"));
+        OperationLifecycleListener events = new OperationLifecycleListener() {
+            @Override
+            public boolean beforeRankUp(RankUpPlan ignored) {
+                providers.unregister(registration);
+                return true;
+            }
+        };
+
+        assertPostPreStaleHasZeroEffects(plan, rank, events, () -> Optional.of(REVISION), ignored -> true);
+    }
+
+    @Test
+    @DisplayName("[OR8B-10] PRE player-state invalidation precedes unknown-player materialization")
+    void postPrePlayerStateRevalidationLeavesUnknownPlayerUnmaterialized() throws Exception {
+        MutableRankAdapter rank = new MutableRankAdapter();
+        providers.activate(providers.register("maddprestige-testkit", rank));
+        RankUpPlan plan = plan(List.of(cost("pre-state-stale", "25")), List.of(reward()),
+                StageProjection.group(RANK_PROVIDER_ID, "new"));
+        AtomicBoolean exactVirtualState = new AtomicBoolean(true);
+        OperationLifecycleListener events = new OperationLifecycleListener() {
+            @Override
+            public boolean beforeRankUp(RankUpPlan ignored) {
+                exactVirtualState.set(false);
+                return true;
+            }
+        };
+
+        assertPostPreStaleHasZeroEffects(plan, rank, events, () -> Optional.of(REVISION),
+                ignored -> exactVirtualState.get());
+    }
+
+    @Test
+    @DisplayName("[8B] POST observes the durable terminal journal before the caller future completes")
+    void postEventFollowsDurableTerminalCommit() throws Exception {
+        RankUpPlan plan = plan(List.of(), List.of(), StageProjection.none());
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            stages.insert(authorization(List.of(), List.of(), StageProjection.none()).state());
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            AtomicInteger postCalls = new AtomicInteger();
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers,
+                    () -> Optional.of(REVISION), new RepositoryStageTransitionCommitter(stages, CLOCK),
+                    new InMemoryStageTransitionFence(), Runnable::run,
+                    new OperationLifecycleListener() {
+                        @Override
+                        public void afterRankUp(
+                                RankUpPlan ignored,
+                                net.maddkraft.maddprestige.core.plan.RankUpExecutionResult result) {
+                            assertEquals(OperationState.COMPLETED,
+                                    operations.find(result.operationId()).orElseThrow().state());
+                            postCalls.incrementAndGet();
+                        }
+                    });
+
+            assertEquals(RankUpExecutionStatus.COMPLETED,
+                    executor.execute(plan).toCompletableFuture().join().status());
+            assertEquals(1, postCalls.get());
         }
     }
 
@@ -475,9 +633,9 @@ class RankUpEngineTest {
     @Test
     @DisplayName("[A09-A26] Public rank-up intent cannot carry requirement or lifecycle authority")
     void rankUpIntentIsStrictlyIntentOnly() {
-        assertEquals(List.of("actor", "playerId", "intendedTarget", "idempotencyKey"),
+        assertEquals(List.of("actor", "playerId", "requestId", "intendedTarget", "idempotencyKey"),
                 Arrays.stream(RankUpIntent.class.getRecordComponents()).map(component -> component.getName()).toList());
-        assertEquals(4, RankUpIntent.class.getRecordComponents().length);
+        assertEquals(5, RankUpIntent.class.getRecordComponents().length);
         assertFalse(Arrays.stream(RankUpIntent.class.getRecordComponents()).anyMatch(component ->
                 component.getType().equals(RequirementStateReader.class)
                         || component.getType().equals(ScopeContext.class)
@@ -1032,6 +1190,47 @@ class RankUpEngineTest {
             List<RewardDefinition> rewards,
             StageProjection projection) {
         return authorizedPlan(authorization(costs, rewards, projection));
+    }
+
+    private void assertPostPreStaleHasZeroEffects(
+            RankUpPlan plan,
+            MutableRankAdapter rank,
+            OperationLifecycleListener events,
+            java.util.function.Supplier<Optional<ConfigRevisionId>> active,
+            java.util.function.Predicate<RankUpPlan> stateRevalidator) throws Exception {
+        try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
+            prepareRevision(fixture);
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(fixture.foundation());
+            SqlitePlayerPrestigeRepository prestiges = new SqlitePlayerPrestigeRepository(fixture.foundation());
+            SqliteOperationRepository operations = new SqliteOperationRepository(fixture.foundation());
+            RankUpOperationExecutor executor = new RankUpOperationExecutor(operations, providers, active,
+                    new RepositoryStageTransitionCommitter(stages, CLOCK), new InMemoryStageTransitionFence(),
+                    Runnable::run, events, stateRevalidator,
+                    ignored -> new SqlitePlayerInitializationStore(fixture.foundation()).initialize(
+                            player, FIRST, REVISION, new ScopeId("unknown_player_prestige"), NOW));
+
+            assertEquals(RankUpExecutionStatus.STALE_GENERATION,
+                    executor.execute(plan).toCompletableFuture().join().status());
+            assertTrue(operations.find(plan.operationId()).isEmpty());
+            assertTrue(stages.find(player).isEmpty());
+            assertTrue(prestiges.find(player).isEmpty());
+            assertEquals(0L, rowCount(fixture, "mp_operations"));
+            assertEquals(0L, rowCount(fixture, "mp_operation_actions"));
+            assertEquals(0L, rowCount(fixture, "mp_stage_transition_leases"));
+            assertEquals(new BigDecimal("100"), costProvider.balance(player));
+            assertEquals(0, rewardProvider.executionCount());
+            assertEquals(0, rank.projectionCalls.get());
+        }
+    }
+
+    private static long rowCount(DisposableSqliteFixture fixture, String table) {
+        try (var connection = fixture.foundation().open();
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
+            return rows.getLong(1);
+        } catch (java.sql.SQLException failure) {
+            throw new AssertionError(failure);
+        }
     }
 
     private RankUpPlan simulatedPlan(

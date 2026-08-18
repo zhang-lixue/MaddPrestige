@@ -6,43 +6,38 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Clock;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Level;
-import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
+import net.maddkraft.maddprestige.api.event.ProviderHealthChangedSnapshot;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricValueType;
-import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
-import net.maddkraft.maddprestige.core.config.CompiledConfiguration;
-import net.maddkraft.maddprestige.core.config.ConfigCompiler;
-import net.maddkraft.maddprestige.core.config.ConfigDraft;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationCompiler;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfigurationCompiler;
+import net.maddkraft.maddprestige.api.service.MaddPrestigeService;
 import net.maddkraft.maddprestige.core.manual.ManualCounterDefinition;
 import net.maddkraft.maddprestige.core.manual.ManualMetricHandle;
 import net.maddkraft.maddprestige.core.manual.ManualProgressBootstrap;
 import net.maddkraft.maddprestige.core.manual.ManualProgressProvider;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistration;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
-import net.maddkraft.maddprestige.core.requirement.MetricBinding;
-import net.maddkraft.maddprestige.core.stage.StageConfiguration;
-import net.maddkraft.maddprestige.core.stage.StageConfigurationCompiler;
 import net.maddkraft.maddprestige.integrations.IntegrationTaskScheduler;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompilation;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompiler;
+import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration;
+import net.maddkraft.maddprestige.integrations.luckperms.LuckPermsRankAdapter;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
+import net.maddkraft.maddprestige.persistence.admin.AtomicConfigurationFileStore;
+import net.maddkraft.maddprestige.persistence.admin.SqliteConfigurationHistoryStore;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
 import net.maddkraft.maddprestige.persistence.recovery.PendingOperationRecoveryService;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteFoundation;
@@ -56,9 +51,16 @@ import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
 import net.maddkraft.maddprestige.platform.paper.PaperWorldContextMetricProvider;
 import net.maddkraft.maddprestige.platform.paper.VanillaStatisticsProvider;
 import net.maddkraft.maddprestige.platform.paper.integration.PhaseSevenOptionalIntegrationManager;
+import net.maddkraft.maddprestige.platform.paper.admin.PaperGuiInventoryGuard;
+import net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter;
+import net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixGuiController;
 import net.maddkraft.maddprestige.platform.paper.placeholder.MaddPrestigePlaceholderCache;
+import net.maddkraft.maddprestige.platform.paper.provider.PaperProviderBridge;
+import net.maddkraft.maddprestige.platform.paper.event.ProviderHealthChangedEvent;
+import net.luckperms.api.LuckPerms;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.scheduler.BukkitTask;
 
 /** Phase 7 production composition root. The frozen V1 entrypoint is no longer selected by the descriptor. */
@@ -78,7 +80,11 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     private ManualProgressBootstrap manualProgress;
     private ExecutorService manualWriter;
     private BukkitTask manualFlushTask;
-    private RuntimeConfiguration configuration;
+    private FailureLogThrottle manualFailureLogs;
+    private ProviderRegistration manualProgressRegistration;
+    private PaperProviderBridge providerBridge;
+    private ProductionRuntime runtime;
+    private AutoCloseable healthEvents;
     private boolean ready;
 
     @Override
@@ -86,7 +92,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         try {
             Path dataDirectory = getDataFolder().toPath().toAbsolutePath().normalize();
             Files.createDirectories(dataDirectory);
-            Map<String, String> documents = prepareAndReadDocuments(dataDirectory);
+            prepareAndReadDocuments(dataDirectory);
 
             Path database = dataDirectory.resolve("maddprestige-v2.sqlite");
             if (Files.notExists(database)) {
@@ -96,12 +102,27 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             new MigrationRunner(foundation,
                     new FileBackupService(database, dataDirectory.resolve("backups"), clock), clock)
                     .migrate(SqliteMigrations.phaseSix());
+            AtomicConfigurationFileStore snapshots = new AtomicConfigurationFileStore(
+                    dataDirectory.resolve("configuration"), clock);
+            Optional<net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision> startup =
+                    StartupConfigurationLoader.load(snapshots, new SqliteConfigurationHistoryStore(foundation));
 
-            configuration = compile(documents);
             registry = new ProviderRegistry();
             scheduler = new BukkitPaperTaskScheduler(this);
+            healthEvents = registry.addHealthListener((providerId, previous, current) -> scheduler.submit(
+                    ExecutionThread.PAPER_SERVER_THREAD, () -> {
+                        getServer().getPluginManager().callEvent(new ProviderHealthChangedEvent(
+                                new ProviderHealthChangedSnapshot(providerId, previous.state(), current.state(),
+                                        current.code(), clock.instant())));
+                        return null;
+                    }));
             registerBuiltInProviders();
-            ManualMetricHandle mcMmoAdjustedXp = registerManualProgress(foundation);
+            registerLuckPerms();
+            PhaseFiveIntegrationConfiguration initialIntegrations = startup.map(value ->
+                    integrationConfiguration(value.compiled().documents()).configuration())
+                    .orElseGet(PhaseFiveIntegrationConfiguration::disabled);
+            ManualMetricHandle mcMmoAdjustedXp = registerManualProgress(foundation,
+                    initialIntegrations.mcMmoEnabled());
 
             IntegrationTaskScheduler integrationScheduler = new IntegrationTaskScheduler() {
                 @Override
@@ -112,15 +133,23 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             optionalIntegrations = new PhaseSevenOptionalIntegrationManager(
                     this, registry, integrationScheduler, mcMmoAdjustedXp,
                     new MaddPrestigePlaceholderCache(10_000), clock);
-            optionalIntegrations.start(configuration.integrations().configuration());
-
+            optionalIntegrations.start(initialIntegrations);
+            providerBridge = new PaperProviderBridge(this, registry, clock);
+            providerBridge.start().toCompletableFuture().orTimeout(5, TimeUnit.SECONDS).join();
             int recovered = new PendingOperationRecoveryService(new SqliteOperationRepository(foundation),
                     new SqlitePrestigeLifecycleRepository(foundation),
                     new SqliteRecoveryEventRepository(foundation), clock, registry).recover(256).size();
+            runtime = new ProductionRuntime(this, registry, foundation, startup, dataDirectory, clock, scheduler,
+                    optionalIntegrations.placeholderOutput(), this::reconcileRuntime);
             bindCommand();
             ready = true;
-            getLogger().info("MaddPrestige V2 Phase 7 ready; configuration is "
-                    + (configuration.stages().active() ? "active" : "safely dormant")
+            getServer().getServicesManager().register(MaddPrestigeService.class, runtime.service(), this,
+                    ServicePriority.Normal);
+            getLogger().info("MaddPrestige V2 Phase 8B ready; configuration is "
+                    + (runtime.operational() ? "active at " + runtime.revision().orElseThrow().value()
+                            : runtime.authoritativeRevision().map(value ->
+                                    "fail-closed pending compatible composition at " + value.value())
+                                    .orElse("safely dormant"))
                     + "; startup recovery inspected " + recovered + " operation(s).");
         } catch (RuntimeException | IOException exception) {
             getLogger().log(Level.SEVERE, "MaddPrestige V2 startup failed closed", exception);
@@ -132,36 +161,6 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     @Override
     public void onDisable() {
         shutdownOwnedState();
-    }
-
-    private synchronized RuntimeConfiguration compile(Map<String, String> documents) {
-        ConfigDraft draft = new ConfigDraft(UUID.randomUUID(), Optional.<ConfigRevisionId>empty(), documents,
-                new Actor("SYSTEM", Optional.empty(), "Phase 7 production bootstrap"), clock.instant());
-        CompiledConfiguration compiled = new ConfigCompiler().compile(draft);
-        var stages = new StageConfigurationCompiler().compile(compiled);
-        var phaseThree = new PhaseThreeConfigurationCompiler().compile(compiled, Map.<MetricBinding,
-                net.maddkraft.maddprestige.api.metric.MetricDescriptor>of());
-        var phaseFour = new PhaseFourConfigurationCompiler().compile(compiled);
-        PhaseFiveIntegrationCompilation integrations = new PhaseFiveIntegrationCompiler()
-                .compile(documents.get("integrations.yml"));
-        ArrayList<String> failures = new ArrayList<>();
-        stages.validation().findings().stream().filter(finding ->
-                finding.severity() == net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR)
-                .forEach(finding -> failures.add(finding.path() + ": " + finding.explanation()));
-        phaseThree.validation().findings().stream().filter(finding ->
-                finding.severity() == net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR)
-                .forEach(finding -> failures.add(finding.path() + ": " + finding.explanation()));
-        phaseFour.validation().findings().stream().filter(finding ->
-                finding.severity() == net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR)
-                .forEach(finding -> failures.add(finding.path() + ": " + finding.explanation()));
-        integrations.validation().findings().stream().filter(finding ->
-                finding.severity() == net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR)
-                .forEach(finding -> failures.add(finding.path() + ": " + finding.explanation()));
-        if (!failures.isEmpty() || stages.configuration().isEmpty()) {
-            throw new IllegalArgumentException("Canonical configuration is invalid: " + String.join("; ", failures));
-        }
-        return new RuntimeConfiguration(Map.copyOf(documents), stages.configuration().orElseThrow(), integrations,
-                compiled.contentHash().value(), Instant.now(clock));
     }
 
     private void registerBuiltInProviders() {
@@ -176,7 +175,22 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         registerActive(statistics);
     }
 
-    private ManualMetricHandle registerManualProgress(SqliteFoundation foundation) {
+    private void registerLuckPerms() {
+        var service = getServer().getServicesManager().getRegistration(LuckPerms.class);
+        if (service == null || !service.getPlugin().isEnabled()) {
+            getLogger().info("LuckPerms service is absent; rank projection remains fail-closed when configured.");
+            return;
+        }
+        LuckPerms api = service.getProvider();
+        LuckPermsRankAdapter adapter = new LuckPermsRankAdapter(api, service.getPlugin().getPluginMeta().getVersion(),
+                () -> {
+                    var current = getServer().getServicesManager().getRegistration(LuckPerms.class);
+                    return current != null && current.getProvider() == api && current.getPlugin().isEnabled();
+                }, clock);
+        registerActive(adapter);
+    }
+
+    private ManualMetricHandle registerManualProgress(SqliteFoundation foundation, boolean mcMmoEnabled) {
         manualWriter = Executors.newSingleThreadExecutor(runnable -> Thread.ofPlatform()
                 .name("maddprestige-manual-writer").daemon(true).unstarted(runnable));
         manualProgress = ManualProgressProvider.bootstrap(new ProviderId("phase5_events"), "maddprestige",
@@ -185,11 +199,17 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
                 new MetricId("mcmmo_adjusted_xp_total"), MetricValueType.EXACT_DECIMAL, true, false,
                 "mcMMO adjusted XP total", "Official post-adjustment mcMMO XP events", Map.of(
                         "source", "mcmmo", "ownership", "maddprestige"))).toCompletableFuture().join();
-        registerOwned(manualProgress.provider(), configuration.integrations().configuration().mcMmoEnabled());
+        manualProgressRegistration = registerOwned(manualProgress.provider(), mcMmoEnabled);
+        manualFailureLogs = new FailureLogThrottle(clock, java.time.Duration.ofMinutes(5));
         manualFlushTask = getServer().getScheduler().runTaskTimer(this, () ->
-                manualProgress.provider().flushAsync().exceptionally(failure -> {
-                    getLogger().log(Level.SEVERE, "Manual progress flush failed; values remain dirty", failure);
-                    return 0;
+                manualProgress.provider().flushAsync().whenComplete((ignored, failure) -> {
+                    registry.refreshHealth(manualProgressRegistration.providerId());
+                    if (failure != null && manualFailureLogs.acquire()) {
+                        getLogger().log(Level.SEVERE, "Manual progress persistence is stalled; values remain dirty",
+                                failure);
+                    } else if (failure == null) {
+                        manualFailureLogs.recovered();
+                    }
                 }), 200L, 200L);
         return adjustedXp;
     }
@@ -198,55 +218,57 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         registerOwned(provider, true);
     }
 
-    private void registerOwned(net.maddkraft.maddprestige.api.provider.Provider provider, boolean active) {
+    private ProviderRegistration registerOwned(
+            net.maddkraft.maddprestige.api.provider.Provider provider,
+            boolean active) {
         ProviderRegistration registration = registry.register("maddprestige", provider);
         if (active) {
             registry.activate(registration);
         }
         ownedRegistrations.add(registration);
+        return registration;
+    }
+
+    private synchronized void reconcileRuntime(PhaseFiveIntegrationConfiguration replacement) {
+        optionalIntegrations.reconcile(replacement);
+        if (replacement.mcMmoEnabled()) {
+            registry.activate(manualProgressRegistration);
+        } else {
+            registry.deactivate(manualProgressRegistration);
+        }
     }
 
     private void bindCommand() {
         PluginCommand command = java.util.Objects.requireNonNull(getCommand("maddprestige"),
                 "maddprestige command is absent from plugin.yml");
-        PhaseSevenCommandExecutor executor = new PhaseSevenCommandExecutor(
-                this::statusLines, this::providerLines, this::reloadLines);
-        command.setExecutor(executor);
-        command.setTabCompleter(executor);
-    }
-
-    private List<String> statusLines() {
-        RuntimeConfiguration current = configuration;
-        return List.of("[maddprestige.status] V2 Phase 7 " + (ready ? "READY" : "NOT READY"),
-                "[maddprestige.config] " + (current.stages().active() ? "active" : "safely dormant")
-                        + " hash=" + current.hash(),
-                "[maddprestige.providers] " + registry.snapshots().size() + " registered; failures fail closed",
-                "[maddprestige.doctor] SQLite migrations, canonical configuration, registry, recovery, commands, "
-                        + "and optional lifecycle composition completed.");
-    }
-
-    private List<String> providerLines() {
-        ArrayList<String> lines = new ArrayList<>(registry.snapshots().stream()
-                .map(snapshot -> "[provider] " + snapshot.descriptor().id().value() + " generation="
-                        + snapshot.generation() + " activation=" + snapshot.activation() + " health="
-                        + snapshot.health().state())
-                .toList());
-        if (optionalIntegrations != null) {
-            lines.addAll(optionalIntegrations.statusLines());
-        }
-        return List.copyOf(lines);
-    }
-
-    private List<String> reloadLines() {
-        return List.of(
-                "[config.reload.refused] Live file reload is not a configuration mutation authority.",
-                "[config.authority] Use the canonical Phase 6 draft, preview, acknowledgement, apply, history, "
-                        + "and remap workflow; the active runtime was not changed.",
-                "[config.hash] " + configuration.hash());
+        PaperPhaseSixGuiController guiController = new PaperPhaseSixGuiController(runtime.gui(),
+                new PaperGuiInventoryGuard(), scheduler);
+        getServer().getPluginManager().registerEvents(guiController, this);
+        PaperPhaseSixCommandAdapter adapter = new PaperPhaseSixCommandAdapter(runtime.commands(),
+                runtime.completion(), scheduler, guiController);
+        command.setExecutor(adapter);
+        command.setTabCompleter(adapter);
     }
 
     private void shutdownOwnedState() {
         ready = false;
+        if (runtime != null) {
+            getServer().getServicesManager().unregister(runtime.service());
+            runtime.close();
+            runtime = null;
+        }
+        if (healthEvents != null) {
+            try {
+                healthEvents.close();
+            } catch (Exception exception) {
+                getLogger().log(Level.WARNING, "Provider health event observer cleanup failed safely", exception);
+            }
+            healthEvents = null;
+        }
+        if (providerBridge != null) {
+            providerBridge.close();
+            providerBridge = null;
+        }
         if (optionalIntegrations != null) {
             optionalIntegrations.stop();
             optionalIntegrations = null;
@@ -257,9 +279,16 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         }
         if (manualProgress != null) {
             try {
-                manualProgress.provider().closeAsync().toCompletableFuture().join();
+                manualProgress.provider().closeAsync().toCompletableFuture().get(5, TimeUnit.SECONDS);
             } catch (RuntimeException exception) {
                 getLogger().log(Level.SEVERE, "Manual progress shutdown flush failed", exception);
+            } catch (java.util.concurrent.TimeoutException exception) {
+                getLogger().log(Level.SEVERE, "Manual progress shutdown flush exceeded its deadline", exception);
+            } catch (java.util.concurrent.ExecutionException exception) {
+                getLogger().log(Level.SEVERE, "Manual progress shutdown flush failed", exception.getCause());
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                getLogger().log(Level.SEVERE, "Manual progress shutdown flush was interrupted", exception);
             }
             manualProgress = null;
         }
@@ -273,10 +302,35 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             });
         }
         ownedRegistrations.clear();
+        manualProgressRegistration = null;
         if (manualWriter != null) {
             manualWriter.shutdown();
+            try {
+                if (!manualWriter.awaitTermination(3, TimeUnit.SECONDS)) {
+                    manualWriter.shutdownNow();
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                manualWriter.shutdownNow();
+            }
             manualWriter = null;
         }
+    }
+
+    private static PhaseFiveIntegrationCompilation integrationConfiguration(Map<String, String> documents) {
+        String source = documents.get("integrations.yml");
+        if (source == null) {
+            throw new IllegalArgumentException("Active configuration is missing integrations.yml");
+        }
+        PhaseFiveIntegrationCompilation compilation = new PhaseFiveIntegrationCompiler().compile(source);
+        List<String> failures = compilation.validation().findings().stream()
+                .filter(finding -> finding.severity()
+                        == net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR)
+                .map(finding -> finding.path() + ": " + finding.explanation()).toList();
+        if (!failures.isEmpty()) {
+            throw new IllegalArgumentException("Integration configuration is invalid: " + String.join("; ", failures));
+        }
+        return compilation;
     }
 
     private Map<String, String> prepareAndReadDocuments(Path directory) throws IOException {
@@ -310,19 +364,4 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         return Map.copyOf(result);
     }
 
-    private static String safeMessage(Exception exception) {
-        String message = exception.getMessage();
-        if (message == null || message.isBlank()) {
-            return exception.getClass().getSimpleName();
-        }
-        return message.length() > 300 ? message.substring(0, 300) : message;
-    }
-
-    private record RuntimeConfiguration(
-            Map<String, String> documents,
-            StageConfiguration stages,
-            PhaseFiveIntegrationCompilation integrations,
-            String hash,
-            Instant loadedAt) {
-    }
 }

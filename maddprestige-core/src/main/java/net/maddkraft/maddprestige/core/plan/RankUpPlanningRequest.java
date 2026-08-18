@@ -20,6 +20,7 @@ import net.maddkraft.maddprestige.core.stage.StageDefinition;
 public final class RankUpPlanningRequest {
     private final Actor actor;
     private final UUID playerId;
+    private final UUID requestId;
     private final PlayerStageState playerState;
     private final StageDefinition targetStage;
     private final ConfigRevisionId configRevision;
@@ -44,7 +45,7 @@ public final class RankUpPlanningRequest {
             List<RewardDefinition> rewards,
             String idempotencyKey) {
         this(actor, playerId, playerState, targetStage, configRevision, pinnedProviderGenerations, requirements,
-                Optional.empty(), costs, rewards, idempotencyKey, Optional.empty(), false);
+                Optional.empty(), costs, rewards, idempotencyKey, Optional.empty(), false, UUID.randomUUID());
     }
 
     static RankUpPlanningRequest canonical(
@@ -58,10 +59,11 @@ public final class RankUpPlanningRequest {
             List<CostDefinition> costs,
             List<RewardDefinition> rewards,
             String idempotencyKey,
-            StageConfiguration stages) {
+            StageConfiguration stages,
+            UUID requestId) {
         return new RankUpPlanningRequest(actor, playerId, playerState, targetStage, configRevision,
                 pinnedProviderGenerations, requirements.result(), Optional.of(requirements), costs, rewards,
-                idempotencyKey, Optional.of(stages), true);
+                idempotencyKey, Optional.of(stages), true, requestId);
     }
 
     private RankUpPlanningRequest(
@@ -77,9 +79,11 @@ public final class RankUpPlanningRequest {
             List<RewardDefinition> rewards,
             String idempotencyKey,
             Optional<StageConfiguration> canonicalStages,
-            boolean canonical) {
+            boolean canonical,
+            UUID requestId) {
         this.actor = Objects.requireNonNull(actor, "actor");
         this.playerId = Objects.requireNonNull(playerId, "player ID");
+        this.requestId = Objects.requireNonNull(requestId, "request ID");
         this.playerState = Objects.requireNonNull(playerState, "player state");
         this.targetStage = Objects.requireNonNull(targetStage, "target stage");
         this.configRevision = Objects.requireNonNull(configRevision, "configuration revision");
@@ -99,6 +103,7 @@ public final class RankUpPlanningRequest {
 
     public Actor actor() { return actor; }
     public UUID playerId() { return playerId; }
+    public UUID requestId() { return requestId; }
     public PlayerStageState playerState() { return playerState; }
     public StageDefinition targetStage() { return targetStage; }
     public ConfigRevisionId configRevision() { return configRevision; }

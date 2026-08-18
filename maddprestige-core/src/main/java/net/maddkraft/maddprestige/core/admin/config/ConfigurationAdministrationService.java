@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.validation.ValidationFinding;
 import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
@@ -44,6 +45,7 @@ public final class ConfigurationAdministrationService {
     private final ConfigurationHistoryStore history;
     private final ConfigurationSnapshotStore snapshots;
     private final Clock clock;
+    private final Consumer<StoredConfigurationRevision> appliedListener;
     private final ConfigurationPathResolver paths = new ConfigurationPathResolver();
     private final Map<UUID, DraftState> drafts = new ConcurrentHashMap<>();
     private final Map<UUID, ConfigurationAcknowledgement> acknowledgements = new ConcurrentHashMap<>();
@@ -56,12 +58,24 @@ public final class ConfigurationAdministrationService {
             ConfigurationHistoryStore history,
             ConfigurationSnapshotStore snapshots,
             Clock clock) {
+        this(canonical, workflow, schema, history, snapshots, clock, ignored -> { });
+    }
+
+    public ConfigurationAdministrationService(
+            ConfigurationService canonical,
+            PhaseSixConfigurationWorkflow workflow,
+            SchemaRegistry schema,
+            ConfigurationHistoryStore history,
+            ConfigurationSnapshotStore snapshots,
+            Clock clock,
+            Consumer<StoredConfigurationRevision> appliedListener) {
         this.canonical = Objects.requireNonNull(canonical, "canonical configuration service");
         this.workflow = Objects.requireNonNull(workflow, "Phase 6 workflow");
         this.schema = Objects.requireNonNull(schema, "schema");
         this.history = Objects.requireNonNull(history, "history");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
         this.clock = Objects.requireNonNull(clock, "clock");
+        this.appliedListener = Objects.requireNonNull(appliedListener, "applied listener");
     }
 
     public UUID beginDraft(PermissionSubject subject, String sourceSurface) {
@@ -808,6 +822,11 @@ public final class ConfigurationAdministrationService {
                             "Do not retry the stale draft; run configuration-transition recovery for revision "
                                     + revisionId.value() + ".");
                 }
+            }
+            try {
+                appliedListener.accept(applied);
+            } catch (RuntimeException | LinkageError ignored) {
+                // Notification failures cannot change the already durable active configuration.
             }
             return applied;
         } catch (AdministrationException exception) {

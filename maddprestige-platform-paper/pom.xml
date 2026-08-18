@@ -7,6 +7,7 @@
         <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-persistence</artifactId></dependency>
         <dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-integrations</artifactId></dependency>
         <dependency><groupId>io.papermc.paper</groupId><artifactId>paper-api</artifactId><version>${paper.version}</version><scope>provided</scope></dependency>
+        <dependency><groupId>net.luckperms</groupId><artifactId>api</artifactId><scope>provided</scope></dependency>
         <dependency><groupId>com.github.MilkBowl</groupId><artifactId>VaultAPI</artifactId><scope>provided</scope></dependency>
         <dependency><groupId>com.gmail.nossr50.mcMMO</groupId><artifactId>mcMMO</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>me.clip</groupId><artifactId>placeholderapi</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
@@ -20,5 +21,6 @@
         <dependency><groupId>net.momirealms</groupId><artifactId>craft-engine-core</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>net.momirealms</groupId><artifactId>craft-engine-bukkit</artifactId><scope>provided</scope><exclusions><exclusion><groupId>*</groupId><artifactId>*</artifactId></exclusion></exclusions></dependency>
         <dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.mockito</groupId><artifactId>mockito-core</artifactId><scope>test</scope></dependency>
     </dependencies>
 </project>

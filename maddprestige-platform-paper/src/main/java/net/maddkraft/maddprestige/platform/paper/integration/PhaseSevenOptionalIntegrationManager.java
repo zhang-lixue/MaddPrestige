@@ -30,10 +30,13 @@ import org.bukkit.scheduler.BukkitTask;
 
 /** Optional dependency discovery, exact generation ownership, and reverse-safe shutdown. */
 public final class PhaseSevenOptionalIntegrationManager implements Listener {
+    private static final List<String> RECONCILIATION_ORDER = List.of(
+            "Vault", "mcMMO", "PlaceholderAPI", "EconomyShopGUI", "QuickShop-Hikari",
+            "GriefPrevention", "WorldGuard", "CraftEngine");
     private static final Map<String, String> SUPPORTED = Map.of(
             "Vault", "2.20.2",
             "mcMMO", "2.2.053",
-            "PlaceholderAPI", "2.12.3",
+            "PlaceholderAPI", "2.12.2",
             "EconomyShopGUI", "7.2.0",
             "QuickShop-Hikari", "6.2.0.11",
             "GriefPrevention", "16.18.7",
@@ -69,19 +72,35 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         configuration = java.util.Objects.requireNonNull(initial, "integration configuration");
         desired = composition(configuration).reachableProviders();
         owner.getServer().getPluginManager().registerEvents(this, owner);
-        SUPPORTED.keySet().stream().filter(name -> !"CraftEngine".equals(name)).forEach(this::bindIfAvailable);
+        RECONCILIATION_ORDER.stream().filter(name -> !"CraftEngine".equals(name)).forEach(this::bindIfAvailable);
         observeCraftEngineAtStartup();
+    }
+
+    /** Bounded cache shared by the production state publisher and PlaceholderAPI hot path. */
+    public MaddPrestigePlaceholderCache placeholderOutput() {
+        return placeholderOutput;
     }
 
     public void reconcile(PhaseFiveIntegrationConfiguration replacement) {
         PhaseFiveIntegrationConfiguration prior = configuration;
         configuration = java.util.Objects.requireNonNull(replacement, "integration configuration");
         desired = composition(configuration).reachableProviders();
-        for (String name : SUPPORTED.keySet()) {
+        for (String name : RECONCILIATION_ORDER) {
+            if (!relevant(name)) {
+                if ("CraftEngine".equals(name)) {
+                    unbindCraftEngine("Canonical integration configuration disabled CraftEngine");
+                } else {
+                    unbind(name, "Canonical integration configuration disabled the integration");
+                }
+                continue;
+            }
             if ("CraftEngine".equals(name)) {
                 if (craftEngine.state() == CraftEngineRegistryLifecycle.State.AVAILABLE
                         && prior.craftEngineRewardMaximumQuantity()
                                 != configuration.craftEngineRewardMaximumQuantity()) {
+                    rebindReadyCraftEngine();
+                } else if (craftEngine.state() == CraftEngineRegistryLifecycle.State.AVAILABLE
+                        && !bindings.containsKey(name)) {
                     rebindReadyCraftEngine();
                 } else {
                     reconcileBinding(name);
@@ -385,24 +404,36 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
 
     private boolean relevant(String name) {
         return switch (name) {
+            case "Vault" -> configuration.vaultEnabled();
+            case "mcMMO" -> configuration.mcMmoEnabled();
             case "PlaceholderAPI" -> configuration.placeholderOutputEnabled()
                     || !configuration.placeholderInputs().isEmpty();
             case "EconomyShopGUI" -> configuration.economyShopGuiCompatibilityEnabled();
             case "QuickShop-Hikari" -> configuration.quickShopCompatibilityEnabled();
-            default -> true;
+            case "GriefPrevention" -> configuration.griefPreventionEnabled();
+            case "WorldGuard" -> configuration.worldGuardEnabled();
+            case "CraftEngine" -> configuration.craftEngineEnabled();
+            default -> false;
         };
     }
 
-    private static boolean structuralChange(String name, PhaseFiveIntegrationConfiguration prior,
+    static boolean structuralChange(String name, PhaseFiveIntegrationConfiguration prior,
             PhaseFiveIntegrationConfiguration replacement) {
         return switch (name) {
+            case "Vault" -> prior.vaultEnabled() != replacement.vaultEnabled();
+            case "mcMMO" -> prior.mcMmoEnabled() != replacement.mcMmoEnabled();
             case "PlaceholderAPI" -> prior.placeholderOutputEnabled() != replacement.placeholderOutputEnabled()
                     || !prior.placeholderInputs().equals(replacement.placeholderInputs());
             case "EconomyShopGUI" -> prior.economyShopGuiCompatibilityEnabled()
                     != replacement.economyShopGuiCompatibilityEnabled();
             case "QuickShop-Hikari" -> prior.quickShopCompatibilityEnabled()
                     != replacement.quickShopCompatibilityEnabled();
-            default -> false;
+            case "GriefPrevention" -> prior.griefPreventionEnabled() != replacement.griefPreventionEnabled();
+            case "WorldGuard" -> prior.worldGuardEnabled() != replacement.worldGuardEnabled();
+            case "CraftEngine" -> prior.craftEngineEnabled() != replacement.craftEngineEnabled()
+                    || prior.craftEngineRewardMaximumQuantity()
+                            != replacement.craftEngineRewardMaximumQuantity();
+            default -> true;
         };
     }
 

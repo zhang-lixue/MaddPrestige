@@ -141,7 +141,7 @@ public final class RankUpAuthorizationService {
                     : authorizer.noRequirements(populated);
             RankUpPlanningRequest request = RankUpPlanningRequest.canonical(intent.actor(), intent.playerId(), state,
                     target, snapshot.stages().revisionId(), snapshot.phaseThree().providerGenerations(), evaluation,
-                    costs, rewards, intent.idempotencyKey(), stages);
+                    costs, rewards, intent.idempotencyKey(), stages, intent.requestId());
             return planner.plan(request).thenApply(plan -> new RankUpAuthorizationResult(Optional.of(plan), List.of()));
         });
     }

@@ -15,10 +15,12 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.metric.MetricValueType;
+import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -102,6 +104,72 @@ class ManualProgressProviderTest {
         assertTrue(bootstrap.provider().metrics().isEmpty());
     }
 
+    @Test
+    @DisplayName("[A65][8B] Repeated flush ticks coalesce behind one drain and include updates made while queued")
+    void flushIsSingleFlightAndCoalescesQueuedUpdates() {
+        QueueExecutor executor = new QueueExecutor();
+        CountingRepository repository = new CountingRepository();
+        ManualProgressBootstrap bootstrap = bootstrap(repository, executor, 2, 100);
+        var registration = bootstrap.owner().registerMetric(definition("coalesced")).toCompletableFuture();
+        executor.runAll();
+        ManualMetricHandle handle = registration.join();
+        UUID player = UUID.randomUUID();
+        handle.increment(player, MetricValue.count(1), "event", CLOCK.instant());
+
+        var first = bootstrap.provider().flushAsync().toCompletableFuture();
+        var second = bootstrap.provider().flushAsync().toCompletableFuture();
+        assertEquals(first, second);
+        assertEquals(1, executor.size());
+        handle.increment(player, MetricValue.count(2), "event", CLOCK.instant());
+        executor.runAll();
+
+        assertEquals(1, repository.writeBatches);
+        assertEquals("3", repository.records.get(player).value().canonical());
+        assertEquals(1, first.join());
+    }
+
+    @Test
+    @DisplayName("[A65][8B] A failed flush retains dirty state and a later single-flight drain retries it")
+    void failedFlushRetainsDirtyState() {
+        AtomicBoolean fail = new AtomicBoolean(true);
+        CountingRepository repository = new CountingRepository() {
+            @Override
+            public void writeBatch(Collection<ManualProgressRecord> records) {
+                if (fail.getAndSet(false)) {
+                    throw new IllegalStateException("simulated storage outage");
+                }
+                super.writeBatch(records);
+            }
+        };
+        ManualProgressBootstrap bootstrap = bootstrap(repository, Runnable::run, 2, 100);
+        ManualMetricHandle handle = bootstrap.owner().registerMetric(definition("retry"))
+                .toCompletableFuture().join();
+        UUID player = UUID.randomUUID();
+        handle.increment(player, MetricValue.count(4), "event", CLOCK.instant());
+        assertThrows(CompletionException.class, () -> bootstrap.provider().flushAsync().toCompletableFuture().join());
+        assertEquals(ProviderHealthState.DEGRADED, bootstrap.provider().health().state());
+        assertEquals("manual.persistence_stalled", bootstrap.provider().health().code());
+        assertEquals(1, bootstrap.provider().flushAsync().toCompletableFuture().join());
+        assertEquals(ProviderHealthState.AVAILABLE, bootstrap.provider().health().state());
+        assertEquals("manual.available", bootstrap.provider().health().code());
+        assertEquals("4", repository.records.get(player).value().canonical());
+    }
+
+    @Test
+    @DisplayName("[A65][8B] Large dirty sets are drained in bounded batches without losing entries")
+    void flushBatchesAreBounded() {
+        CountingRepository repository = new CountingRepository();
+        ManualProgressBootstrap bootstrap = bootstrap(repository, Runnable::run, 2, 3_000);
+        ManualMetricHandle handle = bootstrap.owner().registerMetric(definition("bounded"))
+                .toCompletableFuture().join();
+        for (int index = 0; index < 2_100; index++) {
+            handle.increment(new UUID(0, index + 1L), MetricValue.count(1), "event", CLOCK.instant());
+        }
+        assertEquals(2_100, bootstrap.provider().flushAsync().toCompletableFuture().join());
+        assertEquals(3, repository.writeBatches);
+        assertEquals(2_100, repository.records.size());
+    }
+
     private static ManualProgressBootstrap bootstrap(
             CountingRepository repository,
             Executor executor,
@@ -135,7 +203,7 @@ class ManualProgressProviderTest {
         }
     }
 
-    private static final class CountingRepository implements ManualProgressRepository {
+    private static class CountingRepository implements ManualProgressRepository {
         private final Map<UUID, ManualProgressRecord> records = new LinkedHashMap<>();
         private int writeBatches;
         private int writtenRecords;

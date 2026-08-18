@@ -5,6 +5,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
 import net.maddkraft.maddprestige.api.action.ActionExecutionStatus;
@@ -25,6 +27,7 @@ import net.maddkraft.maddprestige.api.reward.RewardProvider;
 import net.maddkraft.maddprestige.core.prestige.PrestigeExecutionResult;
 import net.maddkraft.maddprestige.core.prestige.PrestigeExecutionStatus;
 import net.maddkraft.maddprestige.core.prestige.PrestigePlan;
+import net.maddkraft.maddprestige.core.event.OperationLifecycleListener;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException;
 import net.maddkraft.maddprestige.core.stage.StageTransitionFence;
@@ -43,6 +46,9 @@ public final class PrestigeOperationExecutor {
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
     private final StageTransitionFence transitionFence;
     private final Clock clock;
+    private final OperationLifecycleListener lifecycleEvents;
+    private final Predicate<PrestigePlan> eventRevalidator;
+    private final Consumer<PrestigePlan> postPreInitializer;
 
     public PrestigeOperationExecutor(
             PrestigeLifecycleRepository lifecycle,
@@ -51,15 +57,73 @@ public final class PrestigeOperationExecutor {
             Supplier<Optional<ConfigRevisionId>> activeRevision,
             StageTransitionFence transitionFence,
             Clock clock) {
+        this(lifecycle, operations, providers, activeRevision, transitionFence, clock,
+                OperationLifecycleListener.NONE, ignored -> true, ignored -> { });
+    }
+
+    public PrestigeOperationExecutor(
+            PrestigeLifecycleRepository lifecycle,
+            OperationRepository operations,
+            ProviderRegistry providers,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionFence transitionFence,
+            Clock clock,
+            OperationLifecycleListener lifecycleEvents) {
+        this(lifecycle, operations, providers, activeRevision, transitionFence, clock,
+                lifecycleEvents, ignored -> true, ignored -> { });
+    }
+
+    public PrestigeOperationExecutor(
+            PrestigeLifecycleRepository lifecycle,
+            OperationRepository operations,
+            ProviderRegistry providers,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionFence transitionFence,
+            Clock clock,
+            OperationLifecycleListener lifecycleEvents,
+            Predicate<PrestigePlan> eventRevalidator) {
+        this(lifecycle, operations, providers, activeRevision, transitionFence, clock, lifecycleEvents,
+                eventRevalidator, ignored -> { });
+    }
+
+    public PrestigeOperationExecutor(
+            PrestigeLifecycleRepository lifecycle,
+            OperationRepository operations,
+            ProviderRegistry providers,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            StageTransitionFence transitionFence,
+            Clock clock,
+            OperationLifecycleListener lifecycleEvents,
+            Predicate<PrestigePlan> eventRevalidator,
+            Consumer<PrestigePlan> postPreInitializer) {
         this.lifecycle = java.util.Objects.requireNonNull(lifecycle, "Prestige lifecycle repository");
         this.operations = java.util.Objects.requireNonNull(operations, "operation repository");
         this.providers = java.util.Objects.requireNonNull(providers, "provider registry");
         this.activeRevision = java.util.Objects.requireNonNull(activeRevision, "active revision");
         this.transitionFence = java.util.Objects.requireNonNull(transitionFence, "stage transition fence");
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
+        this.lifecycleEvents = java.util.Objects.requireNonNull(lifecycleEvents, "lifecycle events");
+        this.eventRevalidator = java.util.Objects.requireNonNull(eventRevalidator, "event revalidator");
+        this.postPreInitializer = java.util.Objects.requireNonNull(postPreInitializer, "post-PRE initializer");
     }
 
     public PrestigeExecutionResult execute(PrestigePlan plan) {
+        PrestigeExecutionResult result = executeInternal(plan);
+        boolean durableTerminal = operations.find(plan.operationId()).map(stored -> switch (stored.state()) {
+            case COMPLETED, COMPENSATED, FAILED, NEEDS_RECONCILIATION -> true;
+            default -> false;
+        }).orElse(false);
+        if (durableTerminal) {
+            try {
+                lifecycleEvents.afterPrestige(plan, result);
+            } catch (RuntimeException | LinkageError ignored) {
+                // Post-event failures cannot change the already durable terminal outcome.
+            }
+        }
+        return result;
+    }
+
+    private PrestigeExecutionResult executeInternal(PrestigePlan plan) {
         java.util.Objects.requireNonNull(plan, "Prestige plan");
         if (!plan.executionAllowed() || !plan.blockers().isEmpty() || !plan.authorization().matches(plan)) {
             return result(plan, PrestigeExecutionStatus.UNAUTHORIZED,
@@ -73,15 +137,39 @@ public final class PrestigeOperationExecutor {
             return result(plan, PrestigeExecutionStatus.STALE_GENERATION,
                     "A pinned provider generation changed after confirmation");
         }
+        try {
+            if (!lifecycleEvents.beforePrestige(plan)) {
+                return result(plan, PrestigeExecutionStatus.UNAUTHORIZED,
+                        "Prestige was cancelled by a pre-operation lifecycle listener");
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            return result(plan, PrestigeExecutionStatus.UNAUTHORIZED,
+                    "Prestige pre-operation listener failed; no journal or effect was created");
+        }
+        if (!postPreAuthorityMatches(plan)) {
+            return result(plan, PrestigeExecutionStatus.STALE_GENERATION,
+                    "Configuration or provider generation changed during pre-operation event delivery");
+        }
+        PrestigeExecutionResult duplicateBeforeInitialization = duplicate(plan);
+        if (duplicateBeforeInitialization != null) {
+            return duplicateBeforeInitialization;
+        }
+        try {
+            postPreInitializer.accept(plan);
+        } catch (RuntimeException | LinkageError failure) {
+            return result(plan, PrestigeExecutionStatus.UNAUTHORIZED,
+                    "Player initialization failed after post-PRE revalidation and before journaling");
+        }
+        if (!postPreAuthorityMatches(plan)) {
+            return result(plan, PrestigeExecutionStatus.STALE_GENERATION,
+                    "Player, configuration, or provider state changed before journal insertion");
+        }
+        PrestigeExecutionResult duplicateAfterInitialization = duplicate(plan);
+        if (duplicateAfterInitialization != null) {
+            return duplicateAfterInitialization;
+        }
         var duplicate = operations.findByIdempotency("prestige", plan.playerId(),
                 plan.operationPlan().idempotencyKey());
-        if (duplicate.isPresent()
-                && (!duplicate.orElseThrow().operationId().equals(plan.operationId())
-                        || duplicate.orElseThrow().state() != OperationState.PREPARED)) {
-            return result(plan, PrestigeExecutionStatus.DUPLICATE,
-                    "Prestige idempotency key already belongs to operation "
-                            + duplicate.orElseThrow().operationId());
-        }
         if (duplicate.isEmpty()) {
             try {
                 lifecycle.insertPrepared(plan);
@@ -118,6 +206,28 @@ public final class PrestigeOperationExecutor {
                 transitionFence.release(permit, clock.instant());
             }
         }
+    }
+
+    private boolean postPreAuthorityMatches(PrestigePlan plan) {
+        try {
+            return activeRevision.get().filter(plan.configRevision()::equals).isPresent()
+                    && bindingsMatch(plan) && eventRevalidator.test(plan);
+        } catch (RuntimeException | LinkageError failure) {
+            return false;
+        }
+    }
+
+    private PrestigeExecutionResult duplicate(PrestigePlan plan) {
+        var duplicate = operations.findByIdempotency("prestige", plan.playerId(),
+                plan.operationPlan().idempotencyKey());
+        if (duplicate.isPresent()
+                && (!duplicate.orElseThrow().operationId().equals(plan.operationId())
+                        || duplicate.orElseThrow().state() != OperationState.PREPARED)) {
+            return result(plan, PrestigeExecutionStatus.DUPLICATE,
+                    "Prestige idempotency key already belongs to operation "
+                            + duplicate.orElseThrow().operationId());
+        }
+        return null;
     }
 
     private PrestigeExecutionResult executeWhileFenced(PrestigePlan plan) {
@@ -477,6 +587,7 @@ public final class PrestigeOperationExecutor {
     }
 
     private boolean bindingMatches(ProviderId id, long generation) {
+        providers.refreshHealth(id);
         var snapshot = providers.find(id);
         return snapshot.isPresent() && snapshot.orElseThrow().generation() == generation
                 && snapshot.orElseThrow().activation() == ActivationState.ACTIVE
