@@ -4,6 +4,11 @@
 **Primary deployment:** MaddKraft SMP  
 **Product goal:** A production-grade, reusable Paper progression/prestige framework that can be deployed by unrelated servers without MaddKraft-specific assumptions.
 
+**Owner product-scope amendment — 2026-08-17:** MaddPrestige 2.0 officially supports SQLite as its production
+persistence backend. MySQL/MariaDB production support and semantic parity are deferred post-2.0 unless explicitly
+re-authorized. This narrows the release scope without weakening SQLite correctness or removing the backend-neutral
+boundaries retained for a proper future external-SQL implementation. A64 is deferred, not satisfied.
+
 ---
 
 ## 0. Executive mandate
@@ -280,7 +285,7 @@ MaddPrestige
 │   ├── repositories
 │   ├── transactions
 │   ├── sqlite
-│   └── mysql-mariadb
+│   └── mysql-mariadb (deferred post-2.0 extension)
 ├── providers
 │   ├── registry
 │   ├── rank
@@ -999,12 +1004,15 @@ Generic command rewards/actions are inherently external side effects and may not
 
 # 21. Persistence
 
-## 21.1 Required backends
+## 21.1 Supported 2.0 backend and deferred extensions
 
-- SQLite — default and recommended for a single Paper server.
-- MySQL/MariaDB — supported for larger deployments and future network use.
+- SQLite — the official MaddPrestige 2.0 production backend, default and recommended for a single Paper server.
+- MySQL/MariaDB — deferred post-2.0. No 2.0 production implementation, semantic-parity, outage/failover, shared-database,
+  or network-safety claim may be made.
 
-Architecture should not preclude PostgreSQL later, but PostgreSQL is not required for V2 unless trivial through the chosen abstraction.
+Existing backend-neutral repository and transaction boundaries should remain extensible for a future external-SQL
+implementation. They are not evidence that an external backend is supported. Architecture should not preclude
+PostgreSQL later, but PostgreSQL is not required for 2.0.
 
 ## 21.2 Persistence requirements
 
@@ -1017,16 +1025,18 @@ Architecture should not preclude PostgreSQL later, but PostgreSQL is not require
 - no blocking long queries on the main thread;
 - bounded queues/backpressure;
 - clean shutdown flush;
-- configurable pool/timeout settings for external DB;
+- configurable pool/timeout settings when an external DB is implemented post-2.0;
 - connection health diagnostics;
 - safe startup when DB unavailable according to configured fail policy;
 - no manual editing of internal DB required for ordinary administration.
 
 ## 21.3 Multi-server/network stance
 
-Single-server correctness is required.
+Single-Paper-server SQLite correctness is required for 2.0.
 
-MySQL/MariaDB design should not assume only one process will ever connect. However, fully synchronized proxy/network progression is not a mandatory first V2 feature unless explicitly implemented and tested. If network mode is not supported, detect/document it rather than implying support.
+Multi-process/shared-database deployment support is deferred post-2.0. A future MySQL/MariaDB design must not assume
+only one process will ever connect and must qualify its row-lock, deadlock, outage and failover semantics before being
+advertised. Until then, configuration and documentation must not imply external-DB or network-mode support.
 
 ---
 
@@ -1934,7 +1944,9 @@ Cover at minimum:
 
 ## 42.2 Database tests
 
-Run against real SQLite and MySQL/MariaDB-compatible test environment where practical.
+For 2.0, run the complete persistence suite against real SQLite. MySQL/MariaDB test environments remain useful
+architecture experiments, but are not a 2.0 release gate or support evidence. If external SQL is re-authorized
+post-2.0, run the full repository/progression/recovery contract against each claimed backend and version family.
 
 Cover:
 
@@ -1999,7 +2011,8 @@ Explicitly test:
 
 # 43. Acceptance-test matrix
 
-The following are release gates, not suggestions.
+The following are release gates unless a dated owner scope amendment explicitly classifies an item `Later`. A64 is the
+only current post-2.0 deferral; it has not passed and must be re-authorized before it can become a release gate again.
 
 | ID | Area | Acceptance test | Expected result |
 |---|---|---|---|
@@ -2066,7 +2079,7 @@ The following are release gates, not suggestions.
 | A61 | Offline player | Rank/repair offline player | Works safely or clearly documents online-only limitation per provider |
 | A62 | High event volume | Generate sustained XP/progress events | No SQL write per event; TPS impact remains acceptable |
 | A63 | DB migration | SQLite schema upgrade with real data | Data preserved and migration report generated |
-| A64 | MySQL/MariaDB | Run same core progression tests | Behavior matches SQLite semantics |
+| A64 | MySQL/MariaDB (deferred post-2.0 by owner decision dated 2026-08-17) | When external SQL is re-authorized, run the same core progression/recovery tests | Not a 2.0 gate; any future supported backend must match the applicable SQLite semantics before support is claimed |
 | A65 | API provider | Register example third-party progression provider | Metric appears dynamically in commands/GUI and evaluates correctly |
 | A66 | API events | Listen for rank/prestige events | Pre/post ordering matches documented contract |
 | A67 | Optional adapter failure | Break one optional integration | Unrelated features remain functional |
@@ -2300,21 +2313,27 @@ For the remainder of MaddKraft stack, perform coexistence validation and documen
 
 ## Phase 8 — Public API, hardening, docs and performance
 
-Complete:
+The original Phase 8 design included MySQL/MariaDB. The owner product-scope decision dated 2026-08-17 preserves that
+future design intent but defers its production implementation and parity work post-2.0. The authoritative decomposition
+is now:
 
-- stable public API;
-- provider SDK examples;
-- MySQL/MariaDB;
-- i18n architecture;
-- docs/Quick Start;
-- examples/presets;
-- fault injection;
-- performance/load tests;
-- upgrade/migration tests;
-- dependency version failure tests;
-- packaging/release notes.
+- **8B — runtime/API/events:** owner-accepted checkpoint.
+- **8C — SQLite Persistence, Migration, Backup & Recovery Hardening:** coordinated safe SQLite backup; backup
+  metadata/checksum/integrity verification; disposable restore rehearsal; populated old-schema-to-current migration
+  fixtures; migration interruption/failure handling; schema version/checksum/gap/future-version handling;
+  corrupt/truncated backup or database handling where practical; database/config compatibility and startup diagnostics;
+  exact populated-state restart/recovery qualification; preservation of accepted transaction, journal, lease,
+  uncertainty, reconciliation and configuration-publication invariants; retention of existing backend-neutral
+  boundaries; explicit documentation that external SQL is deferred rather than supported.
+- **8D — i18n, generic example, public docs and admin UX.**
+- **8E — performance plus fault/dependency qualification.**
+- **8F — packaging and release hardening.**
 
-**Gate:** A61–A68, A70, A76 plus full regression suite.
+The following are explicitly deferred post-2.0: HikariCP integration solely for MySQL/MariaDB; MySQL and MariaDB
+production repositories; three-backend parity suites; MySQL/MariaDB row-lock/deadlock semantics; external-DB
+outage/failover qualification; and multi-process/shared-database deployment support.
+
+**2.0 gate:** A61–A63, A65–A68, A70, A76 plus the full regression suite. A64 is `Later`, not `Satisfied`.
 
 ## Phase 9 — MaddKraft migration and production qualification
 
@@ -2379,7 +2398,8 @@ V2 is release-ready when:
 - YAML, commands and GUI share one canonical model;
 - YAML remains human-readable and documented;
 - setup/help/doctor/why/simulation make the plugin understandable;
-- SQLite and MySQL/MariaDB pass core tests;
+- SQLite passes the complete applicable core, migration, backup, restore and recovery tests; MySQL/MariaDB remains an
+  explicit post-2.0 deferral rather than an implied support claim;
 - migrations are backed up and tested;
 - public API/provider SDK are documented;
 - optional integrations fail independently;

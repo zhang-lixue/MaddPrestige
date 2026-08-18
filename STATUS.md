@@ -1,6 +1,6 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 8B Correction Pass 2 owner-accepted; Phase 8C is next
+**Current phase:** Phase 8B owner-accepted checkpoint; Phase 8C scope prepared but implementation not started
 
 **Last updated:** 2026-08-17
 
@@ -8,7 +8,7 @@
 
 **Frozen pre-Phase-8 HEAD:** `7fc5c3532f0614634933ff66ee0e03bf55b8e5cf`
 
-**Checkpoint scope:** the complete accepted Phase 8B delta; no Phase 8C production work
+**Checkpoint scope:** documentation-only owner product-scope decision; accepted Phase 8B production behavior unchanged
 
 ## Outcome
 
@@ -73,10 +73,21 @@ JARs remain outside the review bundle; sanitized evidence is `PHASE8B_PAPER_QUAL
 
 ## Canonical remaining Phase 8 decomposition
 
-- Phase 8C: backend parity plus migration/backup hardening.
+- Phase 8C: SQLite Persistence, Migration, Backup & Recovery Hardening.
 - Phase 8D: i18n, a generic example, public documentation and admin UX.
 - Phase 8E: performance plus fault/dependency qualification.
 - Phase 8F: packaging and release hardening, including final compatibility-baseline responsibility.
+
+The owner decision dated 2026-08-17 makes SQLite the only officially supported MaddPrestige 2.0 production persistence
+backend. Phase 8C retains the full SQLite correctness burden: coordinated backup, verified metadata/checksums/integrity,
+restore rehearsal, populated migrations, interruption and schema-history failure handling, corruption diagnostics,
+database/config compatibility, and exact populated-state restart/recovery qualification without weakening any accepted
+transaction, journal, lease, uncertainty, reconciliation or configuration-publication invariant. Existing
+backend-neutral boundaries remain for a proper future implementation.
+
+MySQL/MariaDB production repositories, HikariCP integration solely for them, three-backend parity, external row-lock and
+deadlock semantics, external-DB outage/failover qualification, and shared-database/multi-process deployment support are
+deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not support evidence and not an A64 pass.
 
 ## Acceptance classification
 
@@ -85,13 +96,15 @@ JARs remain outside the review bundle; sanitized evidence is `PHASE8B_PAPER_QUAL
 | A02 | Partial | Complete Phase 6 setup/admin/GUI composition is reachable live; independent Quick Start usability remains Phase 8D |
 | A61 | Partial | Durable internal/offline paths and live async LuckPerms composition exist; complete provider-by-provider live offline qualification remains |
 | A62 | Partial | Manual backpressure/health and cache-only rendering are corrected; per-player virtual-thread/SQLite fan-out still needs real Paper load/TPS qualification in Phase 8E |
+| A64 | Later | MySQL/MariaDB production support and semantic parity are explicitly deferred post-2.0; no support or acceptance claim is made |
 | A65 | Partial | A separate live harness proves owner-attested SDK registration, admin-configured metric evaluation, unregister and rebind; the broader independent provider qualification matrix remains |
 | A66 | Partial | Live Paper proves correlation, distinct request/durable IDs, zero-effect cancellation and stale successful PRE, plus durable rank/Prestige POST; the complete uncertainty/listener-fault/reentrancy matrix remains |
 | A67 | Partial | Callback/linkage failure is isolated and unrelated registry state survives; broader dependency service/reload/operation matrix remains Phase 8E |
 | A70 | Partial | Live generic LuckPerms/rank-up/Prestige composition now exists; the complete unbranded three-stage server exercise is not an 8B claim |
 | A76 | Partial | Live setup is reachable, but Quick Start documentation and independent fresh-admin qualification remain Phase 8D |
 
-The mechanically updated ledger is **54 Satisfied, 22 Partial and 0 Later**. Phase 8B does not claim any Phase 8C–8F gate.
+The mechanically updated ledger is **54 Satisfied, 21 Partial and 1 Later**. A64 moved from `Partial` to `Later`; no
+criterion became `Satisfied`. Phase 8B does not claim any Phase 8C–8F gate.
 
 ## Verification
 
@@ -113,4 +126,4 @@ the owner-review bundle.
 - `PHASE8B_PAPER_QUALIFICATION.log`
 - `target/MaddPrestige_Phase8B_Owner_Review.zip`
 
-Phase 8B Correction Pass 2 is owner-accepted for checkpoint publication. Phase 8C production work has not begun.
+Phase 8B Correction Pass 2 remains owner-accepted. This scope-preparation checkpoint contains no Phase 8C implementation.

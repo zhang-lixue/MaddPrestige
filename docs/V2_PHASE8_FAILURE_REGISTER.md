@@ -1,6 +1,6 @@
 # Phase 8 failure register
 
-This register records Phase 8B findings and the unresolved work that must remain visible to the owner. Resolved findings are regression-tested where practical.
+This register records Phase 8B findings and the unresolved work that must remain visible to the owner. Resolved findings are regression-tested where practical. The owner product-scope decision dated 2026-08-17 makes SQLite the only supported 2.0 production backend and defers external SQL post-2.0; deferred is not satisfied.
 
 | ID | State | Failure mode | Phase 8B disposition / remaining action |
 |---|---|---|---|
@@ -37,5 +37,6 @@ This register records Phase 8B findings and the unresolved work that must remain
 | P8B-F015 | Open / 8E | Full dependency loss/linkage/hung/reload-during-operation matrix is incomplete | A61/A67 remain Partial; provider callback deadlines are present but not the complete adapter matrix |
 | P8B-F016 | Open / qualification | One first-party external provider process does not complete the broader independent/multi-provider matrix | The separate live harness now proves canonical setup, SDK discovery/evaluation, unregister/rebind and restart. A65 remains Partial pending its full matrix rather than lack of process evidence |
 | P8B-F017 | Open / qualification | Complete live Paper event uncertainty/listener-fault/reentrancy matrix is not independently exercised | A66 remains Partial; implementation and focused zero-effect/durable ordering tests are present |
-| P8B-F018 | Open / later Phase 8 | Backend parity, public i18n/docs/admin UX, load/fault qualification and release hardening are outside 8B | Preserve the canonical split: 8C backend parity plus migration/backup hardening; 8D i18n, generic example, public docs and admin UX; 8E performance plus fault/dependency qualification; 8F packaging/release hardening |
+| P8B-F018 | Open / later Phase 8 | SQLite persistence hardening, public i18n/docs/admin UX, load/fault qualification and release hardening are outside 8B | Preserve the canonical split: 8C SQLite persistence/migration/backup/recovery hardening; 8D i18n, generic example, public docs and admin UX; 8E performance plus fault/dependency qualification; 8F packaging/release hardening |
 | P8B-F035 | Open / later Phase 8 completion | The accepted Phase 8 SDK and Paper event candidates are not yet a frozen compatibility baseline | Freeze and enforce the final baseline during Phase 8 completion/release hardening; this is not Phase 8C work |
+| P8B-F036 | Deferred post-2.0 | The original V2/Phase 8 contract required MySQL/MariaDB production support and SQLite semantic parity | Owner decision dated 2026-08-17 removes external SQL from the 2.0 gate without claiming completion. A64 is `Later`; existing backend-neutral boundaries remain, while HikariCP-only integration, production repositories, parity/locking/deadlock/outage/failover suites and shared-database operation await explicit post-2.0 authorization |

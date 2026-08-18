@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
 **Architecture baseline:** Phase 8B implementation, 2026-08-17
-**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, public service/provider bridge, lifecycle events and Placeholder publisher; owner API review and later qualification remain
+**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; Phase 8C implementation has not started
 
 ## Module graph
 
@@ -184,7 +184,25 @@ The SQLite implementation uses a V2-only disposable schema with foreign keys, in
 
 Migration 4 adds player Prestige state/details, exact currency ledger, stage/Prestige history, milestone awards, one-active seasons/player progress/archive, native recovery payloads, and recovery events with player/time/state indexes. Both normal rank-up and Prestige reset append stage history transactionally with their stage CAS; stale CAS writes no orphan row. History and recovery APIs enforce 1–1000 row bounds. Query values are prepared parameters; static column fragments do not contain caller data. No Phase 4 high-volume event path writes SQL per event.
 
-`MySQL` and `MariaDB` are backend contract targets, not supported deployments. CI can provision each separately to exercise exact-decimal and uniqueness primitives. No network/proxy-safe behavior is claimed.
+SQLite is the only officially supported MaddPrestige 2.0 production persistence backend under the owner product-scope
+decision dated 2026-08-17. `MySQL` and `MariaDB` remain historical/future contract targets, not supported 2.0
+deployments. Existing repository, transaction and test boundaries remain backend-neutral where they already are so a
+future external-SQL implementation can be built and qualified properly. Primitive CI probes, interfaces or dormant
+configuration do not constitute a support claim. No external-DB, shared-database or network/proxy-safe behavior is
+claimed.
+
+Phase 8C is **SQLite Persistence, Migration, Backup & Recovery Hardening**. It must replace unsafe blind live-file copy
+with a coordinated SQLite-safe backup path; persist and verify backup metadata, checksum and integrity; rehearse restore
+in a disposable environment; exercise populated old-schema-to-current-schema fixtures; handle interrupted/failed
+migrations plus schema checksum/gap/future-version states; diagnose corrupt/truncated backups or databases where
+practical; verify database/config compatibility and startup reporting; and qualify exact populated-state restart and
+recovery. Every accepted transaction, journal, lease, uncertainty, reconciliation and configuration-publication
+invariant remains binding.
+
+HikariCP integration solely for MySQL/MariaDB, MySQL/MariaDB production repositories, three-backend parity suites,
+external row-lock/deadlock semantics, external-DB outage/failover qualification and multi-process/shared-database
+deployment support are deferred post-2.0. Deferral does not convert A64 into a pass and does not reduce the SQLite
+correctness gate.
 
 ## V1 isolation
 
