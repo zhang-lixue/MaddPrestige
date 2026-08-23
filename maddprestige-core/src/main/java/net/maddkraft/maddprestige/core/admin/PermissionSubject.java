@@ -29,7 +29,8 @@ public record PermissionSubject(Actor actor, Set<String> permissions) {
         if (!has(permission)) {
             throw new AdministrationException(
                     "permission.denied", "Permission required: " + permission,
-                    "Ask an owner to grant only the required MaddPrestige permission.");
+                    "Ask an owner to grant only the required MaddPrestige permission.",
+                    "permission", permission);
         }
     }
 }

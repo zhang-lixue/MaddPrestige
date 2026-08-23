@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
-**Architecture baseline:** Phase 8B implementation, 2026-08-17
-**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; the Phase 8C SQLite hardening candidate is implemented/qualified and awaits owner review
+**Architecture baseline:** Owner-accepted Phase 8D implementation, 2026-08-23
+**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; Phase 8C and Phase 8D are owner-accepted, A76 is deferred to the final frozen Phase 8 release candidate, and Phase 8E has not started
 
 ## Module graph
 
@@ -480,3 +480,66 @@ CraftEngine dispositions remain independent. Read-only item requirement: native.
 AdvancedCrates, UltimateMobCoins and DiscordSRV use only the already accepted generic command/typed-Placeholder fallbacks described in the Phase 7 disposition table. AxPlayerWarps remains unavailable; AxSellWands and the MaddKraft custom plugins are coexistence-only. Resource-world lifecycle remains external. A75 proves unconfigured, absent, unhealthy, stale, rebound and removed behavior using only a fake Court metric provider through the unchanged generic boundary; no Court implementation is owned.
 
 `GENERIC INTERFACE EXTENSION REQUIRED: NO`. Existing metric, reward, health, generation, validation, uncertainty, configuration, journal and recovery contracts express every Phase 7 capability without vendor logic in API/core/persistence.
+
+## Phase 8D presentation and public administration boundary
+
+`PaperMessageService` is the only new presentation authority. It owns an immutable snapshot containing the selected
+server-global catalog and complete built-in `en_US` fallback. Both are UTF-8 YAML maps with bounded flat message keys and
+string templates. File/path/size/key-count/value bounds, rejection of every symlink/reparse component, and real-path
+containment beneath the real plugin data directory apply before parsing. Strict MiniMessage
+validation compiles every candidate value before publication. Reload constructs the complete snapshot off to the side
+and performs one reference swap only after validation, so readers see one complete old or new catalog. A rejected
+reload retains the known-good snapshot. Startup may fall back to built-in English; bootstrap failures before message
+service availability remain the narrow English-log exception.
+
+Presentation sites carry a stable semantic message key and immutable named arguments; they never pass a precomposed
+English sentence through a generic line/title/action wrapper. RankUp and Prestige authorization emit immutable typed
+blockers containing stable semantic identity, blocker-specific facts and secondary diagnostic text. The same blockers
+flow through Why, previews, real no-plan simulation failures and operation rejection. Presentation selects the blocker
+catalog key directly from that identity and never classifies English diagnostic prose. All known public administration
+codes use explicit exact mappings rather than diagnostic-code fragment families. A mechanical production-site audit
+accounts for all 111 occurrences and 84 codes: 19 repeated codes have a deliberate compatibility/discriminator register,
+while all 65 single-source codes have a source/identity/trigger/consequence/remediation/fact register. Where repeated
+occurrences have different consequences or remediation,
+`AdministrationException` carries a code-checked immutable `AdministrationSemanticVariant`; five values distinguish
+pre-change/restored/reconciliation apply failures and acknowledgement/apply validation gates. Compatible repeated codes
+retain one shared identity only after deliberate condition/consequence/remediation/fact review. Unknown internal codes
+alone use a safe generic fallback. Doctor and validation code mappings, typed operation-preview stage/Prestige, cost/reward,
+component, currency, projection and uncertainty facts, and schema field descriptions remain catalog-owned.
+Diagnostic summaries/remediations and flattened plan sentences stored inside domain models do not cross as message
+arguments. Arguments are length-bounded,
+control-sanitized and inserted with MiniMessage's unparsed resolver, which gives player, provider, configuration and
+diagnostic values no tag, click, hover or nested-template authority. Stable service error codes/message keys remain
+machine-readable and are not translated in core. A missing selected key uses built-in English. A key missing from both
+catalogs renders bounded `[message:<key>]` and emits a bounded diagnostic instead of returning null.
+
+The 2.0 public setup path remains `SetupWizardService` through the live Phase 6 command adapter. Phase 8D adds only the
+smallest schema-compatible ability to assign the setup session's one requirement to a chosen target stage. Existing
+callers retain the original global form. Ordered session maps and document maps are explicit invariants. For the frozen
+profile the generator's five documents are byte-identical to `examples/member-adventurer-veteran/`, including schema
+versions, value types, complete disabled integration set, field order and line endings. Preview uses the same order.
+Preview, server-issued risk acknowledgement and immutable apply remain the only activation route.
+
+Previously unseen players require a current-Prestige baseline and real managed-rank projection before an authoritative
+progression result can be returned. Production collects configured initial provider samples at pinned generations,
+inserts stage, zero Prestige and every initial requirement baseline in one SQLite transaction, then uses the accepted
+rank-projection planner/executor to persist, execute and verify one idempotent initial projection operation. Completed
+identity is durable; uncertainty or incomplete recovery blocks rather than claiming success. Existing/progressed state
+is not overwritten. Reads, Why, previews, blocked operations and staff manual-Prestige mutation establish this boundary
+before returning/mutating. An eligible
+mutation retains the accepted PRE contract: it authorizes virtually, delivers PRE with zero effects, revalidates, and
+only then establishes and projects Member before its own operation journal/effects. PRE cancellation remains zero-state.
+
+The production Doctor is composed with concrete database, operational, rank-target and configuration-history probes.
+Dormant optional provider findings remain visible but do not make an otherwise applicable profile unhealthy. The
+operational snapshot is bounded and inspects schema, providers, pending/uncertain/reconciliation work, remaps, leases,
+transitions, configuration identity, scheduler/cache/flush state and optional publication. LuckPerms group nodes are
+normalized by LuckPerms; the adapter maps them case-insensitively to exact configured external spelling before enforcing
+managed membership. Neither path creates groups.
+
+The exact A70 runtime is intentionally single-server and SQLite-only. It uses built-in Paper play-time samples and live
+LuckPerms, with no external SDK provider or other optional dependency. A separate harness drives only the public setup
+and service boundaries, records 29 first-boot assertions, restarts the same directory unchanged, and records three
+durability assertions. Harness/runtime data and third-party JARs are disposable and excluded from review artifacts;
+source plus sanitized boot logs are retained. This evidence does not expand A61/A65/A66/A67 or replace the blind-human
+A76 protocol.

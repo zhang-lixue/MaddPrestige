@@ -4,12 +4,13 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationPreview;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 public record SetupPreview(
         UUID sessionId,
         UUID draftId,
         ConfigurationPreview configuration,
-        List<String> playerExperience) {
+        List<MessageReference> playerExperience) {
     public SetupPreview {
         sessionId = Objects.requireNonNull(sessionId, "session ID");
         draftId = Objects.requireNonNull(draftId, "draft ID");

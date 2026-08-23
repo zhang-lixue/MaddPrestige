@@ -85,8 +85,24 @@ class PrestigeAuthorizationServiceTest {
                 .authorize().rejection().orElseThrow().contains("maximum"));
         assertTrue(fixture(PrestigeLimit.unlimited(), 5000, SUMMIT, ORIGIN)
                 .authorize().plan().orElseThrow().executionAllowed());
-        assertTrue(fixture(PrestigeLimit.unlimited(), Long.MAX_VALUE, SUMMIT, ORIGIN)
-                .authorize().rejection().orElseThrow().contains("maximum"));
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                .PRESTIGE_COUNTER_OVERFLOW,
+                fixture(PrestigeLimit.unlimited(), Long.MAX_VALUE, SUMMIT, ORIGIN)
+                        .authorize().authorizationBlockers().getFirst().kind());
+    }
+
+    @Test
+    void exactMaximumAndCooldownBlockerIdentitiesAndFactsSurviveRealAuthorization() {
+        PrestigeAuthorizationResult maximum = fixture(PrestigeLimit.finite(1), 1, SUMMIT, ORIGIN).authorize();
+        PrestigeAuthorizationResult cooldown = fixture(PrestigeLimit.unlimited(), 0, 4, 7, 3, SUMMIT, ORIGIN,
+                Duration.ofMinutes(10), Optional.of(NOW.minusSeconds(60))).authorize();
+
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                .PRESTIGE_MAXIMUM_REACHED, maximum.authorizationBlockers().getFirst().kind());
+        assertEquals("1", maximum.authorizationBlockers().getFirst().facts().get("prestige_maximum"));
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                .PRESTIGE_COOLDOWN_ACTIVE, cooldown.authorizationBlockers().getFirst().kind());
+        assertEquals("PT9M", cooldown.authorizationBlockers().getFirst().facts().get("cooldown_remaining"));
     }
 
     @Test
@@ -141,12 +157,26 @@ class PrestigeAuthorizationServiceTest {
             long prestigeRevision,
             StageId requiredStage,
             StageId resetStage) {
+        return fixture(limit, currentPrestige, lifetimePrestige, stageRevision, prestigeRevision, requiredStage,
+                resetStage, Duration.ZERO, Optional.empty());
+    }
+
+    private static Fixture fixture(
+            PrestigeLimit limit,
+            long currentPrestige,
+            long lifetimePrestige,
+            long stageRevision,
+            long prestigeRevision,
+            StageId requiredStage,
+            StageId resetStage,
+            Duration cooldown,
+            Optional<Instant> lastPrestigedAt) {
         UUID playerId = UUID.fromString("11111111-1111-1111-1111-111111111111");
         PlayerStageState stageState = new PlayerStageState(playerId, SUMMIT, stageRevision, REVISION,
                 NOW.minusSeconds(60),
                 NOW.minusSeconds(600), NOW.minusSeconds(60), Optional.empty(), Optional.empty(), Optional.empty());
         PlayerPrestigeState prestigeState = new PlayerPrestigeState(playerId, currentPrestige,
-                lifetimePrestige, prestigeRevision, REVISION, new ScopeId("prestige-current"), Optional.empty(),
+                lifetimePrestige, prestigeRevision, REVISION, new ScopeId("prestige-current"), lastPrestigedAt,
                 NOW.minusSeconds(600), NOW.minusSeconds(60));
         StageDefinition origin = new StageDefinition(ORIGIN, true, "Origin", Map.of(), StageProjection.none());
         StageDefinition summit = new StageDefinition(SUMMIT, true, "Summit", Map.of(), StageProjection.none());
@@ -155,7 +185,7 @@ class PrestigeAuthorizationServiceTest {
         PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16, Map.of(), Map.of(), Map.of(),
                 Map.of(), CommandActionPolicy.safeDefaults());
         PrestigeConfiguration prestige = new PrestigeConfiguration(true, Set.of(requiredStage), resetStage, 1, 1,
-                limit, Duration.ZERO, Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty(),
+                limit, cooldown, Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty(),
                 ResetPreservePolicy.safeDefaults(), false);
         PhaseFourConfiguration phaseFour = new PhaseFourConfiguration(4, prestige, Map.of(), Map.of(), Map.of(),
                 Map.of(), CompetitionConfiguration.disabled());

@@ -33,6 +33,8 @@ import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyReport;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
+import net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation;
 import net.maddkraft.maddprestige.core.admin.setup.SetupCost;
 import net.maddkraft.maddprestige.core.admin.setup.SetupPrestige;
 import net.maddkraft.maddprestige.core.admin.setup.SetupRequirement;
@@ -46,8 +48,6 @@ import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
  * configuration inspection is dispatched on the supplied administration worker.
  */
 public final class PhaseSixCommandService {
-    private static final String USAGE = "Use help, status, rankup, prestige, confirm, simulate, why, player, gui, "
-            + "config, setup, doctor, or staff.";
     private final ContextualHelpService help;
     private final ConfigurationIntrospectionService introspection;
     private final ConfigurationAdministrationService configuration;
@@ -101,7 +101,7 @@ public final class PhaseSixCommandService {
     private CompletionStage<CommandResponse> dispatch(CommandInvocation invocation) {
         List<String> arguments = invocation.arguments();
         if (arguments.isEmpty()) {
-            return completed(CommandResponse.failure("command.usage", "No subcommand was provided.", USAGE));
+            return completed(CommandResponse.failure("command.usage", m("command.usage.root")));
         }
         PermissionSubject subject = invocation.subject();
         return switch (arguments.getFirst().toLowerCase(java.util.Locale.ROOT)) {
@@ -119,38 +119,42 @@ public final class PhaseSixCommandService {
             case "doctor" -> doctor(subject);
             case "staff" -> staff(subject, arguments);
             default -> completed(CommandResponse.failure("command.unknown",
-                    "Unknown MaddPrestige V2 subcommand: " + arguments.getFirst(), USAGE));
+                    m("command.unknown", "value", arguments.getFirst())));
         };
     }
 
     private CompletionStage<CommandResponse> help(PermissionSubject subject, List<String> arguments) {
         String topic = arguments.size() > 1 ? arguments.get(1) : "stages";
-        List<String> lines = help.help(subject, topic);
+        List<MessageReference> lines = help.help(subject, topic);
         return completed(CommandResponse.success("help", lines.isEmpty()
-                ? List.of("No schema-owned help matched '" + topic + "'.", "Try measurement, stages, or providers.")
+                ? List.of(m("command.help.no_match", "topic", topic), m("command.help.suggestions"))
                 : lines));
     }
 
     private CompletionStage<CommandResponse> status(PermissionSubject subject) {
         subject.require(PhaseSixPermissions.USE);
         String revision = activeRevision.get().map(ConfigRevisionId::value).orElse("inactive");
-        return completed(CommandResponse.success("status", List.of("MaddPrestige V2 configuration: " + revision,
-                "Use player for canonical progress or doctor for administrative diagnostics.")));
+        return completed(CommandResponse.success("status", List.of(m("command.status.configuration",
+                "revision", revision), m("command.status.guidance"))));
     }
 
     private CompletionStage<CommandResponse> prepare(PermissionSubject subject, UUID playerId, boolean prestige) {
         return (prestige ? confirmations.preparePrestige(subject, playerId)
-                : confirmations.prepareRankUp(subject, playerId)).thenApply(value -> CommandResponse.success(
-                        prestige ? "prestige.preview" : "rankup.preview",
-                        List.of(render(value.preview()), "Confirmation: " + value.confirmationId(),
-                                "Expires: " + value.expiresAt())));
+                : confirmations.prepareRankUp(subject, playerId)).thenApply(value -> {
+                    ArrayList<MessageReference> lines = new ArrayList<>(SemanticPresentation.preview(
+                            "command.preview.summary", value.preview()));
+                    lines.add(m("command.preview.confirmation", "confirmation", value.confirmationId()));
+                    lines.add(m("command.preview.expires", "expires", value.expiresAt()));
+                    return CommandResponse.success(prestige ? "prestige.preview" : "rankup.preview", lines);
+                });
     }
 
     private CompletionStage<CommandResponse> confirm(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 2, "confirm <confirmation-id>");
         return confirmations.confirm(subject, uuid(arguments.get(1), "confirmation ID"))
                 .thenApply(result -> CommandResponse.success("operation.executed", List.of(
-                        "Operation " + result.operationId() + ": " + result.status(), result.detail())));
+                        m("command.operation.executed", "operation", result.operationId(),
+                                "status", result.status()))));
     }
 
     private CompletionStage<CommandResponse> simulate(PermissionSubject subject, List<String> arguments) {
@@ -163,7 +167,8 @@ public final class PhaseSixCommandService {
             case "prestige" -> previews.simulatePrestige(subject, target);
             default -> throw usage("simulate <rankup|prestige> [player-uuid]");
         };
-        return stage.thenApply(value -> CommandResponse.success("simulation", List.of(render(value))));
+        return stage.thenApply(value -> CommandResponse.success("simulation",
+                SemanticPresentation.preview("command.simulation.summary", value)));
     }
 
     private CompletionStage<CommandResponse> why(PermissionSubject subject, List<String> arguments) {
@@ -176,7 +181,7 @@ public final class PhaseSixCommandService {
             case "prestige" -> why.prestige(subject, target);
             default -> throw usage("why <rankup|prestige> [player-uuid]");
         };
-        return stage.thenApply(value -> CommandResponse.success("why", render(value)));
+        return stage.thenApply(value -> CommandResponse.success("why", SemanticPresentation.why(value)));
     }
 
     private CompletionStage<CommandResponse> player(PermissionSubject subject, List<String> arguments) {
@@ -184,16 +189,20 @@ public final class PhaseSixCommandService {
             throw usage("player [player-uuid]");
         }
         UUID target = arguments.size() == 2 ? uuid(arguments.get(1), "player UUID") : self(subject);
-        return playerViews.view(subject, target).thenApply(view -> CommandResponse.success("player.progress",
-                List.of("Rank-up: " + render(view.rankUp()), "Prestige: " + render(view.prestige()))));
+        return playerViews.view(subject, target).thenApply(view -> {
+            ArrayList<MessageReference> lines = new ArrayList<>(SemanticPresentation.preview(
+                    "command.player.rankup", view.rankUp()));
+            lines.addAll(SemanticPresentation.preview("command.player.prestige", view.prestige()));
+            return CommandResponse.success("player.progress", lines);
+        });
     }
 
     private CompletionStage<CommandResponse> gui(PermissionSubject subject) {
         self(subject);
         var view = subject.has(PhaseSixPermissions.ADMIN_GUI) ? gui.openStaff(subject)
                 : gui.openPlayer(subject, self(subject));
-        return completed(CommandResponse.gui("gui.open", List.of("GUI session: " + view.sessionId(),
-                view.title(), "Server-owned actions: " + view.actions().size()), view));
+        return completed(CommandResponse.gui("gui.open", List.of(m("command.gui.opened", "id", view.sessionId(),
+                "count", view.actions().size())), view));
     }
 
     private CompletionStage<CommandResponse> config(PermissionSubject subject, List<String> arguments) {
@@ -229,10 +238,13 @@ public final class PhaseSixCommandService {
         requireSize(arguments, 3, "config explain <canonical-path>");
         var value = introspection.explain(subject, arguments.get(2));
         return completed(CommandResponse.success("config.explain", List.of(
-                value.canonicalPath() + " = " + value.currentValue().orElse("<not set>"),
-                "Type: " + value.type() + "; reload: " + value.reloadBehavior() + "; risk: " + value.risk(),
-                value.description(), "Allowed: " + (value.allowedValues().isEmpty()
-                        ? "schema/provider-defined" : String.join(", ", value.allowedValues())))));
+                m("command.config.value", "path", value.canonicalPath(),
+                        "value", value.currentValue().orElse("NOT_SET")),
+                m("command.config.metadata", "type", value.type(), "status", value.reloadBehavior(),
+                        "risk", value.risk()),
+                SemanticPresentation.configurationDescription(value),
+                m("command.config.allowed", "allowed", value.allowedValues().isEmpty()
+                        ? "SCHEMA_OR_PROVIDER_DEFINED" : String.join(", ", value.allowedValues())))));
     }
 
     private CompletionStage<CommandResponse> configSearch(PermissionSubject subject, List<String> arguments) {
@@ -240,10 +252,11 @@ public final class PhaseSixCommandService {
             throw usage("config search <text>");
         }
         String query = join(arguments, 2);
-        List<String> lines = introspection.search(subject, query, 25).stream().map(value ->
-                value.canonicalPath() + " [" + value.type() + "] = " + value.currentValue()).toList();
+        List<MessageReference> lines = introspection.search(subject, query, 25).stream().map(value ->
+                m("command.config.search_result", "path", value.canonicalPath(), "type", value.type(),
+                        "value", value.currentValue())).toList();
         return completed(CommandResponse.success("config.search", lines.isEmpty()
-                ? List.of("No schema-owned settings matched '" + query + "'.") : lines));
+                ? List.of(m("command.config.search_empty", "value", query)) : lines));
     }
 
     private CompletionStage<CommandResponse> configList(PermissionSubject subject, List<String> arguments) {
@@ -251,14 +264,15 @@ public final class PhaseSixCommandService {
         List<String> values = configuration.listValues(subject, uuid(arguments.get(2), "draft ID"),
                 arguments.get(3));
         return completed(CommandResponse.success("config.list", values.isEmpty()
-                ? List.of("The selected structure is empty.") : values));
+                ? List.of(m("command.config.list_empty"))
+                : values.stream().map(value -> m("command.config.list_value", "value", value)).toList()));
     }
 
     private CompletionStage<CommandResponse> configDraft(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 2, "config draft");
         UUID draft = configuration.beginDraft(subject, "command");
-        return completed(CommandResponse.success("config.draft.created", List.of("Draft: " + draft,
-                "Production remains unchanged until this draft is previewed, validated, and applied.")));
+        return completed(CommandResponse.success("config.draft.created", List.of(
+                m("command.config.draft_created", "draft", draft), m("command.config.production_unchanged"))));
     }
 
     private CompletionStage<CommandResponse> configSet(PermissionSubject subject, List<String> arguments) {
@@ -269,7 +283,8 @@ public final class PhaseSixCommandService {
         String path = arguments.get(3);
         configuration.editScalar(subject, draft, path, join(arguments, 4));
         return completed(CommandResponse.success("config.draft.edited", List.of(
-                "Draft " + draft + " updated at " + path + ".", "Production configuration was not changed.")));
+                m("command.config.draft_edited", "draft", draft, "path", path),
+                m("command.config.production_unchanged"))));
     }
 
     private CompletionStage<CommandResponse> configAdd(PermissionSubject subject, List<String> arguments) {
@@ -292,8 +307,8 @@ public final class PhaseSixCommandService {
             configuration.addListValue(subject, draft, path, arguments.get(4));
         }
         return completed(CommandResponse.success("config.draft.structure_added", List.of(
-                "Draft " + draft + " was structurally updated through the canonical editor.",
-                "Production remains unchanged until preview and apply.")));
+                m("command.config.structure_added", "draft", draft),
+                m("command.config.production_unchanged"))));
     }
 
     private CompletionStage<CommandResponse> configRemove(PermissionSubject subject, List<String> arguments) {
@@ -311,8 +326,8 @@ public final class PhaseSixCommandService {
             configuration.removeListValue(subject, draft, path, arguments.get(4));
         }
         return completed(CommandResponse.success("config.draft.structure_removed", List.of(
-                "Draft " + draft + " was structurally updated through the canonical editor.",
-                "Preview shows any migration and acknowledgement requirement.")));
+                m("command.config.structure_removed", "draft", draft),
+                m("command.config.preview_guidance"))));
     }
 
     private CompletionStage<CommandResponse> configPreview(PermissionSubject subject, List<String> arguments) {
@@ -327,8 +342,8 @@ public final class PhaseSixCommandService {
         configuration.selectStageRemap(subject, draft, new StageId(arguments.get(3)),
                 new StageId(arguments.get(4)));
         return completed(CommandResponse.success("config.draft.remap_selected", List.of(
-                "Draft " + draft + " now requests " + arguments.get(3) + " → " + arguments.get(4) + ".",
-                "Preview will validate and seal current references before acknowledgement/apply.")));
+                m("command.config.remap_selected", "draft", draft, "stage", arguments.get(3),
+                        "target", arguments.get(4)), m("command.config.remap_preview_guidance"))));
     }
 
     private CompletionStage<CommandResponse> configUnmap(PermissionSubject subject, List<String> arguments) {
@@ -336,8 +351,8 @@ public final class PhaseSixCommandService {
         UUID draft = uuid(arguments.get(2), "draft ID");
         configuration.removeStageRemap(subject, draft, new StageId(arguments.get(3)));
         return completed(CommandResponse.success("config.draft.remap_removed", List.of(
-                "Draft " + draft + " no longer remaps source stage " + arguments.get(3) + ".",
-                "Other source mappings remain intact; preview authority was invalidated.")));
+                m("command.config.remap_removed", "draft", draft, "stage", arguments.get(3)),
+                m("command.config.remap_removed_guidance"))));
     }
 
     private CompletionStage<CommandResponse> configAcknowledge(
@@ -345,11 +360,10 @@ public final class PhaseSixCommandService {
             List<String> arguments) {
         requireSize(arguments, 3, "config acknowledge <draft-id>");
         var prepared = configuration.prepareAcknowledgement(subject, uuid(arguments.get(2), "draft ID"));
-        ArrayList<String> lines = new ArrayList<>();
-        prepared.findings().forEach(finding -> lines.add(finding.path() + " [" + finding.code() + "] "
-                + finding.explanation() + " Consequence: " + finding.consequence()));
-        lines.add("Server acknowledgement: " + prepared.acknowledgementId());
-        lines.add("Expires: " + prepared.expiresAt());
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        prepared.findings().forEach(finding -> lines.addAll(SemanticPresentation.validationFinding(finding)));
+        lines.add(m("command.acknowledgement.id", "acknowledgement", prepared.acknowledgementId()));
+        lines.add(m("command.acknowledgement.expires", "expires", prepared.expiresAt()));
         return completed(CommandResponse.success("config.acknowledgement.prepared", lines));
     }
 
@@ -359,7 +373,8 @@ public final class PhaseSixCommandService {
         }
         return configuration.confirmAcknowledgement(subject, uuid(arguments.get(2), "acknowledgement ID"),
                 join(arguments, 3)).thenApply(value -> CommandResponse.success("config.applied", List.of(
-                        "Applied acknowledged revision " + value.id().value() + ".", "Status: " + value.status())));
+                        m("command.config.acknowledged_applied", "revision", value.id().value(),
+                                "status", value.status()))));
     }
 
     private CompletionStage<CommandResponse> configCancel(PermissionSubject subject, List<String> arguments) {
@@ -367,7 +382,7 @@ public final class PhaseSixCommandService {
         UUID draft = uuid(arguments.get(2), "draft ID");
         configuration.discardDraft(subject, draft);
         return completed(CommandResponse.success("config.draft.cancelled", List.of(
-                "Draft " + draft + " was discarded. Production configuration was not changed.")));
+                m("command.config.draft_cancelled", "draft", draft))));
     }
 
     private CompletionStage<CommandResponse> configHistory(PermissionSubject subject, List<String> arguments) {
@@ -375,20 +390,20 @@ public final class PhaseSixCommandService {
             throw usage("config history [limit]");
         }
         int limit = arguments.size() == 3 ? positiveInteger(arguments.get(2), "history limit") : 20;
-        List<String> lines = configuration.history(subject, limit).stream().map(revision ->
-                revision.id().value() + " " + revision.status() + " by "
-                        + revision.actor().displayName() + " — " + revision.reason()).toList();
+        List<MessageReference> lines = configuration.history(subject, limit).stream().map(revision ->
+                m("command.config.history_entry", "revision", revision.id().value(),
+                        "status", revision.status(), "player", revision.actor().displayName())).toList();
         return completed(CommandResponse.success("config.history", lines.isEmpty()
-                ? List.of("No configuration revisions have been recorded.") : lines));
+                ? List.of(m("command.config.history_empty")) : lines));
     }
 
     private CompletionStage<CommandResponse> configRollback(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 3, "config rollback <revision-id>");
         UUID draft = configuration.beginRollback(subject, new ConfigRevisionId(arguments.get(2)), "command");
         return configuration.preview(subject, draft).thenApply(preview -> {
-            ArrayList<String> lines = new ArrayList<>(renderPreview(preview));
-            lines.add("Rollback draft: " + draft);
-            lines.add("Applying it creates a new revision; history is never rewritten.");
+            ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(preview));
+            lines.add(m("command.config.rollback_draft", "draft", draft));
+            lines.add(m("command.config.rollback_history_safe"));
             return CommandResponse.success("config.rollback.preview", lines);
         });
     }
@@ -409,7 +424,7 @@ public final class PhaseSixCommandService {
                 ? configuration.applyRollback(subject, draft, expected, Set.of(), reason)
                 : configuration.applyDraft(subject, draft, expected, Set.of(), reason);
         return stage.thenApply(value -> CommandResponse.success("config.applied", List.of(
-                "Applied new revision " + value.id().value() + ".", "Status: " + value.status())));
+                m("command.config.applied", "revision", value.id().value(), "status", value.status()))));
     }
 
     private CompletionStage<CommandResponse> setup(PermissionSubject subject, List<String> arguments) {
@@ -440,19 +455,20 @@ public final class PhaseSixCommandService {
     private CompletionStage<CommandResponse> setupDiscover(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 2, "setup discover");
         var discovery = setup.discover(subject);
-        ArrayList<String> lines = new ArrayList<>();
-        lines.add("Active V2 configuration present: " + discovery.activeConfigurationPresent());
-        discovery.providers().forEach(provider -> lines.add(provider.providerId().value() + ": active="
-                + provider.active() + ", healthy=" + provider.healthy() + ", rank=" + provider.rankCapable()
-                + ", metrics=" + provider.metricIds()));
-        lines.add(discovery.externalGroupPolicy());
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        lines.add(m("command.setup.discovery_active", "active", discovery.activeConfigurationPresent()));
+        discovery.providers().forEach(provider -> lines.add(m("command.setup.discovery_provider",
+                "provider", provider.providerId().value(), "active", provider.active(),
+                "healthy", provider.healthy(), "rank", provider.rankCapable(),
+                "metrics", provider.metricIds())));
+        lines.add(m("command.setup.external_group_policy"));
         return completed(CommandResponse.success("setup.discovery", lines));
     }
 
     private CompletionStage<CommandResponse> setupStart(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 2, "setup start");
-        return completed(CommandResponse.success("setup.started", List.of("Setup session: " + setup.start(subject),
-                "Choose an existing rank provider or internal, then add at least two stages.")));
+        return completed(CommandResponse.success("setup.started", List.of(
+                m("command.setup.started", "id", setup.start(subject)), m("command.setup.started_guidance"))));
     }
 
     private CompletionStage<CommandResponse> setupProvider(PermissionSubject subject, List<String> arguments) {
@@ -461,7 +477,7 @@ public final class PhaseSixCommandService {
                 arguments.get(3).equalsIgnoreCase("internal")
                         ? Optional.empty() : Optional.of(new ProviderId(arguments.get(3))));
         return completed(CommandResponse.success("setup.provider.selected", List.of(
-                "Provider selection saved in the draft session; no external groups were created.")));
+                m("command.setup.provider_selected"))));
     }
 
     private CompletionStage<CommandResponse> setupStage(PermissionSubject subject, List<String> arguments) {
@@ -471,27 +487,36 @@ public final class PhaseSixCommandService {
         setup.addStage(subject, uuid(arguments.get(2), "setup session"), new SetupStage(
                 new StageId(arguments.get(3)), arguments.get(4),
                 arguments.size() == 6 ? Optional.of(arguments.get(5)) : Optional.empty()));
-        return completed(CommandResponse.success("setup.stage.added", List.of(
-                "Stage added to the resumable setup draft; production remains unchanged.")));
+        return completed(CommandResponse.success("setup.stage.added", List.of(m("command.setup.stage_added"))));
     }
 
     private CompletionStage<CommandResponse> setupBaseline(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 4, "setup baseline <session-id> <stage-id>");
         setup.selectBaseline(subject, uuid(arguments.get(2), "setup session"), new StageId(arguments.get(3)));
-        return completed(CommandResponse.success("setup.baseline.selected", List.of("Setup baseline selected.")));
+        return completed(CommandResponse.success("setup.baseline.selected",
+                List.of(m("command.setup.baseline_selected"))));
     }
 
     private CompletionStage<CommandResponse> setupRequirement(
             PermissionSubject subject,
             List<String> arguments) {
-        requireSize(arguments, 10,
-                "setup requirement <session> <id> <provider> <metric> <operator> <target> <scope> <completion>");
-        setup.configureRequirement(subject, uuid(arguments.get(2), "setup session"), new SetupRequirement(
-                new RequirementId(arguments.get(3)), new ProviderId(arguments.get(4)),
-                new MetricId(arguments.get(5)), arguments.get(6), arguments.get(7), arguments.get(8),
-                arguments.get(9)));
+        if (arguments.size() == 10) {
+            setup.configureRequirement(subject, uuid(arguments.get(2), "setup session"), new SetupRequirement(
+                    new RequirementId(arguments.get(3)), new ProviderId(arguments.get(4)),
+                    new MetricId(arguments.get(5)), arguments.get(6), arguments.get(7), arguments.get(8),
+                    arguments.get(9)));
+        } else if (arguments.size() == 11) {
+            setup.configureRequirementForStage(subject, uuid(arguments.get(2), "setup session"),
+                    new StageId(arguments.get(3)), new SetupRequirement(
+                            new RequirementId(arguments.get(4)), new ProviderId(arguments.get(5)),
+                            new MetricId(arguments.get(6)), arguments.get(7), arguments.get(8), arguments.get(9),
+                            arguments.get(10)));
+        } else {
+            throw usage("setup requirement <session> [target-stage] <id> <provider> <metric> <operator> "
+                    + "<target> <scope> <completion>");
+        }
         return completed(CommandResponse.success("setup.requirement.configured",
-                List.of("Simple eligibility requirement configured; preview will validate provider semantics.")));
+                List.of(m("command.setup.requirement_configured"))));
     }
 
     private CompletionStage<CommandResponse> setupCost(PermissionSubject subject, List<String> arguments) {
@@ -501,7 +526,7 @@ public final class PhaseSixCommandService {
                 new CostId(arguments.get(3)), new ProviderId(arguments.get(4)), arguments.get(5), arguments.get(6),
                 arguments.get(7), arguments.get(8)));
         return completed(CommandResponse.success("setup.cost.configured",
-                List.of("Simple stage cost configured; preview will validate it.")));
+                List.of(m("command.setup.cost_configured"))));
     }
 
     private CompletionStage<CommandResponse> setupReward(PermissionSubject subject, List<String> arguments) {
@@ -511,7 +536,7 @@ public final class PhaseSixCommandService {
                 new RewardId(arguments.get(3)), new ProviderId(arguments.get(4)), arguments.get(5), arguments.get(6),
                 arguments.get(7), arguments.get(8)));
         return completed(CommandResponse.success("setup.reward.configured",
-                List.of("Simple stage reward configured; preview will validate it.")));
+                List.of(m("command.setup.reward_configured"))));
     }
 
     private CompletionStage<CommandResponse> setupPrestige(PermissionSubject subject, List<String> arguments) {
@@ -526,13 +551,13 @@ public final class PhaseSixCommandService {
                     + "<reset-stage>");
         }
         return completed(CommandResponse.success("setup.prestige.configured",
-                List.of("Prestige eligibility and reset behavior configured; preview the consequences.")));
+                List.of(m("command.setup.prestige_configured"))));
     }
 
     private CompletionStage<CommandResponse> setupPreview(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 3, "setup preview <session-id>");
         return setup.preview(subject, uuid(arguments.get(2), "setup session")).thenApply(value -> {
-            ArrayList<String> lines = new ArrayList<>(renderPreview(value.configuration()));
+            ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(value.configuration()));
             lines.addAll(value.playerExperience());
             return CommandResponse.success("setup.preview", lines);
         });
@@ -544,18 +569,16 @@ public final class PhaseSixCommandService {
         }
         return setup.apply(subject, uuid(arguments.get(2), "setup session"), Set.of(), join(arguments, 3))
                 .thenApply(value -> CommandResponse.success("setup.applied", List.of(
-                        "Setup applied as revision " + value.id().value() + ".")));
+                        m("command.setup.applied", "revision", value.id().value()))));
     }
 
     private CompletionStage<CommandResponse> setupAcknowledge(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 3, "setup acknowledge <session-id>");
         var prepared = setup.prepareAcknowledgement(subject, uuid(arguments.get(2), "setup session"));
-        ArrayList<String> lines = new ArrayList<>();
-        prepared.findings().forEach(finding -> lines.add(finding.path() + " [" + finding.code() + "] "
-                + finding.explanation() + " Consequence: " + finding.consequence()));
-        lines.add("Server acknowledgement: " + prepared.acknowledgementId());
-        lines.add("Confirm with /maddprestige setup confirm <token> <reason> before expiry "
-                + prepared.expiresAt());
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        prepared.findings().forEach(finding -> lines.addAll(SemanticPresentation.validationFinding(finding)));
+        lines.add(m("command.acknowledgement.id", "acknowledgement", prepared.acknowledgementId()));
+        lines.add(m("command.setup.confirm_guidance", "expires", prepared.expiresAt()));
         return completed(CommandResponse.success("setup.acknowledgement.prepared", lines));
     }
 
@@ -565,22 +588,20 @@ public final class PhaseSixCommandService {
         }
         return setup.confirmAcknowledgement(subject, uuid(arguments.get(2), "setup acknowledgement"),
                 join(arguments, 3)).thenApply(value -> CommandResponse.success("setup.applied", List.of(
-                        "Setup applied as revision " + value.id().value() + ".")));
+                        m("command.setup.applied", "revision", value.id().value()))));
     }
 
     private CompletionStage<CommandResponse> setupCancel(PermissionSubject subject, List<String> arguments) {
         requireSize(arguments, 3, "setup cancel <session-id>");
         setup.cancel(subject, uuid(arguments.get(2), "setup session"));
-        return completed(CommandResponse.success("setup.cancelled", List.of(
-                "Setup draft cancelled; production configuration was not changed.")));
+        return completed(CommandResponse.success("setup.cancelled", List.of(m("command.setup.cancelled"))));
     }
 
     private CompletionStage<CommandResponse> doctor(PermissionSubject subject) {
         return doctor.inspect(subject).thenApply(report -> {
-            ArrayList<String> lines = new ArrayList<>();
-            lines.add("Doctor: " + report.status());
-            report.findings().forEach(finding -> lines.add(finding.severity() + " " + finding.path()
-                    + " — " + finding.summary() + " Next: " + finding.remediation()));
+            ArrayList<MessageReference> lines = new ArrayList<>();
+            lines.add(m("command.doctor.status", "status", report.status()));
+            report.findings().forEach(finding -> lines.addAll(SemanticPresentation.doctorFinding(finding)));
             return CommandResponse.success("doctor", lines);
         });
     }
@@ -596,68 +617,56 @@ public final class PhaseSixCommandService {
         long lifetime = nonNegativeLong(arguments.get(6), "lifetime Prestige");
         return prestigeAdministration.set(subject, playerId, expected, current, lifetime, "command",
                 join(arguments, 7)).thenApply(state -> CommandResponse.success("staff.prestige.adjusted", List.of(
-                        "Player " + playerId + " Prestige is now " + state.currentPrestige() + " current / "
-                                + state.lifetimePrestige() + " lifetime at state revision " + state.stateRevision()
-                                + ".")));
+                        m("command.staff.prestige_adjusted", "player", playerId, "current", state.currentPrestige(),
+                                "lifetime", state.lifetimePrestige(), "revision", state.stateRevision()))));
     }
 
     private static CommandResponse render(ConfigurationPreview preview) {
         return CommandResponse.success("config.preview", renderPreview(preview));
     }
 
-    private static List<String> renderPreview(ConfigurationPreview preview) {
-        ArrayList<String> lines = new ArrayList<>();
-        lines.add("Draft " + preview.draftId() + "; base "
-                + preview.baseRevision().map(ConfigRevisionId::value).orElse("none") + "; hash "
-                + preview.candidateHash().value());
-        lines.add("Draft version: " + preview.draftVersion());
-        lines.add("Changed documents: " + String.join(", ", preview.changedDocuments()));
-        lines.add("Validation: " + (preview.validation().hasErrors() ? "BLOCKED" : "VALID"));
-        preview.validation().findings().forEach(finding -> lines.add(finding.severity() + " " + finding.path()
-                + " [" + finding.code() + "] " + finding.explanation() + " Next: " + finding.remediation()));
+    private static List<MessageReference> renderPreview(ConfigurationPreview preview) {
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        lines.add(m("command.config.preview_header", "draft", preview.draftId(), "base",
+                preview.baseRevision().map(ConfigRevisionId::value).orElse("NONE"),
+                "hash", preview.candidateHash().value()));
+        lines.add(m("command.config.preview_version", "version", preview.draftVersion()));
+        lines.add(m("command.config.preview_documents", "value", String.join(", ", preview.changedDocuments())));
+        lines.add(m("command.config.preview_validation", "status",
+                preview.validation().hasErrors() ? "BLOCKED" : "VALID"));
+        preview.validation().findings().forEach(finding ->
+                lines.addAll(SemanticPresentation.validationFinding(finding)));
         if (preview.stale()) {
-            lines.add("STALE: active revision changed; apply will fail closed.");
+            lines.add(m("command.config.preview_stale"));
         }
         if (!preview.stageImpact().semanticDiff().entries().isEmpty()) {
-            preview.stageImpact().semanticDiff().entries().forEach(entry -> lines.add("DIFF " + entry.kind() + " "
-                    + entry.path() + ": " + entry.redactedOldValue().orElse("<absent>") + " -> "
-                    + entry.redactedNewValue().orElse("<absent>")));
+            preview.stageImpact().semanticDiff().entries().forEach(entry -> lines.add(m("command.config.preview_diff",
+                    "kind", entry.kind(), "path", entry.path(), "current",
+                    entry.redactedOldValue().orElse("ABSENT"), "value",
+                    entry.redactedNewValue().orElse("ABSENT"))));
         }
         if (!preview.stageImpact().affectedPlayerReferences().isEmpty()) {
-            lines.add("Affected current player stages: " + preview.stageImpact().affectedPlayerReferences());
-            lines.add("Sealed remap: " + preview.stageRemapSeal().map(value -> value.value()).orElse("missing"));
+            lines.add(m("command.config.preview_affected", "count",
+                    preview.stageImpact().affectedPlayerReferences().size()));
+            lines.add(m("command.config.preview_remap", "hash",
+                    preview.stageRemapSeal().map(value -> value.value()).orElse("MISSING")));
         }
         return List.copyOf(lines);
-    }
-
-    private static List<String> render(WhyReport report) {
-        ArrayList<String> lines = new ArrayList<>();
-        lines.add(report.executable() ? "Canonical authorization currently allows this operation."
-                : "Canonical authorization blocks this operation.");
-        if (!report.blockers().isEmpty()) {
-            lines.addAll(report.blockers());
-        }
-        report.requirementExplanation().ifPresent(value -> lines.add("Requirements: " + value));
-        report.configRevision().ifPresent(value -> lines.add("Configuration revision: " + value.value()));
-        return List.copyOf(lines);
-    }
-
-    private static String render(OperationPreview preview) {
-        String blockers = preview.blockers().isEmpty() ? "none" : String.join("; ", preview.blockers());
-        return preview.kind() + " " + preview.stateChange() + "; costs=" + preview.costs() + "; rewards="
-                + preview.rewards() + "; blockers=" + blockers + "; revision=" + preview.configRevision().value();
     }
 
     private static CommandResponse failure(Throwable failure) {
         Throwable cause = unwrap(failure);
         if (cause instanceof AdministrationException exception) {
-            return CommandResponse.failure(exception.code(), safeMessage(exception), exception.remediation());
+            return CommandResponse.failure(exception.code(), SemanticPresentation.administration(exception));
         }
-        if (cause instanceof IllegalArgumentException exception) {
-            return CommandResponse.failure("command.invalid", safeMessage(exception), USAGE);
+        if (cause instanceof CommandUsageException exception) {
+            return CommandResponse.failure("command.invalid",
+                    m("command.error.usage", "usage", "/maddprestige " + exception.usage()));
         }
-        return CommandResponse.failure("command.failed", "The command could not complete safely.",
-                "Run doctor and consult server logs with the generated diagnostic code.");
+        if (cause instanceof IllegalArgumentException) {
+            return CommandResponse.failure("command.invalid", m("command.error.invalid"));
+        }
+        return CommandResponse.failure("command.failed", m("command.error.internal"));
     }
 
     private static Throwable unwrap(Throwable failure) {
@@ -714,19 +723,32 @@ public final class PhaseSixCommandService {
     }
 
     private static IllegalArgumentException usage(String usage) {
-        return new IllegalArgumentException("Usage: /maddprestige " + usage);
+        return new CommandUsageException(usage);
     }
 
     private static String join(List<String> arguments, int start) {
         return String.join(" ", arguments.subList(start, arguments.size()));
     }
 
-    private static String safeMessage(Throwable failure) {
-        return failure.getMessage() == null || failure.getMessage().isBlank()
-                ? failure.getClass().getSimpleName() : failure.getMessage();
+    private static MessageReference m(String key, Object... arguments) {
+        return MessageReference.of(key, arguments);
     }
 
     private static CompletionStage<CommandResponse> completed(CommandResponse response) {
         return CompletableFuture.completedFuture(response);
+    }
+
+    private static final class CommandUsageException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+        private final String usage;
+
+        private CommandUsageException(String usage) {
+            super("Usage: /maddprestige " + usage);
+            this.usage = usage;
+        }
+
+        private String usage() {
+            return usage;
+        }
     }
 }

@@ -27,6 +27,8 @@ import net.maddkraft.maddprestige.api.reward.PlannedReward;
 import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
 import net.maddkraft.maddprestige.api.reward.RewardPreflight;
 import net.maddkraft.maddprestige.api.reward.RewardProvider;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.rank.ProjectionPolicy;
 import net.maddkraft.maddprestige.core.requirement.BoundRequirementEvaluation;
@@ -45,11 +47,14 @@ public final class RankUpPlanner {
                     "Caller-composed rank-up requests are not an authorization boundary"));
         }
         OperationId operationId = distinctOperationId(request.requestId());
-        ArrayList<String> blockers = new ArrayList<>();
+        ArrayList<AuthorizationBlocker> blockers = new ArrayList<>();
         LinkedHashSet<ProviderId> unavailable = new LinkedHashSet<>();
         validateRequirementBinding(request, blockers);
         if (!request.requirements().satisfied()) {
-            blockers.add("Requirement tree is " + request.requirements().status());
+            blockers.add(b(AuthorizationBlockerKind.REQUIREMENT_UNSATISFIED,
+                    "Requirement tree is " + request.requirements().status(),
+                    "status", request.requirements().status(), "requirement",
+                    request.targetStage().requirementTreeId().map(value -> value.value()).orElse("NONE")));
         }
         List<ProposedCost> costs = proposeCosts(operationId, request, blockers, unavailable);
         List<ProposedReward> rewards = proposeRewards(operationId, request, blockers, unavailable);
@@ -140,7 +145,7 @@ public final class RankUpPlanner {
     private List<ProposedCost> proposeCosts(
             OperationId operationId,
             RankUpPlanningRequest request,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             Set<ProviderId> unavailable) {
         ArrayList<ProposedCost> proposals = new ArrayList<>();
         for (int index = 0; index < request.costs().size(); index++) {
@@ -149,17 +154,25 @@ public final class RankUpPlanner {
                     .orElse(null);
             if (!(provider instanceof CostProvider costProvider)) {
                 if (provider != null) {
-                    blockers.add("Provider does not implement cost contract: " + definition.providerId().value());
+                    blockers.add(b(AuthorizationBlockerKind.COST_PROVIDER_CONTRACT_MISSING,
+                            "Provider does not implement cost contract: " + definition.providerId().value(),
+                            "provider", definition.providerId().value(), "id", definition.id().value()));
                 }
                 continue;
             }
             try {
                 if (costProvider.validate(definition).hasErrors()) {
-                    blockers.add("Cost definition is invalid: " + definition.id().value());
+                    blockers.add(b(AuthorizationBlockerKind.COST_DEFINITION_INVALID,
+                            "Cost definition is invalid: " + definition.id().value(),
+                            "id", definition.id().value(), "provider", definition.providerId().value(),
+                            "amount", definition.amount().canonical(), "type", definition.type()));
                     continue;
                 }
             } catch (RuntimeException exception) {
-                blockers.add("Cost provider validation failed: " + rootMessage(exception));
+                blockers.add(b(AuthorizationBlockerKind.COST_PROVIDER_VALIDATION_FAILED,
+                        "Cost provider validation failed: " + rootMessage(exception),
+                        "id", definition.id().value(), "provider", definition.providerId().value(),
+                        "amount", definition.amount().canonical(), "type", definition.type()));
                 continue;
             }
             long generation = request.pinnedProviderGenerations().get(definition.providerId());
@@ -174,7 +187,7 @@ public final class RankUpPlanner {
     private List<ProposedReward> proposeRewards(
             OperationId operationId,
             RankUpPlanningRequest request,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             Set<ProviderId> unavailable) {
         ArrayList<ProposedReward> proposals = new ArrayList<>();
         for (int index = 0; index < request.rewards().size(); index++) {
@@ -184,20 +197,28 @@ public final class RankUpPlanner {
                     .orElse(null);
             if (!(provider instanceof RewardProvider rewardProvider)) {
                 if (provider != null || required) {
-                    blockers.add("Required provider does not implement reward contract: "
-                            + definition.providerId().value());
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PROVIDER_CONTRACT_MISSING,
+                            "Required provider does not implement reward contract: "
+                                    + definition.providerId().value(),
+                            "provider", definition.providerId().value(), "id", definition.id().value()));
                 }
                 continue;
             }
             try {
                 if (rewardProvider.validate(definition).hasErrors()) {
-                    blockers.add("Reward definition is invalid: " + definition.id().value());
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_DEFINITION_INVALID,
+                            "Reward definition is invalid: " + definition.id().value(),
+                            "id", definition.id().value(), "provider", definition.providerId().value(),
+                            "amount", definition.value().canonical(), "type", definition.type()));
                     continue;
                 }
             } catch (RuntimeException exception) {
                 unavailable.add(definition.providerId());
                 if (required) {
-                    blockers.add("Required reward provider validation failed: " + rootMessage(exception));
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PROVIDER_VALIDATION_FAILED,
+                            "Required reward provider validation failed: " + rootMessage(exception),
+                            "id", definition.id().value(), "provider", definition.providerId().value(),
+                            "amount", definition.value().canonical(), "type", definition.type()));
                 }
                 continue;
             }
@@ -213,7 +234,7 @@ public final class RankUpPlanner {
     private Optional<Provider> usablePinned(
             ProviderId providerId,
             RankUpPlanningRequest request,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             Set<ProviderId> unavailable,
             boolean required) {
         Long generation = request.pinnedProviderGenerations().get(providerId);
@@ -224,7 +245,9 @@ public final class RankUpPlanner {
                 || !healthy(snapshot.orElseThrow().health().state())) {
             unavailable.add(providerId);
             if (required) {
-                blockers.add("Provider is unavailable or stale: " + providerId.value());
+                blockers.add(b(AuthorizationBlockerKind.REQUIRED_PROVIDER_UNAVAILABLE,
+                        "Provider is unavailable or stale: " + providerId.value(),
+                        "provider", providerId.value()));
             }
             return Optional.empty();
         }
@@ -238,9 +261,9 @@ public final class RankUpPlanner {
             List<ProposedReward> proposedRewards,
             List<CompletableFuture<CostPreflight>> costFutures,
             List<CompletableFuture<RewardPreflight>> rewardFutures,
-            List<String> initialBlockers,
+            List<AuthorizationBlocker> initialBlockers,
             Set<ProviderId> unavailable) {
-        ArrayList<String> blockers = new ArrayList<>(initialBlockers);
+        ArrayList<AuthorizationBlocker> blockers = new ArrayList<>(initialBlockers);
         ArrayList<PlannedCost> costs = new ArrayList<>();
         ArrayList<PlannedReward> rewards = new ArrayList<>();
         for (int index = 0; index < costFutures.size(); index++) {
@@ -248,18 +271,29 @@ public final class RankUpPlanner {
             try {
                 CostPreflight preflight = future.join();
                 if (preflight.status() != PreflightStatus.READY) {
-                    blockers.add("Cost preflight blocked: " + preflight.detail());
+                    var definition = proposedCosts.get(index).plan.definition();
+                    blockers.add(b(AuthorizationBlockerKind.COST_PREFLIGHT_BLOCKED,
+                            "Cost preflight blocked: " + preflight.detail(),
+                            "id", definition.id().value(), "provider", definition.providerId().value(),
+                            "amount", definition.amount().canonical(), "type", definition.type(),
+                            "status", preflight.status(), "detail", preflight.detail()));
                     if (preflight.status() == PreflightStatus.UNAVAILABLE) {
                         unavailable.add(proposedCosts.get(index).plan.definition().providerId());
                     }
                 } else if (!preflight.plannedCost().orElseThrow().equals(proposedCosts.get(index).plan)) {
-                    blockers.add("Cost provider altered the immutable proposed plan: "
-                            + proposedCosts.get(index).plan.definition().id().value());
+                    var definition = proposedCosts.get(index).plan.definition();
+                    blockers.add(b(AuthorizationBlockerKind.COST_PLAN_INTEGRITY_VIOLATION,
+                            "Cost provider altered the immutable proposed plan: " + definition.id().value(),
+                            "id", definition.id().value(), "provider", definition.providerId().value()));
                 } else {
                     costs.add(preflight.plannedCost().orElseThrow());
                 }
             } catch (RuntimeException exception) {
-                blockers.add("Cost provider preflight failed: " + rootMessage(exception));
+                var definition = proposedCosts.get(index).plan.definition();
+                blockers.add(b(AuthorizationBlockerKind.COST_PREFLIGHT_FAILED,
+                        "Cost provider preflight failed: " + rootMessage(exception),
+                        "id", definition.id().value(), "provider", definition.providerId().value(),
+                        "amount", definition.amount().canonical(), "type", definition.type()));
             }
         }
         for (int index = 0; index < rewardFutures.size(); index++) {
@@ -271,10 +305,16 @@ public final class RankUpPlanner {
                         unavailable.add(definition.providerId());
                     }
                     if (definition.failurePolicy() == RewardFailurePolicy.REQUIRED) {
-                        blockers.add("Required reward preflight blocked: " + preflight.detail());
+                        blockers.add(b(AuthorizationBlockerKind.REWARD_PREFLIGHT_BLOCKED,
+                                "Required reward preflight blocked: " + preflight.detail(),
+                                "id", definition.id().value(), "provider", definition.providerId().value(),
+                                "amount", definition.value().canonical(), "type", definition.type(),
+                                "status", preflight.status(), "detail", preflight.detail()));
                     }
                 } else if (!preflight.plannedReward().orElseThrow().equals(proposedRewards.get(index).plan)) {
-                    blockers.add("Reward provider altered the immutable proposed plan: " + definition.id().value());
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PLAN_INTEGRITY_VIOLATION,
+                            "Reward provider altered the immutable proposed plan: " + definition.id().value(),
+                            "id", definition.id().value(), "provider", definition.providerId().value()));
                 } else {
                     rewards.add(preflight.plannedReward().orElseThrow());
                 }
@@ -282,7 +322,10 @@ public final class RankUpPlanner {
                 var definition = proposedRewards.get(index).plan.definition();
                 unavailable.add(definition.providerId());
                 if (definition.failurePolicy() == RewardFailurePolicy.REQUIRED) {
-                    blockers.add("Required reward provider preflight failed: " + rootMessage(exception));
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PREFLIGHT_FAILED,
+                            "Required reward provider preflight failed: " + rootMessage(exception),
+                            "id", definition.id().value(), "provider", definition.providerId().value(),
+                            "amount", definition.value().canonical(), "type", definition.type()));
                 }
             }
         }
@@ -310,6 +353,7 @@ public final class RankUpPlanner {
                 request.idempotencyKey(), actions, "rank-up " + request.playerState().stageId().value() + " -> "
                         + request.targetStage().id().value());
         boolean executionAllowed = blockers.isEmpty();
+        List<String> blockerDiagnostics = AuthorizationBlocker.diagnostics(blockers);
         RankUpAuthorization authorization = executionAllowed
                 ? new RankUpAuthorization(operationId, request.playerId(), request.playerState().stageId(),
                         request.targetStage().id(), request.playerState().stateRevision(),
@@ -321,14 +365,14 @@ public final class RankUpPlanner {
                 request.targetStage().id(), request.playerState().stateRevision(),
                 request.playerState().configRevision(), request.configRevision(), request.pinnedProviderGenerations(),
                 evaluation, costs, rewards,
-                Optional.of(request.targetStage().projection()), projectionRequest, unavailable, blockers,
-                executionAllowed, operationPlan, authorization);
+                Optional.of(request.targetStage().projection()), projectionRequest, unavailable, blockerDiagnostics,
+                executionAllowed, operationPlan, authorization, blockers);
     }
 
     private Optional<RankProjectionRequest> projectionRequest(
             OperationId operationId,
             RankUpPlanningRequest request,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             Set<ProviderId> unavailable) {
         if (request.targetStage().projection().policy() == ProjectionPolicy.NONE) {
             return Optional.empty();
@@ -336,7 +380,9 @@ public final class RankUpPlanner {
         ProviderId providerId = request.targetStage().projection().providerId().orElse(null);
         var stages = request.canonicalStages().orElse(null);
         if (providerId == null || stages == null) {
-            blockers.add("Canonical rank projection binding is incomplete");
+            blockers.add(b(AuthorizationBlockerKind.RANK_PROJECTION_BINDING_INCOMPLETE,
+                    "Canonical rank projection binding is incomplete", "target_stage",
+                    request.targetStage().id().value()));
             return Optional.empty();
         }
         Provider provider = usablePinned(providerId, request, blockers, unavailable, true).orElse(null);
@@ -345,7 +391,9 @@ public final class RankUpPlanner {
         }
         if (!(provider instanceof RankAdapter)) {
             unavailable.add(providerId);
-            blockers.add("Provider does not implement rank projection contract: " + providerId.value());
+            blockers.add(b(AuthorizationBlockerKind.RANK_PROJECTION_CONTRACT_MISSING,
+                    "Provider does not implement rank projection contract: " + providerId.value(),
+                    "provider", providerId.value(), "target_stage", request.targetStage().id().value()));
             return Optional.empty();
         }
         long generation = request.pinnedProviderGenerations().get(providerId);
@@ -353,36 +401,54 @@ public final class RankUpPlanner {
             return Optional.of(new RankProjectionRequest(request.playerId(), operationId, request.configRevision(),
                     generation, stages.managedGroups(providerId), request.targetStage().projection().groupName()));
         } catch (IllegalArgumentException exception) {
-            blockers.add("Canonical rank projection is invalid: " + exception.getMessage());
+            blockers.add(b(AuthorizationBlockerKind.RANK_PROJECTION_INVALID,
+                    "Canonical rank projection is invalid: " + exception.getMessage(),
+                    "provider", providerId.value(), "target_stage", request.targetStage().id().value()));
             return Optional.empty();
         }
     }
 
     private static void validateRequirementBinding(
             RankUpPlanningRequest request,
-            List<String> blockers) {
+            List<AuthorizationBlocker> blockers) {
         var bound = request.boundRequirements().orElse(null);
         if (bound == null) {
-            blockers.add("Requirement result lacks canonical provenance");
+            blockers.add(b(AuthorizationBlockerKind.REQUIREMENT_PROVENANCE_MISSING,
+                    "Requirement result lacks canonical provenance", "target_stage",
+                    request.targetStage().id().value()));
             return;
         }
         var binding = bound.binding();
         if (!binding.playerId().equals(request.playerId())) {
-            blockers.add("Requirement result belongs to another player");
+            blockers.add(b(AuthorizationBlockerKind.REQUIREMENT_PLAYER_MISMATCH,
+                    "Requirement result belongs to another player", "player", request.playerId()));
         }
         if (!binding.configRevision().equals(request.configRevision())) {
-            blockers.add("Requirement result belongs to another configuration revision");
+            blockers.add(b(AuthorizationBlockerKind.REQUIREMENT_REVISION_MISMATCH,
+                    "Requirement result belongs to another configuration revision",
+                    "revision", request.configRevision().value()));
         }
         if (!binding.providerGenerations().equals(request.pinnedProviderGenerations())) {
-            blockers.add("Requirement result provider generations do not match the active snapshot");
+            blockers.add(b(AuthorizationBlockerKind.REQUIREMENT_PROVIDER_GENERATION_MISMATCH,
+                    "Requirement result provider generations do not match the active snapshot",
+                    "revision", request.configRevision().value()));
         }
         if (!binding.treeId().equals(request.targetStage().requirementTreeId())) {
-            blockers.add("Requirement result belongs to another requirement tree");
+            blockers.add(b(AuthorizationBlockerKind.REQUIREMENT_TREE_MISMATCH,
+                    "Requirement result belongs to another requirement tree", "requirement",
+                    request.targetStage().requirementTreeId().map(value -> value.value()).orElse("NONE")));
         }
     }
 
     private static boolean healthy(ProviderHealthState state) {
         return state == ProviderHealthState.AVAILABLE || state == ProviderHealthState.ACTIVE;
+    }
+
+    private static AuthorizationBlocker b(
+            AuthorizationBlockerKind kind,
+            String diagnostic,
+            Object... facts) {
+        return AuthorizationBlocker.of(kind, diagnostic, facts);
     }
 
     private static String rootMessage(Throwable failure) {

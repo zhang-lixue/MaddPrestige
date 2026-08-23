@@ -52,6 +52,7 @@ import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
 import net.maddkraft.maddprestige.platform.paper.PaperWorldContextMetricProvider;
 import net.maddkraft.maddprestige.platform.paper.VanillaStatisticsProvider;
 import net.maddkraft.maddprestige.platform.paper.integration.PhaseSevenOptionalIntegrationManager;
+import net.maddkraft.maddprestige.platform.paper.i18n.PaperMessageService;
 import net.maddkraft.maddprestige.platform.paper.admin.PaperGuiInventoryGuard;
 import net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter;
 import net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixGuiController;
@@ -84,6 +85,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     private FailureLogThrottle manualFailureLogs;
     private ProviderRegistration manualProgressRegistration;
     private PaperProviderBridge providerBridge;
+    private PaperMessageService messages;
     private ProductionRuntime runtime;
     private AutoCloseable healthEvents;
     private boolean ready;
@@ -94,6 +96,8 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             Path dataDirectory = getDataFolder().toPath().toAbsolutePath().normalize();
             Files.createDirectories(dataDirectory);
             prepareAndReadDocuments(dataDirectory);
+            messages = PaperMessageService.open(dataDirectory, getClassLoader(),
+                    detail -> getLogger().warning(detail));
 
             Path database = dataDirectory.resolve("maddprestige-v2.sqlite");
             if (Files.notExists(database)) {
@@ -149,7 +153,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             ready = true;
             getServer().getServicesManager().register(MaddPrestigeService.class, runtime.service(), this,
                     ServicePriority.Normal);
-            getLogger().info("MaddPrestige V2 Phase 8C candidate ready; configuration is "
+            getLogger().info("MaddPrestige V2 Phase 8D candidate ready; configuration is "
                     + (runtime.operational() ? "active at " + runtime.revision().orElseThrow().value()
                             : runtime.authoritativeRevision().map(value ->
                                     "fail-closed pending compatible composition at " + value.value())
@@ -174,7 +178,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
                 scheduler, getServer()::getPlayer, () -> health, clock);
         VanillaStatisticsProvider statistics = new VanillaStatisticsProvider(
                 new net.maddkraft.maddprestige.api.id.ProviderId("paper_statistics"), "maddprestige",
-                scheduler, getServer()::getPlayer, () -> health);
+                scheduler, getServer()::getOfflinePlayer, () -> health);
         registerActive(world);
         registerActive(statistics);
     }
@@ -246,16 +250,17 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         PluginCommand command = java.util.Objects.requireNonNull(getCommand("maddprestige"),
                 "maddprestige command is absent from plugin.yml");
         PaperPhaseSixGuiController guiController = new PaperPhaseSixGuiController(runtime.gui(),
-                new PaperGuiInventoryGuard(), scheduler);
+                new PaperGuiInventoryGuard(), scheduler, messages);
         getServer().getPluginManager().registerEvents(guiController, this);
         PaperPhaseSixCommandAdapter adapter = new PaperPhaseSixCommandAdapter(runtime.commands(),
-                runtime.completion(), scheduler, guiController);
+                runtime.completion(), scheduler, guiController, messages);
         command.setExecutor(adapter);
         command.setTabCompleter(adapter);
     }
 
     private void shutdownOwnedState() {
         ready = false;
+        messages = null;
         if (runtime != null) {
             getServer().getServicesManager().unregister(runtime.service());
             runtime.close();

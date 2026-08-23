@@ -19,6 +19,7 @@ import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.validation.ValidationFinding;
 import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
+import net.maddkraft.maddprestige.core.admin.AdministrationSemanticVariant;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.config.ActiveConfiguration;
@@ -110,11 +111,13 @@ public final class ConfigurationAdministrationService {
                 "Apply a valid configuration first."));
         StoredConfigurationRevision target = history.find(targetRevision).orElseThrow(() ->
                 new AdministrationException("config.rollback.unknown", "Unknown configuration revision: "
-                        + targetRevision.value(), "Use config history to select an existing applied revision."));
+                        + targetRevision.value(), "Use config history to select an existing applied revision.",
+                        "revision", targetRevision.value()));
         if (target.status() != ConfigurationApplicationStatus.APPLIED) {
             throw new AdministrationException("config.rollback.not_applied",
                     "Only a successfully applied revision can be selected for rollback.",
-                    "Choose an APPLIED revision from configuration history.");
+                    "Choose an APPLIED revision from configuration history.",
+                    "revision", targetRevision.value(), "status", target.status());
         }
         return createDraft(subject, Optional.of(current.revisionId()), target.compiled().documents(), sourceSurface,
                 Optional.of(targetRevision), ConfigurationApplyKind.ROLLBACK);
@@ -130,21 +133,23 @@ public final class ConfigurationAdministrationService {
         DraftState state = requireOwnedDraft(subject, draftId);
         SchemaNode node = schema.resolve(actualPath).orElseThrow(() -> new AdministrationException(
                 "config.path.unknown", "Unknown canonical configuration path: " + actualPath,
-                "Use config search before editing."));
+                "Use config search before editing.", "path", actualPath));
         subject.require(node.editPermission());
         ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(actualPath).orElseThrow(() ->
                 new AdministrationException("config.path.not_editable",
                         "This schema path is not a lossless scalar edit surface: " + actualPath,
-                        "Edit the owning YAML draft or use a structured wizard operation."));
+                        "Edit the owning YAML draft or use a structured wizard operation.",
+                        "path", actualPath));
         String source = state.draft().documents().get(resolved.documentName());
         if (source == null) {
             throw new AdministrationException("config.document.missing",
                     "Draft is missing canonical document " + resolved.documentName(),
-                    "Restore the document before attempting an edit.");
+                    "Restore the document before attempting an edit.",
+                    "document", resolved.documentName());
         }
         validateAllowed(node, replacement);
         LosslessYamlDocument document = LosslessYamlDocument.parse(source);
-        LosslessYamlDocument edited = replace(document, resolved, node.type(), replacement);
+        LosslessYamlDocument edited = replace(document, resolved, node.type(), actualPath, replacement);
         LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
         documents.put(resolved.documentName(), edited.render());
         ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
@@ -193,10 +198,10 @@ public final class ConfigurationAdministrationService {
         DraftState state = requireOwnedDraft(subject, draftId);
         SchemaNode node = schema.resolve(actualPath).orElseThrow(() -> new AdministrationException(
                 "config.path.unknown", "Unknown canonical configuration path: " + actualPath,
-                "Use config search before listing a structure."));
+                "Use config search before listing a structure.", "path", actualPath));
         ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(actualPath).orElseThrow(() ->
                 new AdministrationException("config.path.not_listable", "Configuration path cannot be listed.",
-                        "Use a schema-owned list or map path."));
+                        "Use a schema-owned list or map path.", "path", actualPath));
         LosslessYamlDocument document = document(state, resolved);
         try {
             return switch (node.type()) {
@@ -204,11 +209,11 @@ public final class ConfigurationAdministrationService {
                 case MAP -> document.mappingKeys(resolved.yamlPath());
                 default -> throw new AdministrationException("config.path.not_listable",
                         "Configuration path is not a list or map: " + actualPath,
-                        "Use config get/explain for scalar settings.");
+                        "Use config get/explain for scalar settings.", "path", actualPath);
             };
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("config.list.rejected", safeMessage(exception),
-                    "Correct the draft structure and validate it before listing values.");
+                    "Correct the draft structure and validate it before listing values.", "path", actualPath);
         }
     }
 
@@ -226,7 +231,8 @@ public final class ConfigurationAdministrationService {
             edited = document(state, resolved).appendSequenceString(resolved.yamlPath(), value);
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("config.add.rejected", safeMessage(exception),
-                    "Add a unique schema-valid scalar value to the selected list.");
+                    "Add a unique schema-valid scalar value to the selected list.",
+                    "path", actualPath, "value", value);
         }
         return replaceDocument(draftId, state, resolved.documentName(), edited.render(), state.remapPlan());
     }
@@ -245,7 +251,8 @@ public final class ConfigurationAdministrationService {
             edited = document(state, resolved).removeSequenceString(resolved.yamlPath(), value);
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("config.remove.rejected", safeMessage(exception),
-                    "Remove an existing scalar value from the selected list.");
+                    "Remove an existing scalar value from the selected list.",
+                    "path", actualPath, "value", value);
         }
         return replaceDocument(draftId, state, resolved.documentName(), edited.render(), state.remapPlan());
     }
@@ -269,7 +276,7 @@ public final class ConfigurationAdministrationService {
         String source = state.draft().documents().get("progression.yml");
         if (source == null) {
             throw new AdministrationException("config.document.missing", "Draft has no progression.yml document.",
-                    "Restore progression.yml before adding a stage.");
+                    "Restore progression.yml before adding a stage.", "document", "progression.yml");
         }
         List<String> lines = new ArrayList<>();
         lines.add("enabled: true");
@@ -289,7 +296,8 @@ public final class ConfigurationAdministrationService {
             return replaceDocument(draftId, state, "progression.yml", document.render(), state.remapPlan());
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("stage.add.rejected", safeMessage(exception),
-                    "Use a unique stage ID and a supported block-style progression document.");
+                    "Use a unique stage ID and a supported block-style progression document.",
+                    "stage", stageId.value());
         }
     }
 
@@ -304,13 +312,14 @@ public final class ConfigurationAdministrationService {
             if (value.equals(stageId)) {
                 throw new AdministrationException("stage.change.remap_invalid",
                         "A deleted stage cannot be its own replacement.",
-                        "Select a different enabled ordered stage.");
+                        "Select a different enabled ordered stage.",
+                        "source", stageId.value(), "target", value.value());
             }
         });
         String source = state.draft().documents().get("progression.yml");
         if (source == null) {
             throw new AdministrationException("config.document.missing", "Draft has no progression.yml document.",
-                    "Restore progression.yml before deleting a stage.");
+                    "Restore progression.yml before deleting a stage.", "document", "progression.yml");
         }
         try {
             LosslessYamlDocument document = LosslessYamlDocument.parse(source)
@@ -327,7 +336,8 @@ public final class ConfigurationAdministrationService {
             return replaceDocument(draftId, state, "progression.yml", document.render(), plan);
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("stage.remove.rejected", safeMessage(exception),
-                    "Select an existing stage and provide a valid replacement when references exist.");
+                    "Select an existing stage and provide a valid replacement when references exist.",
+                    "stage", stageId.value(), "target", replacement.map(value -> value.value()).orElse("NONE"));
         }
     }
 
@@ -341,7 +351,8 @@ public final class ConfigurationAdministrationService {
         if (source.equals(replacement)) {
             throw new AdministrationException("stage.change.remap_invalid",
                     "A missing stage cannot be its own replacement.",
-                    "Select a different enabled ordered stage present in the candidate configuration.");
+                    "Select a different enabled ordered stage present in the candidate configuration.",
+                    "source", source.value(), "target", replacement.value());
         }
         StageRemapPlan plan = mergeRemap(state, source, replacement);
         validateDraftRemap(state.draft(), plan);
@@ -368,7 +379,7 @@ public final class ConfigurationAdministrationService {
         if (remaining.size() == current.mappings().size()) {
             throw new AdministrationException("stage.change.remap_source_missing",
                     "The draft has no remap for source stage " + source.value() + ".",
-                    "Review the current draft remap before removing a mapping.");
+                    "Review the current draft remap before removing a mapping.", "source", source.value());
         }
         Optional<StageRemapPlan> replacement = remaining.isEmpty() ? Optional.empty() : Optional.of(
                 new StageRemapPlan(draftId + ":v" + Math.addExact(state.version(), 1), remaining));
@@ -466,8 +477,11 @@ public final class ConfigurationAdministrationService {
                 .filter(finding -> finding.severity() == ValidationSeverity.ACKNOWLEDGEMENT_REQUIRED).toList();
         if (preview.validation().hasErrors()) {
             throw new AdministrationException("config.validation.blocked",
+                    AdministrationSemanticVariant.CONFIG_VALIDATION_ACKNOWLEDGEMENT_PREPARATION,
                     "A blocked configuration cannot receive acknowledgement authority.",
-                    "Correct every validation error and preview again.");
+                    "Correct every validation error and preview again.",
+                    "errors", validationCount(preview.validation().findings(), ValidationSeverity.ERROR),
+                    "findings", required.size());
         }
         if (required.isEmpty()) {
             throw new AdministrationException("config.acknowledgement.not_required",
@@ -681,13 +695,17 @@ public final class ConfigurationAdministrationService {
                 new AdministrationException("config.preview.candidate_missing",
                         "The exact preview candidate is no longer available.",
                         "Preview the current draft again before applying it."));
-        Optional<StageRemapPlan> remapPlan = previewedCandidate.stageRemap().map(StageRemapSnapshot::plan);
+        Optional<StageRemapSnapshot> previewedRemap = previewedCandidate.stageRemap();
+        Optional<StageRemapPlan> remapPlan = previewedRemap.map(StageRemapSnapshot::plan);
         return workflow.prepare(state.draft(), remapPlan).thenApply(candidate -> {
-            if (!candidate.stageRemap().map(StageRemapSnapshot::seal)
-                    .equals(previewedCandidate.stageRemap().map(StageRemapSnapshot::seal))) {
+            Optional<StageRemapSnapshot> currentRemap = candidate.stageRemap();
+            if (!currentRemap.map(StageRemapSnapshot::seal).equals(previewedRemap.map(StageRemapSnapshot::seal))) {
                 throw new AdministrationException("stage.change.remap_snapshot_stale",
                         "Persisted player stage references changed after the remap preview.",
-                        "Preview the exact replacement migration again before applying it.");
+                        "Preview the exact replacement migration again before applying it.",
+                        "source", remapStages(remapPlan, true), "target", remapStages(remapPlan, false),
+                        "before", previewedRemap.map(value -> value.entries().size()).orElse(0),
+                        "after", currentRemap.map(value -> value.entries().size()).orElse(0));
             }
             if (expectedFindingSeal.isPresent()
                     && !expectedFindingSeal.orElseThrow().equals(findingSeal(candidate.validation().findings()))) {
@@ -736,8 +754,13 @@ public final class ConfigurationAdministrationService {
         if (!candidate.validation().canApply(acknowledgements)) {
             drafts.replace(state.draft().draftId(), claimed, state);
             throw new AdministrationException("config.validation.blocked",
+                    AdministrationSemanticVariant.CONFIG_VALIDATION_APPLY,
                     "Configuration contains errors or unacknowledged high-risk changes.",
-                    "Correct every error and explicitly acknowledge each required finding before apply.");
+                    "Correct every error and explicitly acknowledge each required finding before apply.",
+                    "errors", validationCount(candidate.validation().findings(), ValidationSeverity.ERROR),
+                    "findings", candidate.validation().findings().stream()
+                            .filter(finding -> finding.severity() == ValidationSeverity.ACKNOWLEDGEMENT_REQUIRED)
+                            .filter(finding -> !acknowledgements.contains(finding.code())).count());
         }
         ConfigRevisionId revisionId = new ConfigRevisionId("r_" + UUID.randomUUID().toString().replace("-", ""));
         Instant now = Instant.now(clock);
@@ -797,11 +820,14 @@ public final class ConfigurationAdministrationService {
                 } else {
                     finalizeFailure(attempted, exception);
                 }
-                throw new AdministrationException("config.apply.failed", safeMessage(exception),
+                AdministrationSemanticVariant variant = previousPointerRestored
+                        ? AdministrationSemanticVariant.CONFIG_APPLY_PRIOR_STATE_RESTORED
+                        : AdministrationSemanticVariant.CONFIG_APPLY_RECONCILIATION_REQUIRED;
+                throw new AdministrationException("config.apply.failed", variant, safeMessage(exception),
                         previousPointerRestored
                                 ? "The runtime rejected the candidate and the prior pointer was restored safely."
-                                : "The prior pointer could not be restored; destructive-stage authority remains "
-                                        + "reserved and requires explicit reconciliation.");
+                                : "The prior pointer could not be restored; explicit reconciliation is required.",
+                        "revision", revisionId.value());
             }
             StoredConfigurationRevision applied = attempted.withOutcome(ConfigurationApplicationStatus.APPLIED,
                     Optional.of(Instant.now(clock)), Optional.empty());
@@ -811,7 +837,8 @@ public final class ConfigurationAdministrationService {
                 throw new AdministrationException("config.history.finalize_failed",
                         "Configuration revision " + revisionId.value()
                                 + " is active, but its durable history outcome remains ATTEMPTED.",
-                        "Do not retry the stale draft; run doctor and reconcile the attempted history outcome.");
+                        "Do not retry the stale draft; run doctor and reconcile the attempted history outcome.",
+                        "revision", revisionId.value());
             }
             if (stageTransition.isPresent()) {
                 try {
@@ -820,7 +847,7 @@ public final class ConfigurationAdministrationService {
                     throw new AdministrationException("stage.change.transition_reconciliation_pending",
                             "Configuration is active, but its unsafe-stage reservation still requires cleanup.",
                             "Do not retry the stale draft; run configuration-transition recovery for revision "
-                                    + revisionId.value() + ".");
+                                    + revisionId.value() + ".", "revision", revisionId.value());
                 }
             }
             try {
@@ -832,8 +859,10 @@ public final class ConfigurationAdministrationService {
         } catch (AdministrationException exception) {
             throw exception;
         } catch (RuntimeException exception) {
-            throw new AdministrationException("config.apply.failed", safeMessage(exception),
-                    "The last known-good configuration remains authoritative; inspect history and doctor output.");
+            throw new AdministrationException("config.apply.failed",
+                    AdministrationSemanticVariant.CONFIG_APPLY_PRIOR_STATE_UNCHANGED, safeMessage(exception),
+                    "The last known-good configuration remains authoritative; inspect history and doctor output.",
+                    "revision", revisionId.value());
         } finally {
             if (configurationActivated) {
                 drafts.remove(state.draft().draftId(), claimed);
@@ -931,7 +960,8 @@ public final class ConfigurationAdministrationService {
         if (source == null) {
             throw new AdministrationException("config.document.missing",
                     "Draft is missing canonical document " + resolved.documentName(),
-                    "Restore the document before attempting a structural edit.");
+                    "Restore the document before attempting a structural edit.",
+                    "document", resolved.documentName());
         }
         return LosslessYamlDocument.parse(source);
     }
@@ -942,12 +972,13 @@ public final class ConfigurationAdministrationService {
             SchemaValueType expected) {
         SchemaNode node = schema.resolve(path).orElseThrow(() -> new AdministrationException(
                 "config.path.unknown", "Unknown canonical configuration path: " + path,
-                "Use config search before editing."));
+                "Use config search before editing.", "path", path));
         subject.require(node.editPermission());
         if (node.type() != expected) {
             throw new AdministrationException("config.path.type_mismatch",
                     "Configuration path is " + node.type() + ", not " + expected + ": " + path,
-                    "Use the operation that matches the schema-owned value type.");
+                    "Use the operation that matches the schema-owned value type.",
+                    "path", path, "current", node.type(), "type", expected);
         }
         return node;
     }
@@ -1014,6 +1045,16 @@ public final class ConfigurationAdministrationService {
         return RevisionHasher.hashText(canonical);
     }
 
+    private static long validationCount(List<ValidationFinding> findings, ValidationSeverity severity) {
+        return findings.stream().filter(finding -> finding.severity() == severity).count();
+    }
+
+    private static String remapStages(Optional<StageRemapPlan> plan, boolean sources) {
+        return plan.map(value -> String.join(",", value.mappings().entrySet().stream()
+                .map(entry -> sources ? entry.getKey().value() : entry.getValue().value())
+                .sorted().toList())).orElse("NONE");
+    }
+
     private DraftState requireOwnedDraft(PermissionSubject subject, UUID draftId) {
         DraftState state = drafts.get(Objects.requireNonNull(draftId, "draft ID"));
         if (state == null) {
@@ -1063,7 +1104,8 @@ public final class ConfigurationAdministrationService {
                 && node.allowedValues().staticValues().stream().noneMatch(replacement::equalsIgnoreCase)) {
             throw new AdministrationException("config.value.not_allowed",
                     "Value is not allowed for " + node.canonicalPath() + ": " + replacement,
-                    "Use one of: " + String.join(", ", node.allowedValues().staticValues()));
+                    "Use one of: " + String.join(", ", node.allowedValues().staticValues()),
+                    "path", node.canonicalPath());
         }
     }
 
@@ -1071,6 +1113,7 @@ public final class ConfigurationAdministrationService {
             LosslessYamlDocument document,
             ConfigurationPathResolver.ResolvedPath path,
             SchemaValueType type,
+            String canonicalPath,
             String replacement) {
         try {
             return switch (type) {
@@ -1092,7 +1135,8 @@ public final class ConfigurationAdministrationService {
             };
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("config.edit.rejected", safeMessage(exception),
-                    "Correct the value or use a structured wizard/editor that preserves YAML presentation.");
+                    "Correct the value or use a structured wizard/editor that preserves YAML presentation.",
+                    "path", canonicalPath, "type", type, "value", replacement);
         }
     }
 
@@ -1120,14 +1164,16 @@ public final class ConfigurationAdministrationService {
             if (configuration.stages().containsKey(mapping.getKey())) {
                 throw new AdministrationException("stage.change.remap_source_present",
                         "Remap source stage " + mapping.getKey().value() + " still exists in the candidate.",
-                        "Remove the source stage before selecting its persisted-reference replacement.");
+                        "Remove the source stage before selecting its persisted-reference replacement.",
+                        "source", mapping.getKey().value(), "target", mapping.getValue().value());
             }
             var target = configuration.stages().get(mapping.getValue());
             if (target == null || !target.enabled() || !configuration.order().contains(mapping.getValue())) {
                 throw new AdministrationException("stage.change.remap_target_missing",
                         "Remap target stage " + mapping.getValue().value()
                                 + " is absent, disabled, or unordered in the candidate.",
-                        "Select an enabled ordered stage present in the candidate configuration.");
+                        "Select an enabled ordered stage present in the candidate configuration.",
+                        "source", mapping.getKey().value(), "target", mapping.getValue().value());
             }
         }
     }

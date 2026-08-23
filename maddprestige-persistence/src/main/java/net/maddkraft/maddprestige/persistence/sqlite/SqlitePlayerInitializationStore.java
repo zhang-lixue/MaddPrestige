@@ -5,11 +5,13 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.ScopeId;
 import net.maddkraft.maddprestige.api.id.StageId;
+import net.maddkraft.maddprestige.core.requirement.RequirementBaseline;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 
@@ -27,18 +29,39 @@ public final class SqlitePlayerInitializationStore {
             ConfigRevisionId revision,
             ScopeId prestigeScope,
             Instant now) {
+        initialize(playerId, stageId, revision, prestigeScope, now, List.of());
+    }
+
+    public void initialize(
+            UUID playerId,
+            StageId stageId,
+            ConfigRevisionId revision,
+            ScopeId prestigeScope,
+            Instant now,
+            List<RequirementBaseline> baselines) {
         Objects.requireNonNull(playerId, "player ID");
         Objects.requireNonNull(stageId, "stage ID");
         Objects.requireNonNull(revision, "configuration revision");
         Objects.requireNonNull(prestigeScope, "Prestige scope");
         Objects.requireNonNull(now, "initialization time");
+        List<RequirementBaseline> pinnedBaselines = List.copyOf(Objects.requireNonNull(baselines, "baselines"));
         try (Connection connection = connections.open()) {
             SqliteStageTransitionGuard.beginImmediate(connection);
             try {
                 SqliteStageTransitionGuard.requireNoPendingRemap(connection, java.util.List.of(stageId));
                 insertStage(connection, playerId, stageId, revision, now);
                 insertPrestige(connection, playerId, revision, prestigeScope, now);
+                for (RequirementBaseline baseline : pinnedBaselines) {
+                    if (!baseline.key().playerId().equals(playerId)
+                            || !baseline.key().scopeInstance().equals(prestigeScope)) {
+                        throw new PersistenceException("Initial baseline does not belong to the player lifecycle");
+                    }
+                    insertBaseline(connection, baseline);
+                }
                 verify(connection, playerId, stageId, revision, prestigeScope);
+                for (RequirementBaseline baseline : pinnedBaselines) {
+                    verifyBaseline(connection, baseline);
+                }
                 SqliteStageTransitionGuard.commit(connection);
             } catch (SQLException | RuntimeException failure) {
                 SqliteStageTransitionGuard.rollback(connection, failure);
@@ -46,6 +69,46 @@ public final class SqlitePlayerInitializationStore {
             }
         } catch (SQLException failure) {
             throw new PersistenceException("Could not atomically initialize player progression lifecycle", failure);
+        }
+    }
+
+    private static void insertBaseline(Connection connection, RequirementBaseline baseline) throws SQLException {
+        String sql = "INSERT OR IGNORE INTO mp_requirement_baselines "
+                + "(player_uuid, requirement_id, measurement_scope, scope_instance, semantic_fingerprint, "
+                + "value_type, value_text, provider_generation, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            var key = baseline.key();
+            statement.setString(1, key.playerId().toString());
+            statement.setString(2, key.requirementId().value());
+            statement.setString(3, key.scope().name());
+            statement.setString(4, key.scopeInstance().value());
+            statement.setString(5, key.semanticFingerprint());
+            statement.setString(6, baseline.value().type().name());
+            statement.setString(7, baseline.value().canonical());
+            statement.setLong(8, baseline.providerGeneration());
+            statement.setString(9, baseline.createdAt().toString());
+            statement.executeUpdate();
+        }
+    }
+
+    private static void verifyBaseline(Connection connection, RequirementBaseline baseline) throws SQLException {
+        String sql = "SELECT value_type, value_text, provider_generation FROM mp_requirement_baselines "
+                + "WHERE player_uuid = ? AND requirement_id = ? AND measurement_scope = ? "
+                + "AND scope_instance = ? AND semantic_fingerprint = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            var key = baseline.key();
+            statement.setString(1, key.playerId().toString());
+            statement.setString(2, key.requirementId().value());
+            statement.setString(3, key.scope().name());
+            statement.setString(4, key.scopeInstance().value());
+            statement.setString(5, key.semanticFingerprint());
+            try (ResultSet row = statement.executeQuery()) {
+                if (!row.next() || !baseline.value().type().name().equals(row.getString(1))
+                        || !baseline.value().canonical().equals(row.getString(2))
+                        || baseline.providerGeneration() != row.getLong(3)) {
+                    throw new PersistenceException("Initial requirement baseline raced with different state");
+                }
+            }
         }
     }
 

@@ -13,6 +13,7 @@ import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.operation.OperationPlan;
 import net.maddkraft.maddprestige.api.rank.RankProjectionRequest;
 import net.maddkraft.maddprestige.api.reward.PlannedReward;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
 
 public record PrestigePlan(
         OperationId operationId,
@@ -31,7 +32,8 @@ public record PrestigePlan(
         List<String> blockers,
         boolean executionAllowed,
         OperationPlan operationPlan,
-        PrestigeAuthorization authorization) {
+        PrestigeAuthorization authorization,
+        List<AuthorizationBlocker> authorizationBlockers) {
     public PrestigePlan {
         operationId = Objects.requireNonNull(operationId, "operation ID");
         requestId = Objects.requireNonNull(requestId, "request ID");
@@ -50,12 +52,42 @@ public record PrestigePlan(
         blockers = List.copyOf(Objects.requireNonNull(blockers, "blockers"));
         operationPlan = Objects.requireNonNull(operationPlan, "operation plan");
         authorization = Objects.requireNonNull(authorization, "authorization");
+        authorizationBlockers = List.copyOf(Objects.requireNonNull(authorizationBlockers,
+                "authorization blockers"));
         if (executionAllowed != blockers.isEmpty()) {
             throw new IllegalArgumentException("Execution allowance must agree with blockers");
         }
         if (rankProviderId.isPresent() != rankProjectionRequest.isPresent()) {
             throw new IllegalArgumentException("Rank provider and projection request must be present together");
         }
+        if (!authorizationBlockers.isEmpty()
+                && !blockers.equals(AuthorizationBlocker.diagnostics(authorizationBlockers))) {
+            throw new IllegalArgumentException("Diagnostic and structured plan blockers must agree");
+        }
+    }
+
+    public PrestigePlan(
+            OperationId operationId,
+            UUID requestId,
+            UUID playerId,
+            long expectedStageRevision,
+            long expectedPrestigeRevision,
+            ConfigRevisionId configRevision,
+            Map<ProviderId, Long> providerGenerations,
+            PrestigeSimulation simulation,
+            List<PlannedCost> costs,
+            List<PlannedReward> rewards,
+            Optional<ProviderId> rankProviderId,
+            Optional<RankProjectionRequest> rankProjectionRequest,
+            Set<ProviderId> unavailableProviders,
+            List<String> blockers,
+            boolean executionAllowed,
+            OperationPlan operationPlan,
+            PrestigeAuthorization authorization) {
+        this(operationId, requestId, playerId, expectedStageRevision, expectedPrestigeRevision, configRevision,
+                providerGenerations, simulation, costs, rewards, rankProviderId, rankProjectionRequest,
+                unavailableProviders, blockers, executionAllowed, operationPlan, authorization,
+                AuthorizationBlocker.unknownAll(blockers));
     }
 
     public PrestigePlan(
@@ -78,6 +110,6 @@ public record PrestigePlan(
         this(operationId, UUID.randomUUID(), playerId, expectedStageRevision, expectedPrestigeRevision,
                 configRevision, providerGenerations, simulation, costs, rewards, rankProviderId,
                 rankProjectionRequest, unavailableProviders, blockers, executionAllowed, operationPlan,
-                authorization);
+                authorization, AuthorizationBlocker.unknownAll(blockers));
     }
 }

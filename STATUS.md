@@ -1,16 +1,79 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 8C Owner Review Correction Pass 2 candidate complete, awaiting owner review; Phase 8D not started
+**Current phase:** Phase 8D owner-accepted after Independent Owner Review 7 and in publication; Phase 8E not started
 
-**Last updated:** 2026-08-18
+**Last updated:** 2026-08-23
 
 **Branch:** `v2/phase-8`
 
 **Frozen pre-Phase-8 HEAD:** `7fc5c3532f0614634933ff66ee0e03bf55b8e5cf`
 
-**Candidate scope:** SQLite persistence, migration, backup and recovery hardening; accepted Phase 1-8B behavior retained
+**Candidate scope:** i18n, exact generic example, public documentation and command-driven admin UX; accepted Phase 1-8C behavior retained
 
 ## Outcome
+
+Phase 8D supplies one server-global UTF-8 locale selected by `locale.yml`, with built-in `en_US` as the complete
+fallback catalog. Player/admin-facing command, setup, Why, GUI and Phase 7 presentation carries stable semantic message
+references to the Paper boundary; it does not wrap precomposed English lines in generic catalog entries. Dynamic values
+are named bounded data, not markup authority. Reload parses and validates a complete
+snapshot before one atomic publication; an invalid catalog retains the previous known-good snapshot. A missing selected
+key falls back to built-in English, while a key absent from both catalogs produces `[message:<key>]`.
+
+Correction Pass 3 removed the lossy authorization and code-fragment classification present after the rejected Pass 2
+candidate. Every real
+RankUp/Prestige rejection now carries a stable `AuthorizationBlockerKind`, structured facts and secondary diagnostic
+text. Why, executable-plan previews and true no-plan preview/simulation rejection use that same structured data; public
+meaning is never inferred from diagnostic English. Owner Review 4 accepted that architecture and mapping completeness,
+then found the smaller generic administration families were not semantically correct for every exact code.
+
+Correction Pass 4 audits all 84 known public `AdministrationException` codes against their production throw sites and
+gives each one a dedicated explicit semantic identity, catalog-owned explanation/remediation and applicable immutable
+facts. Server-issued acknowledgement, no-acknowledgement-required, projected group, duplicate requirement, unknown
+Prestige stage/metric, missing document, rollback/history and remap/transition failures now describe their actual
+condition and action. Owner Review 5 found that exact code mapping alone still collapsed materially different
+occurrences of `config.apply.failed` and `config.validation.blocked`.
+
+Correction Pass 5 mechanically inventories 111 literal production exception sites: 84 codes, including 19 codes with
+multiple sites. Seventeen multi-site codes share compatible condition/consequence/remediation contracts. The two
+overloaded codes now carry five immutable `AdministrationSemanticVariant` values for unchanged/restored/reconciliation
+apply outcomes and acknowledgement/apply validation contexts. The public catalog also recognizes list and map
+collections and reports persisted-reference change as the cause of stale remap previews. Real branch, occurrence
+inventory and alternate-catalog tests prove the exact recovery/action context without reading English diagnostics. The
+safe unknown fallback remains, while known codes cannot select it. Catalog rendering also distinguishes
+maximum, cooldown, inactive ladder, illegal target, missing cost, provider, preflight, projection, state, requirement
+and boundary causes. Command usage is also a catalog template with canonical syntax as data. Exhaustive mapping,
+real-service, distinctness, preflight-detail, no-plan, exact-administration, alternate-catalog and static-architecture
+tests close OR8D-07 through OR8D-10 without changing the accepted lifecycle, locale-containment or setup-parity work.
+
+Owner Review 6 accepted that complete multi-source correction and found OR8D-11: several catalog messages still drifted
+from the source condition of otherwise single-source identities. Correction Pass 6 exhaustively enumerates all 65
+single-source codes, so the accepted 19-code multi-source register plus the new register account for all 84 codes and
+111 literal occurrences. `config.preview.stale` now means only draft hash/version drift and remains distinct from active
+`config.revision.stale`; rollback provenance failure names the draft; snapshot preparation explicitly fails before
+activation with current active configuration unchanged. The same audit corrected actor-bound confirmation ownership,
+unknown confirmation terminal states, lossless stage add/remove guidance, absent remap-plan removal and the actual GUI
+missing-replacement condition. A source-walk test fails on any unreviewed single-source code. Real defensive branches,
+alternate catalogs and internal-English prohibitions pass without changing stable codes or production Java control flow.
+
+Independent Owner Review 7 accepted the complete Phase 8D candidate with no remaining acceptance-blocking defect.
+OR8D-01 through OR8D-11 are closed at the Phase 8D boundary.
+
+The public Quick Start uses the existing Phase 6 command-driven setup session rather than a second setup architecture.
+It creates the frozen generic `member` -> `adventurer` -> `veteran` profile, selects externally created LuckPerms groups
+`Member`, `Adventurer` and `Veteran`, configures 60/180-second current-Prestige Paper play-time requirements, previews,
+acknowledges and applies the canonical configuration, then runs Doctor. MaddPrestige never creates the external groups.
+The public example contains no cost, reward or optional-provider dependency.
+
+A fresh disposable Paper 26.1.2 build 74 process with the independently audited LuckPerms 5.5.71 artifact passed 29/29 first-boot assertions and 3/3
+unchanged-restart assertions. It used the documented setup commands, proved exact Why deficits and zero-effect blocked
+attempts, completed Member -> Adventurer -> Veteran -> Prestige once, retained the Paper-owned statistic, reset only the
+current-Prestige baseline, and exercised an offline UUID path. Before Adventurer, the first stable read established exact
+durable stage/Prestige/baseline state and one journaled, externally verified real LuckPerms `Member` projection. Repeated
+initialization made no duplicate mutation; new Why, preview and blocked-operation identities each established real
+Member state. Restart recovered exact configuration, state, history, LuckPerms projection and healthy Doctor status.
+The automated run satisfies A02 and A70. It does not fabricate an independent blind human. By owner decision, A76
+remains Partial and is intentionally deferred until the final Phase 8 release candidate is frozen; the published
+owner/manual protocol will then qualify the actual release candidate.
 
 Phase 8C adds the production SQLite-native backup authority selected from the existing Xerial driver. A fair
 application-connection fence drains/fences MaddPrestige work while the backup API seals a unique snapshot; a partial
@@ -66,8 +129,10 @@ authority is revalidated before atomic initialization and again before journalin
 listener failure is isolated. Same-player recursive mutation returns a structured conflict.
 
 Live progress contexts now use durable stage, current/lifetime Prestige and active-season state for scaling, catch-up and
-all accepted scope identities. Unknown-player reads/PRE use virtual initial state; atomic stage/Prestige initialization
-occurs only after PRE succeeds, so cancellation/listener failure creates no player state or operation effects.
+all accepted scope identities. Authoritative reads, Why, previews and blocked operations establish the durable initial
+state and journaled real rank projection before returning. An eligible operation still authorizes against virtual initial
+state and performs that establishment only after PRE succeeds and authority is revalidated, so PRE cancellation or
+listener failure creates no player state, projection, journal or other effect.
 
 Manual progress uses one shared single-flight drain, bounded 1,024-row repository batches, request coalescing,
 version-aware dirty clearing, failure retention/retry and bounded shutdown. Persistence failure reports `DEGRADED`,
@@ -98,9 +163,10 @@ JARs remain outside the review bundle; sanitized evidence is `PHASE8B_PAPER_QUAL
 
 ## Canonical remaining Phase 8 decomposition
 
-- Phase 8C: SQLite Persistence, Migration, Backup & Recovery Hardening — Owner Review Correction Pass 2 candidate
+- Phase 8C: SQLite Persistence, Migration, Backup & Recovery Hardening — owner-accepted at checkpoint
+  `d481a9db7cd67108ff77f97e2d64d737e9096276`.
+- Phase 8D: i18n, a generic example, public documentation and admin UX — implementation/qualification candidate
   complete, awaiting owner review.
-- Phase 8D: i18n, a generic example, public documentation and admin UX.
 - Phase 8E: performance plus fault/dependency qualification.
 - Phase 8F: packaging and release hardening, including final compatibility-baseline responsibility.
 
@@ -117,9 +183,12 @@ deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not
 
 ## Acceptance classification
 
-| Acceptance | Current classification | Phase 8B evidence / remaining gate |
+| Acceptance | Current classification | Current evidence / remaining gate |
 |---|---|---|
-| A02 | Partial | Complete Phase 6 setup/admin/GUI composition is reachable live; independent Quick Start usability remains Phase 8D |
+| A02 | Satisfied | A fresh real-Paper process used the documented command-driven setup session to create, preview, acknowledge, apply and diagnose the exact active three-stage ladder; no second GUI architecture is required |
+| A45 | Satisfied | Doctor command rendering now carries catalog-owned consequence/explanation plus affected path/code and safe actionable remediation for every diagnostic family; command and Paper rendering tests prove the public boundary |
+| A46 | Satisfied | Rank-target and other actionable Doctor findings render stable semantic remediation identities without exposing arbitrary stored exception/diagnostic prose |
+| A47 | Satisfied | RankUp/Prestige authorization emits exhaustive typed blocker identities and facts; the real command/service Why path distinguishes inactive state, illegal target, missing cost, maximum, cooldown, provider, cost-preflight, projection, requirements and boundaries without parsing diagnostic prose |
 | A61 | Partial | Durable internal/offline paths and live async LuckPerms composition exist; complete provider-by-provider live offline qualification remains |
 | A62 | Partial | Manual backpressure/health and cache-only rendering are corrected; per-player virtual-thread/SQLite fan-out still needs real Paper load/TPS qualification in Phase 8E |
 | A63 | Partial | Populated fresh/prefix migration, native backup, restore rehearsal, corruption/history failures and real Paper restart are qualified; Phase 9 retains actual MaddKraft clone/deployment migration qualification |
@@ -127,36 +196,44 @@ deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not
 | A65 | Partial | A separate live harness proves owner-attested SDK registration, admin-configured metric evaluation, unregister and rebind; the broader independent provider qualification matrix remains |
 | A66 | Partial | Live Paper proves correlation, distinct request/durable IDs, zero-effect cancellation and stale successful PRE, plus durable rank/Prestige POST; the complete uncertainty/listener-fault/reentrancy matrix remains |
 | A67 | Partial | Callback/linkage failure is isolated and unrelated registry state survives; broader dependency service/reload/operation matrix remains Phase 8E |
-| A70 | Partial | Live generic LuckPerms/rank-up/Prestige composition now exists; the complete unbranded three-stage server exercise is not an 8B claim |
-| A76 | Partial | Live setup is reachable, but Quick Start documentation and independent fresh-admin qualification remain Phase 8D |
+| A68 | Satisfied | Stable semantic references preserve 51 typed blocker identities and occurrence-correct administration semantics across 111 sites/84 codes: 19 multi-source and all 65 single-source codes; five typed variants distinguish overloaded apply/validation states, applicable facts remain data, no English or diagnostic-fragment classifier remains, and real-branch plus alternate-catalog tests pass |
+| A70 | Satisfied | The exact unbranded Member -> Adventurer -> Veteran -> Prestige profile passed 29 first-boot and three unchanged-restart assertions, including a real journaled LuckPerms Member projection before Adventurer and idempotent read/Why/preview/operation lifecycle ingress |
+| A76 | Partial / Deferred | By owner decision, the independent blind-administrator protocol will run against the final frozen Phase 8 release candidate, not the intermediate Phase 8D snapshot |
 
-The mechanically audited ledger remains **54 Satisfied, 21 Partial and 1 Later**. A63 remains `Partial` because Phase 9
-retains the live MaddKraft clone/deployment gate; A64 remains `Later`. No Phase 8D-8F criterion is claimed.
+The mechanically audited ledger is **57 Satisfied, 18 Partial and 1 Later**. A63 remains `Partial` because Phase 9
+retains the live MaddKraft clone/deployment gate; A64 remains `Later`. A61/A62/A65/A66/A67 retain their broader Phase 8E
+qualification gates, and A76 retains its independent blind-admin gate deferred to the final frozen Phase 8 release
+candidate.
 
 ## Verification
 
-The Phase 8C candidate is sealed by two consecutive eight-module `clean verify` runs with no source or documentation
-edits between them. Their exact totals, module counts and reproducible hashes were then recorded in
-`PHASE8C_OWNER_REVIEW_SUMMARY.txt` and the owner-review bundle.
+The owner-accepted Phase 8D implementation is sealed by focused i18n, documentation, SDK-consumer and regression checks, the exact
+two-boot Paper qualification, and two consecutive eight-module `clean verify` runs with no source or documentation
+edits between them. Exact totals and reproducible artifact hashes are recorded in
+`PHASE8D_OWNER_REVIEW_SUMMARY.txt` and the owner-review bundle.
 
 ## Owner handoff
 
-- `docs/V2_PHASE8C_IMPLEMENTATION.md`
-- `docs/V2_PHASE8C_MIGRATION_MATRIX.md`
-- `docs/V2_PHASE8C_BACKUP_RESTORE_EVIDENCE.md`
-- `docs/V2_PHASE8C_FIXTURE_METADATA.md`
-- `docs/V2_PHASE8C_FILE_MANIFEST.md`
+- `docs/V2_PHASE8D_IMPLEMENTATION.md`
+- `docs/V2_PHASE8D_A70_QUALIFICATION.md`
+- `docs/V2_PHASE8D_A76_PROTOCOL.md`
+- `docs/V2_PHASE8D_I18N_EVIDENCE.md`
+- `docs/V2_PHASE8D_ADMINISTRATION_SEMANTIC_AUDIT.md`
+- `docs/V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`
+- `docs/V2_PHASE8D_ADMINISTRATION_SINGLE_SOURCE_AUDIT.md`
+- `docs/V2_PHASE8D_FILE_MANIFEST.md`
 - `docs/V2_PHASE8_FAILURE_REGISTER.md`
 - `docs/V2_PHASE8B_STATIC_AUDIT.md`
 - `docs/V2_ARCHITECTURE.md`
 - `docs/V2_TRACEABILITY.md`
 - `DECISIONS.md`
-- `PHASE8C_OWNER_REVIEW_SUMMARY.txt`
-- `PHASE8C_PAPER_QUALIFICATION.log`
-- `PHASE8C_VERIFY_1.log`
-- `PHASE8C_VERIFY_2.log`
-- `target/MaddPrestige_Phase8C_Owner_Review.zip`
+- `PHASE8D_OWNER_REVIEW_SUMMARY.txt`
+- `PHASE8D_PAPER_BOOT_1.log`
+- `PHASE8D_PAPER_BOOT_2.log`
+- `PHASE8D_VERIFY_1.log`
+- `PHASE8D_VERIFY_2.log`
+- `target/MaddPrestige_Phase8D_Owner_Review.zip`
 
-Phase 8B Correction Pass 2 remains owner-accepted and unchanged. Phase 8C Correction Pass 2 is a review candidate,
-not owner-accepted.
-Phase 8D has not started.
+Phase 8B, Phase 8C and Phase 8D are owner-accepted. Independent Owner Review 7 closed OR8D-01 through OR8D-11 with no
+remaining Phase 8D acceptance blocker. A76 remains Partial by explicit owner deferral to the final frozen Phase 8
+release candidate. Phase 8E has not started.

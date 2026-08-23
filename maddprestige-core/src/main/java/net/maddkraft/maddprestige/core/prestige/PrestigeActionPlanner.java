@@ -25,6 +25,8 @@ import net.maddkraft.maddprestige.api.reward.RewardDefinition;
 import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
 import net.maddkraft.maddprestige.api.reward.RewardPreflight;
 import net.maddkraft.maddprestige.api.reward.RewardProvider;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 
 final class PrestigeActionPlanner {
@@ -41,7 +43,7 @@ final class PrestigeActionPlanner {
             Map<ProviderId, Long> pins,
             List<CostDefinition> costDefinitions,
             List<RewardDefinition> rewardDefinitions) {
-        ArrayList<String> blockers = new ArrayList<>();
+        ArrayList<AuthorizationBlocker> blockers = new ArrayList<>();
         LinkedHashSet<ProviderId> unavailable = new LinkedHashSet<>();
         List<CostProposal> costs = proposeCosts(operationId, playerId, configRevision, pins, costDefinitions,
                 blockers, unavailable);
@@ -61,7 +63,7 @@ final class PrestigeActionPlanner {
             ConfigRevisionId configRevision,
             Map<ProviderId, Long> pins,
             List<CostDefinition> definitions,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             LinkedHashSet<ProviderId> unavailable) {
         ArrayList<CostProposal> result = new ArrayList<>();
         for (int index = 0; index < definitions.size(); index++) {
@@ -69,13 +71,17 @@ final class PrestigeActionPlanner {
             Provider provider = pinned(definition.providerId(), pins, blockers, unavailable, true).orElse(null);
             if (!(provider instanceof CostProvider costProvider)) {
                 if (provider != null) {
-                    blockers.add("Provider lacks cost contract: " + definition.providerId().value());
+                    blockers.add(b(AuthorizationBlockerKind.COST_PROVIDER_CONTRACT_MISSING,
+                            "Provider lacks cost contract: " + definition.providerId().value(),
+                            "id", definition.id().value(), "provider", definition.providerId().value()));
                 }
                 continue;
             }
             try {
                 if (costProvider.validate(definition).hasErrors()) {
-                    blockers.add("Invalid Prestige cost: " + definition.id().value());
+                    blockers.add(b(AuthorizationBlockerKind.COST_DEFINITION_INVALID,
+                            "Invalid Prestige cost: " + definition.id().value(),
+                            "id", definition.id().value(), "provider", definition.providerId().value()));
                     continue;
                 }
                 PlannedCost plan = new PlannedCost(operationId, "cost-" + index, playerId, definition, configRevision,
@@ -83,7 +89,9 @@ final class PrestigeActionPlanner {
                         "consume " + definition.displayName());
                 result.add(new CostProposal(costProvider, plan));
             } catch (RuntimeException exception) {
-                blockers.add("Cost provider validation failed: " + rootMessage(exception));
+                blockers.add(b(AuthorizationBlockerKind.COST_PROVIDER_VALIDATION_FAILED,
+                        "Cost provider validation failed: " + rootMessage(exception),
+                        "id", definition.id().value(), "provider", definition.providerId().value()));
             }
         }
         return List.copyOf(result);
@@ -95,7 +103,7 @@ final class PrestigeActionPlanner {
             ConfigRevisionId configRevision,
             Map<ProviderId, Long> pins,
             List<RewardDefinition> definitions,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             LinkedHashSet<ProviderId> unavailable) {
         ArrayList<RewardProposal> result = new ArrayList<>();
         for (int index = 0; index < definitions.size(); index++) {
@@ -104,14 +112,20 @@ final class PrestigeActionPlanner {
             Provider provider = pinned(definition.providerId(), pins, blockers, unavailable, required).orElse(null);
             if (!(provider instanceof RewardProvider rewardProvider)) {
                 if (required) {
-                    blockers.add("Required provider lacks reward contract: " + definition.providerId().value());
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PROVIDER_CONTRACT_MISSING,
+                            "Required provider lacks reward contract: " + definition.providerId().value(),
+                            "id", definition.id().value(), "provider",
+                            definition.providerId().value()));
                 }
                 continue;
             }
             try {
                 if (rewardProvider.validate(definition).hasErrors()) {
                     if (required) {
-                        blockers.add("Invalid required Prestige reward: " + definition.id().value());
+                        blockers.add(b(AuthorizationBlockerKind.REWARD_DEFINITION_INVALID,
+                                "Invalid required Prestige reward: " + definition.id().value(),
+                                "id", definition.id().value(), "provider",
+                                definition.providerId().value()));
                     }
                     continue;
                 }
@@ -123,7 +137,10 @@ final class PrestigeActionPlanner {
             } catch (RuntimeException exception) {
                 unavailable.add(definition.providerId());
                 if (required) {
-                    blockers.add("Required reward provider validation failed: " + rootMessage(exception));
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PROVIDER_VALIDATION_FAILED,
+                            "Required reward provider validation failed: " + rootMessage(exception),
+                            "id", definition.id().value(), "provider",
+                            definition.providerId().value()));
                 }
             }
         }
@@ -133,7 +150,7 @@ final class PrestigeActionPlanner {
     private Optional<Provider> pinned(
             ProviderId id,
             Map<ProviderId, Long> pins,
-            List<String> blockers,
+            List<AuthorizationBlocker> blockers,
             LinkedHashSet<ProviderId> unavailable,
             boolean required) {
         Long generation = pins.get(id);
@@ -143,7 +160,8 @@ final class PrestigeActionPlanner {
                 || !healthy(snapshot.orElseThrow().health().state())) {
             unavailable.add(id);
             if (required) {
-                blockers.add("Provider unavailable or stale: " + id.value());
+                blockers.add(b(AuthorizationBlockerKind.REQUIRED_PROVIDER_UNAVAILABLE,
+                        "Provider unavailable or stale: " + id.value(), "provider", id.value()));
             }
             return Optional.empty();
         }
@@ -203,26 +221,40 @@ final class PrestigeActionPlanner {
             List<RewardProposal> rewardProposals,
             List<CompletableFuture<CostPreflight>> costFutures,
             List<CompletableFuture<RewardPreflight>> rewardFutures,
-            List<String> initialBlockers,
+            List<AuthorizationBlocker> initialBlockers,
             LinkedHashSet<ProviderId> unavailable) {
-        ArrayList<String> blockers = new ArrayList<>(initialBlockers);
+        ArrayList<AuthorizationBlocker> blockers = new ArrayList<>(initialBlockers);
         ArrayList<PlannedCost> costs = new ArrayList<>();
         ArrayList<PlannedReward> rewards = new ArrayList<>();
         for (int index = 0; index < costFutures.size(); index++) {
             try {
                 CostPreflight result = costFutures.get(index).join();
                 if (result.status() != PreflightStatus.READY) {
-                    blockers.add("Cost preflight blocked: " + result.detail());
+                    PlannedCost proposal = costProposals.get(index).plan();
+                    blockers.add(b(AuthorizationBlockerKind.COST_PREFLIGHT_BLOCKED,
+                            "Cost preflight blocked: " + result.detail(),
+                            "id", proposal.definition().id().value(), "provider",
+                            proposal.definition().providerId().value(), "amount",
+                            proposal.definition().amount().canonical(),
+                            "type", proposal.definition().type(), "status", result.status(),
+                            "detail", result.detail()));
                     if (result.status() == PreflightStatus.UNAVAILABLE) {
                         unavailable.add(costProposals.get(index).plan().definition().providerId());
                     }
                 } else if (!result.plannedCost().orElseThrow().equals(costProposals.get(index).plan())) {
-                    blockers.add("Cost provider altered immutable proposal");
+                    PlannedCost proposal = costProposals.get(index).plan();
+                    blockers.add(b(AuthorizationBlockerKind.COST_PLAN_INTEGRITY_VIOLATION,
+                            "Cost provider altered immutable proposal", "id",
+                            proposal.definition().id().value(), "provider",
+                            proposal.definition().providerId().value()));
                 } else {
                     costs.add(result.plannedCost().orElseThrow());
                 }
             } catch (RuntimeException exception) {
-                blockers.add("Cost preflight failed: " + rootMessage(exception));
+                PlannedCost proposal = costProposals.get(index).plan();
+                blockers.add(b(AuthorizationBlockerKind.COST_PREFLIGHT_FAILED,
+                        "Cost preflight failed: " + rootMessage(exception), "id",
+                        proposal.definition().id().value(), "provider", proposal.definition().providerId().value()));
             }
         }
         for (int index = 0; index < rewardFutures.size(); index++) {
@@ -233,12 +265,23 @@ final class PrestigeActionPlanner {
                         && result.plannedReward().orElseThrow().equals(rewardProposals.get(index).plan())) {
                     rewards.add(result.plannedReward().orElseThrow());
                 } else if (definition.failurePolicy() == RewardFailurePolicy.REQUIRED) {
-                    blockers.add("Required reward preflight blocked: " + result.detail());
+                    AuthorizationBlockerKind kind = result.status() == PreflightStatus.READY
+                            ? AuthorizationBlockerKind.REWARD_PLAN_INTEGRITY_VIOLATION
+                            : AuthorizationBlockerKind.REWARD_PREFLIGHT_BLOCKED;
+                    String diagnostic = result.status() == PreflightStatus.READY
+                            ? "Reward provider altered immutable proposal"
+                            : "Required reward preflight blocked: " + result.detail();
+                    blockers.add(b(kind, diagnostic, "id", definition.id().value(), "provider",
+                            definition.providerId().value(), "amount", definition.value().canonical(), "type",
+                            definition.type(),
+                            "status", result.status(), "detail", result.detail()));
                 }
             } catch (RuntimeException exception) {
                 unavailable.add(definition.providerId());
                 if (definition.failurePolicy() == RewardFailurePolicy.REQUIRED) {
-                    blockers.add("Required reward preflight failed: " + rootMessage(exception));
+                    blockers.add(b(AuthorizationBlockerKind.REWARD_PREFLIGHT_FAILED,
+                            "Required reward preflight failed: " + rootMessage(exception), "id",
+                            definition.id().value(), "provider", definition.providerId().value()));
                 }
             }
         }
@@ -262,6 +305,13 @@ final class PrestigeActionPlanner {
 
     private static boolean healthy(ProviderHealthState state) {
         return state == ProviderHealthState.AVAILABLE || state == ProviderHealthState.ACTIVE;
+    }
+
+    private static AuthorizationBlocker b(
+            AuthorizationBlockerKind kind,
+            String diagnostic,
+            Object... facts) {
+        return AuthorizationBlocker.of(kind, diagnostic, facts);
     }
 
     private static String rootMessage(Throwable failure) {

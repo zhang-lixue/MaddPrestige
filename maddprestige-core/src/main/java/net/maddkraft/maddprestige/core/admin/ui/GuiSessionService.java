@@ -17,6 +17,7 @@ import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationApplyKind;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 public final class GuiSessionService {
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
@@ -51,21 +52,21 @@ public final class GuiSessionService {
         }
         Optional<ConfigRevisionId> revision = activeRevision.get();
         java.util.ArrayList<GuiAction> actions = new java.util.ArrayList<>();
-        addIfPermitted(actions, subject, GuiActionKind.VIEW_PROGRESS, "Progress", self ? PhaseSixPermissions.USE
+        addIfPermitted(actions, subject, GuiActionKind.VIEW_PROGRESS, m("gui.action.view_progress"), self ? PhaseSixPermissions.USE
                 : PhaseSixPermissions.PLAYER_VIEW, false, revision, playerId, Optional.empty());
-        addIfPermitted(actions, subject, GuiActionKind.SIMULATE_RANK_UP, "Simulate rank-up",
+        addIfPermitted(actions, subject, GuiActionKind.SIMULATE_RANK_UP, m("gui.action.simulate_rankup"),
                 self ? PhaseSixPermissions.RANK_UP : PhaseSixPermissions.SIMULATE, false, revision, playerId,
                 Optional.empty());
-        addIfPermitted(actions, subject, GuiActionKind.SIMULATE_PRESTIGE, "Simulate Prestige",
+        addIfPermitted(actions, subject, GuiActionKind.SIMULATE_PRESTIGE, m("gui.action.simulate_prestige"),
                 self ? PhaseSixPermissions.PRESTIGE : PhaseSixPermissions.SIMULATE, false, revision, playerId,
                 Optional.empty());
-        addIfPermitted(actions, subject, GuiActionKind.PREPARE_RANK_UP, "Rank-up confirmation",
+        addIfPermitted(actions, subject, GuiActionKind.PREPARE_RANK_UP, m("gui.action.prepare_rankup"),
                 self ? PhaseSixPermissions.RANK_UP : PhaseSixPermissions.EXECUTE, false, revision, playerId,
                 Optional.empty());
-        addIfPermitted(actions, subject, GuiActionKind.PREPARE_PRESTIGE, "Prestige confirmation",
+        addIfPermitted(actions, subject, GuiActionKind.PREPARE_PRESTIGE, m("gui.action.prepare_prestige"),
                 self ? PhaseSixPermissions.PRESTIGE : PhaseSixPermissions.EXECUTE, false, revision, playerId,
                 Optional.empty());
-        return store(subject, GuiAudience.PLAYER, "MaddPrestige Progress", actions);
+        return store(subject, GuiAudience.PLAYER, m("gui.title.progress"), actions);
     }
 
     public GuiSessionView openStaff(PermissionSubject subject) {
@@ -73,14 +74,14 @@ public final class GuiSessionService {
         Optional<ConfigRevisionId> revision = activeRevision.get();
         java.util.ArrayList<GuiAction> actions = new java.util.ArrayList<>();
         if (subject.has(PhaseSixPermissions.CONFIG_VIEW)) {
-            actions.add(action(GuiActionKind.VIEW_CONFIGURATION, "Configuration",
+            actions.add(action(GuiActionKind.VIEW_CONFIGURATION, m("gui.action.view_configuration"),
                     PhaseSixPermissions.CONFIG_VIEW, false, revision, null));
         }
         if (subject.has(PhaseSixPermissions.DOCTOR)) {
-            actions.add(action(GuiActionKind.VIEW_DOCTOR, "Doctor", PhaseSixPermissions.DOCTOR,
+            actions.add(action(GuiActionKind.VIEW_DOCTOR, m("gui.action.view_doctor"), PhaseSixPermissions.DOCTOR,
                     false, revision, null));
         }
-        return store(subject, GuiAudience.STAFF, "MaddPrestige Control Panel", actions);
+        return store(subject, GuiAudience.STAFF, m("gui.title.control_panel"), actions);
     }
 
     public GuiSessionView openScalarEditor(
@@ -91,7 +92,8 @@ public final class GuiSessionService {
         subject.require(PhaseSixPermissions.ADMIN_GUI);
         subject.require(PhaseSixPermissions.CONFIG_EDIT);
         GuiMutationContext context = context(draftId, path, value, null);
-        return mutationSession(subject, "Edit: " + path, GuiActionKind.EDIT_CONFIGURATION, "Set value",
+        return mutationSession(subject, m("gui.title.edit_scalar", "path", path), GuiActionKind.EDIT_CONFIGURATION,
+                m("gui.action.set_value"),
                 PhaseSixPermissions.CONFIG_EDIT, context, null, null);
     }
 
@@ -104,9 +106,10 @@ public final class GuiSessionService {
         subject.require(PhaseSixPermissions.ADMIN_GUI);
         subject.require(PhaseSixPermissions.CONFIG_EDIT);
         GuiMutationContext context = context(draftId, path, value, null);
-        return mutationSession(subject, "Edit list: " + path,
+        return mutationSession(subject, m("gui.title.edit_list", "path", path),
                 add ? GuiActionKind.ADD_CONFIGURATION_VALUE : GuiActionKind.REMOVE_CONFIGURATION_VALUE,
-                add ? "Add value" : "Remove value", PhaseSixPermissions.CONFIG_EDIT, context, null, null);
+                m(add ? "gui.action.add_value" : "gui.action.remove_value"), PhaseSixPermissions.CONFIG_EDIT,
+                context, null, null);
     }
 
     public GuiSessionView openStageAdder(
@@ -121,15 +124,16 @@ public final class GuiSessionService {
         GuiMutationContext context = new GuiMutationContext(Optional.of(draftId), Optional.empty(),
                 Optional.of(displayName), providerId, externalGroup, Optional.empty(), Optional.empty(),
                 Optional.empty());
-        return mutationSession(subject, "Add stage", GuiActionKind.ADD_STAGE, "Add stage " + stageId.value(),
+        return mutationSession(subject, m("gui.title.add_stage"), GuiActionKind.ADD_STAGE,
+                m("gui.action.add_stage", "stage", stageId.value()),
                 PhaseSixPermissions.CONFIG_EDIT, context, stageId, null);
     }
 
     public GuiSessionView openDraftPreview(PermissionSubject subject, UUID draftId) {
         subject.require(PhaseSixPermissions.ADMIN_GUI);
         subject.require(PhaseSixPermissions.CONFIG_VIEW);
-        return mutationSession(subject, "Preview configuration", GuiActionKind.PREVIEW_CONFIGURATION,
-                "Validate exact draft", PhaseSixPermissions.CONFIG_VIEW, GuiMutationContext.draft(draftId), null,
+        return mutationSession(subject, m("gui.title.preview_configuration"), GuiActionKind.PREVIEW_CONFIGURATION,
+                m("gui.action.validate_draft"), PhaseSixPermissions.CONFIG_VIEW, GuiMutationContext.draft(draftId), null,
                 null);
     }
 
@@ -143,14 +147,15 @@ public final class GuiSessionService {
         subject.require(permission);
         GuiMutationContext context = context(draftId, null, null, reason);
         boolean rollback = kind == ConfigurationApplyKind.ROLLBACK;
-        String title = switch (kind) {
-            case NORMAL -> "Apply configuration";
-            case ROLLBACK -> "Apply rollback";
-            case SETUP -> "Apply setup";
+        MessageReference title = switch (kind) {
+            case NORMAL -> m("gui.title.apply_configuration");
+            case ROLLBACK -> m("gui.title.apply_rollback");
+            case SETUP -> m("gui.title.apply_setup");
         };
         return mutationSession(subject, title,
                 rollback ? GuiActionKind.ROLLBACK_CONFIGURATION : GuiActionKind.APPLY_CONFIGURATION,
-                rollback ? "Apply rollback draft" : "Apply previewed " + kind.name().toLowerCase() + " draft",
+                rollback ? m("gui.action.apply_rollback")
+                        : m("gui.action.apply_draft", "kind", kind.name().toLowerCase(java.util.Locale.ROOT)),
                 permission, context, null, null);
     }
 
@@ -161,8 +166,8 @@ public final class GuiSessionService {
         ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
         String permission = permission(kind);
         subject.require(permission);
-        return mutationSession(subject, "Acknowledge configuration",
-                GuiActionKind.PREPARE_CONFIGURATION_ACKNOWLEDGEMENT, "Review exact high-risk findings",
+        return mutationSession(subject, m("gui.title.acknowledge_configuration"),
+                GuiActionKind.PREPARE_CONFIGURATION_ACKNOWLEDGEMENT, m("gui.action.review_findings"),
                 permission, GuiMutationContext.draft(draftId), null, null);
     }
 
@@ -177,8 +182,8 @@ public final class GuiSessionService {
         GuiMutationContext context = new GuiMutationContext(Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(acknowledgementId),
                 Optional.of(reason));
-        return mutationSession(subject, "Confirm configuration",
-                GuiActionKind.CONFIRM_CONFIGURATION_ACKNOWLEDGEMENT, "Confirm exact acknowledged candidate",
+        return mutationSession(subject, m("gui.title.confirm_configuration"),
+                GuiActionKind.CONFIRM_CONFIGURATION_ACKNOWLEDGEMENT, m("gui.action.confirm_candidate"),
                 permission, context, null, null);
     }
 
@@ -189,8 +194,8 @@ public final class GuiSessionService {
         subject.require(PhaseSixPermissions.CONFIG_ROLLBACK);
         GuiMutationContext context = new GuiMutationContext(Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.of(targetRevision), Optional.empty(), Optional.empty());
-        return mutationSession(subject, "Prepare rollback", GuiActionKind.ROLLBACK_CONFIGURATION,
-                "Create rollback draft from " + targetRevision.value(), PhaseSixPermissions.CONFIG_ROLLBACK,
+        return mutationSession(subject, m("gui.title.prepare_rollback"), GuiActionKind.ROLLBACK_CONFIGURATION,
+                m("gui.action.create_rollback", "revision", targetRevision.value()), PhaseSixPermissions.CONFIG_ROLLBACK,
                 context, null, null);
     }
 
@@ -201,8 +206,8 @@ public final class GuiSessionService {
             Optional<net.maddkraft.maddprestige.api.id.StageId> replacement) {
         subject.require(PhaseSixPermissions.ADMIN_GUI);
         subject.require(PhaseSixPermissions.CONFIG_EDIT);
-        return mutationSession(subject, "Stage: " + stageId.value(), GuiActionKind.DELETE_STAGE,
-                "Delete stage " + stageId.value(), PhaseSixPermissions.CONFIG_EDIT,
+        return mutationSession(subject, m("gui.title.stage", "stage", stageId.value()), GuiActionKind.DELETE_STAGE,
+                m("gui.action.delete_stage", "stage", stageId.value()), PhaseSixPermissions.CONFIG_EDIT,
                 GuiMutationContext.draft(draftId), stageId, replacement.orElse(null));
     }
 
@@ -215,8 +220,8 @@ public final class GuiSessionService {
         ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
         String permission = permission(kind);
         subject.require(permission);
-        return mutationSession(subject, "Remap missing stage", GuiActionKind.SELECT_STAGE_REMAP,
-                missingStage.value() + " → " + replacement.value(), permission,
+        return mutationSession(subject, m("gui.title.remap_stage"), GuiActionKind.SELECT_STAGE_REMAP,
+                m("gui.action.remap_stage", "stage", missingStage.value(), "target", replacement.value()), permission,
                 GuiMutationContext.draft(draftId), missingStage, replacement);
     }
 
@@ -228,12 +233,12 @@ public final class GuiSessionService {
         ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
         String permission = permission(kind);
         subject.require(permission);
-        return mutationSession(subject, "Remove stage remap", GuiActionKind.REMOVE_STAGE_REMAP,
-                "Remove remap for " + missingStage.value(), permission,
+        return mutationSession(subject, m("gui.title.remove_remap"), GuiActionKind.REMOVE_STAGE_REMAP,
+                m("gui.action.remove_remap", "stage", missingStage.value()), permission,
                 GuiMutationContext.draft(draftId), missingStage, null);
     }
 
-    public CompletionStage<String> click(
+    public CompletionStage<MessageReference> click(
             PermissionSubject subject,
             UUID sessionId,
             UUID actionId) {
@@ -270,9 +275,9 @@ public final class GuiSessionService {
 
     private GuiSessionView mutationSession(
             PermissionSubject subject,
-            String title,
+            MessageReference title,
             GuiActionKind kind,
-            String label,
+            MessageReference label,
             String permission,
             GuiMutationContext context,
             net.maddkraft.maddprestige.api.id.StageId stage,
@@ -288,7 +293,7 @@ public final class GuiSessionService {
     private GuiSessionView store(
             PermissionSubject subject,
             GuiAudience audience,
-            String title,
+            MessageReference title,
             List<GuiAction> actions) {
         pruneExpired();
         UUID id = UUID.randomUUID();
@@ -301,7 +306,7 @@ public final class GuiSessionService {
 
     private static GuiAction action(
             GuiActionKind kind,
-            String label,
+            MessageReference label,
             String permission,
             boolean mutating,
             Optional<ConfigRevisionId> revision,
@@ -314,7 +319,7 @@ public final class GuiSessionService {
             List<GuiAction> actions,
             PermissionSubject subject,
             GuiActionKind kind,
-            String label,
+            MessageReference label,
             String permission,
             boolean mutating,
             Optional<ConfigRevisionId> revision,
@@ -337,6 +342,10 @@ public final class GuiSessionService {
             case ROLLBACK -> PhaseSixPermissions.CONFIG_ROLLBACK;
             case SETUP -> PhaseSixPermissions.SETUP;
         };
+    }
+
+    private static MessageReference m(String key, Object... arguments) {
+        return MessageReference.of(key, arguments);
     }
 
     private void pruneExpired() {

@@ -7,6 +7,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.logging.Level;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
 import net.maddkraft.maddprestige.core.stage.PlayerStageState;
@@ -26,6 +27,7 @@ public final class PlaceholderSnapshotPublisher implements Listener, AutoCloseab
     private final MaddPrestigePlaceholderCache cache;
     private final SqlitePlayerStageRepository stages;
     private final SqlitePlayerPrestigeRepository prestiges;
+    private final Function<UUID, java.util.Optional<String>> playerInitializer;
     private final ExecutorService worker;
     private final Set<UUID> inFlight = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private BukkitTask refreshTask;
@@ -34,11 +36,13 @@ public final class PlaceholderSnapshotPublisher implements Listener, AutoCloseab
             Plugin plugin,
             MaddPrestigePlaceholderCache cache,
             SqlitePlayerStageRepository stages,
-            SqlitePlayerPrestigeRepository prestiges) {
+            SqlitePlayerPrestigeRepository prestiges,
+            Function<UUID, java.util.Optional<String>> playerInitializer) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.cache = Objects.requireNonNull(cache, "placeholder cache");
         this.stages = Objects.requireNonNull(stages, "stage repository");
         this.prestiges = Objects.requireNonNull(prestiges, "Prestige repository");
+        this.playerInitializer = Objects.requireNonNull(playerInitializer, "player initializer");
         worker = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
                 .name("maddprestige-placeholder-publisher-", 0).factory());
     }
@@ -57,6 +61,13 @@ public final class PlaceholderSnapshotPublisher implements Listener, AutoCloseab
         }
         worker.execute(() -> {
             try {
+                java.util.Optional<String> initializationFailure = playerInitializer.apply(playerId);
+                if (initializationFailure.isPresent()) {
+                    cache.remove(playerId);
+                    plugin.getLogger().warning("Placeholder snapshot initialization failed safely: "
+                            + initializationFailure.orElseThrow());
+                    return;
+                }
                 PlayerStageState stage = stages.find(playerId).orElse(null);
                 PlayerPrestigeState prestige = prestiges.find(playerId).orElse(null);
                 if (stage == null && prestige == null) {

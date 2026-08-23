@@ -9,6 +9,7 @@ import net.maddkraft.maddprestige.core.schema.SchemaValueType;
 
 public record ConfigurationExplanation(
         String canonicalPath,
+        String descriptionIdentity,
         SchemaValueType type,
         Optional<String> currentValue,
         Optional<String> defaultValue,
@@ -21,6 +22,7 @@ public record ConfigurationExplanation(
         String applyPermission) {
     public ConfigurationExplanation {
         canonicalPath = Objects.requireNonNull(canonicalPath, "canonical path");
+        descriptionIdentity = Objects.requireNonNull(descriptionIdentity, "description identity");
         type = Objects.requireNonNull(type, "type");
         currentValue = Objects.requireNonNull(currentValue, "current value");
         defaultValue = Objects.requireNonNull(defaultValue, "default value");

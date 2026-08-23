@@ -2,13 +2,15 @@ package net.maddkraft.maddprestige.platform.paper.admin;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
-import net.kyori.adventure.text.Component;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
 import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
 import net.maddkraft.maddprestige.platform.paper.PaperTaskScheduler;
+import net.maddkraft.maddprestige.platform.paper.i18n.PaperMessageService;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -22,23 +24,27 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
     private final CommandCompletionService completion;
     private final PaperTaskScheduler scheduler;
     private final PaperPhaseSixGuiController guiController;
+    private final PaperMessageService messages;
 
     public PaperPhaseSixCommandAdapter(
             PhaseSixCommandService commands,
             CommandCompletionService completion,
-            PaperTaskScheduler scheduler) {
-        this(commands, completion, scheduler, null);
+            PaperTaskScheduler scheduler,
+            PaperMessageService messages) {
+        this(commands, completion, scheduler, null, messages);
     }
 
     public PaperPhaseSixCommandAdapter(
             PhaseSixCommandService commands,
             CommandCompletionService completion,
             PaperTaskScheduler scheduler,
-            PaperPhaseSixGuiController guiController) {
+            PaperPhaseSixGuiController guiController,
+            PaperMessageService messages) {
         this.commands = Objects.requireNonNull(commands, "commands");
         this.completion = Objects.requireNonNull(completion, "completion");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.guiController = guiController;
+        this.messages = Objects.requireNonNull(messages, "messages");
     }
 
     @Override
@@ -47,21 +53,23 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
             @NotNull Command command,
             @NotNull String label,
             String @NotNull [] arguments) {
+        if (arguments.length > 0 && "locale".equals(arguments[0].toLowerCase(Locale.ROOT))) {
+            return reloadLocale(sender, arguments);
+        }
         var invocation = new CommandInvocation(PaperPermissionSubjects.from(sender), Arrays.asList(arguments));
         commands.execute(invocation).whenComplete((response, failure) -> scheduler.submit(
                 ExecutionThread.PAPER_SERVER_THREAD, () -> {
                     if (failure != null) {
-                        sender.sendMessage(Component.text("[command.failed] The command could not complete safely."));
+                        sender.sendMessage(messages.render("command.failed"));
                     } else {
                         if (response.guiView().isPresent() && sender instanceof org.bukkit.entity.Player player) {
                             if (guiController == null) {
-                                sender.sendMessage(Component.text("[gui.unavailable] GUI controller is not bound."));
+                                sender.sendMessage(messages.render("gui.unavailable"));
                             } else {
                                 guiController.open(player, response.guiView().orElseThrow());
                             }
                         }
-                        response.lines().forEach(line -> sender.sendMessage(Component.text(
-                                "[" + response.code() + "] " + line)));
+                        renderResponse(response, messages).forEach(sender::sendMessage);
                     }
                     return null;
                 }));
@@ -74,6 +82,39 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
             @NotNull Command command,
             @NotNull String alias,
             String @NotNull [] arguments) {
+        if (arguments.length == 1 && "locale".startsWith(arguments[0].toLowerCase(Locale.ROOT))) {
+            return java.util.stream.Stream.concat(
+                    completion.suggest(PaperPermissionSubjects.from(sender), Arrays.asList(arguments)).stream(),
+                    java.util.stream.Stream.of("locale")).distinct().sorted().toList();
+        }
+        if (arguments.length == 2 && "locale".equalsIgnoreCase(arguments[0])) {
+            return sender.hasPermission("maddprestige.admin.locale.reload")
+                    && "reload".startsWith(arguments[1].toLowerCase(Locale.ROOT))
+                    ? List.of("reload") : List.of();
+        }
         return completion.suggest(PaperPermissionSubjects.from(sender), Arrays.asList(arguments));
+    }
+
+    private boolean reloadLocale(CommandSender sender, String[] arguments) {
+        if (arguments.length != 2 || !"reload".equalsIgnoreCase(arguments[1])) {
+            sender.sendMessage(messages.render("locale.reload.usage"));
+            return true;
+        }
+        if (!sender.hasPermission("maddprestige.admin.locale.reload")) {
+            sender.sendMessage(messages.render("locale.reload.permission_denied"));
+            return true;
+        }
+        var result = messages.reload();
+        sender.sendMessage(messages.render(result.code(), Map.of(
+                "locale", result.locale(), "detail", result.detail())));
+        return true;
+    }
+
+    public static List<net.kyori.adventure.text.Component> renderResponse(
+            net.maddkraft.maddprestige.core.admin.command.CommandResponse response,
+            PaperMessageService messages) {
+        Objects.requireNonNull(response, "command response");
+        Objects.requireNonNull(messages, "messages");
+        return response.messages().stream().map(messages::render).toList();
     }
 }

@@ -5,13 +5,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.util.List;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
+import net.maddkraft.maddprestige.api.id.RequirementId;
 import net.maddkraft.maddprestige.api.id.ScopeId;
 import net.maddkraft.maddprestige.api.id.StageId;
+import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
+import net.maddkraft.maddprestige.core.requirement.BaselineKey;
+import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
+import net.maddkraft.maddprestige.core.requirement.RequirementBaseline;
 import net.maddkraft.maddprestige.persistence.FileBackupService;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
 import org.junit.jupiter.api.DisplayName;
@@ -38,9 +45,12 @@ class SqlitePlayerInitializationStoreTest {
         StageId stageId = new StageId("novice");
         ScopeId scopeId = new ScopeId("prestige_initial_scope");
         SqlitePlayerInitializationStore initialization = new SqlitePlayerInitializationStore(sqlite);
+        var baselineKey = new BaselineKey(playerId, new RequirementId("play_time"),
+                MeasurementScope.SINCE_PRESTIGE_START, scopeId, "0".repeat(64));
+        var baseline = new RequirementBaseline(baselineKey, MetricValue.duration(Duration.ofSeconds(7)), 1, NOW);
 
-        initialization.initialize(playerId, stageId, revision, scopeId, NOW);
-        initialization.initialize(playerId, stageId, revision, scopeId, NOW);
+        initialization.initialize(playerId, stageId, revision, scopeId, NOW, List.of(baseline));
+        initialization.initialize(playerId, stageId, revision, scopeId, NOW, List.of(baseline));
 
         var stage = new SqlitePlayerStageRepository(sqlite).find(playerId).orElseThrow();
         var prestige = new SqlitePlayerPrestigeRepository(sqlite).find(playerId).orElseThrow();
@@ -51,6 +61,7 @@ class SqlitePlayerInitializationStoreTest {
         assertEquals(0, prestige.lifetimePrestige());
         assertEquals(0, prestige.stateRevision());
         assertEquals(scopeId, prestige.prestigeScope());
+        assertEquals(baseline, new SqliteRequirementStateRepository(sqlite).findBaseline(baselineKey).orElseThrow());
         assertTrue(count(sqlite, "mp_operations") == 0);
     }
 

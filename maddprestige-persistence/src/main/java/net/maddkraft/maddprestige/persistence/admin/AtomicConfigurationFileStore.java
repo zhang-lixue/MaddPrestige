@@ -1,9 +1,11 @@
 package net.maddkraft.maddprestige.persistence.admin;
 
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AccessDeniedException;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -199,16 +201,32 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
     }
 
     private static void atomicMove(Path source, Path target, boolean replace) throws IOException {
-        try {
-            if (replace) {
-                Files.move(source, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            } else {
-                Files.move(source, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+        for (int attempt = 1; attempt <= 8; attempt++) {
+            try {
+                if (replace) {
+                    Files.move(source, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                } else {
+                    Files.move(source, target, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+                }
+                return;
+            } catch (AtomicMoveNotSupportedException exception) {
+                throw new PersistenceException(
+                        "Filesystem does not support required atomic configuration replacement", exception);
+            } catch (AccessDeniedException exception) {
+                if (attempt == 8) {
+                    throw exception;
+                }
+                try {
+                    Thread.sleep(25L * attempt);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    InterruptedIOException failure = new InterruptedIOException(
+                            "Interrupted while retrying atomic configuration replacement");
+                    failure.initCause(exception);
+                    throw failure;
+                }
             }
-        } catch (AtomicMoveNotSupportedException exception) {
-            throw new PersistenceException("Filesystem does not support required atomic configuration replacement",
-                    exception);
         }
     }
 

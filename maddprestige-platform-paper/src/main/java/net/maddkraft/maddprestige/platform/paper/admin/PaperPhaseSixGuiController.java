@@ -1,13 +1,14 @@
 package net.maddkraft.maddprestige.platform.paper.admin;
 
 import java.util.Objects;
-import net.kyori.adventure.text.Component;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
+import net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionView;
 import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
 import net.maddkraft.maddprestige.platform.paper.PaperTaskScheduler;
 import net.maddkraft.maddprestige.platform.paper.PaperThreadGuard;
+import net.maddkraft.maddprestige.platform.paper.i18n.PaperMessageService;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -19,19 +20,22 @@ public final class PaperPhaseSixGuiController implements Listener {
     private final GuiSessionService sessions;
     private final PaperGuiInventoryGuard guard;
     private final PaperTaskScheduler scheduler;
+    private final PaperMessageService messages;
 
     public PaperPhaseSixGuiController(
             GuiSessionService sessions,
             PaperGuiInventoryGuard guard,
-            PaperTaskScheduler scheduler) {
+            PaperTaskScheduler scheduler,
+            PaperMessageService messages) {
         this.sessions = Objects.requireNonNull(sessions, "sessions");
         this.guard = Objects.requireNonNull(guard, "guard");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
+        this.messages = Objects.requireNonNull(messages, "messages");
     }
 
     public void open(Player player, GuiSessionView view) {
         PaperThreadGuard.requireServerThread("Open Phase 6 GUI");
-        player.openInventory(new PaperGuiInventory(view).getInventory());
+        player.openInventory(new PaperGuiInventory(view, messages).getInventory());
     }
 
     @EventHandler(ignoreCancelled = false)
@@ -62,15 +66,15 @@ public final class PaperPhaseSixGuiController implements Listener {
             sessions.click(PaperPermissionSubjects.from(player), holder.sessionId(), actionId)
                     .whenComplete((message, failure) -> scheduler.submit(ExecutionThread.PAPER_SERVER_THREAD, () -> {
                         if (failure == null) {
-                            player.sendMessage(Component.text(message));
+                            player.sendMessage(messages.render(message));
                         } else {
-                            player.sendMessage(Component.text("The GUI action failed safely; reopen the current view."));
+                            player.sendMessage(messages.render("gui.action.failed"));
                         }
                         return null;
                     }));
         } catch (AdministrationException exception) {
-            player.sendMessage(Component.text("[" + exception.code() + "] " + exception.getMessage()
-                    + " Next: " + exception.remediation()));
+            SemanticPresentation.administration(exception).stream().map(messages::render)
+                    .forEach(player::sendMessage);
         }
     }
 }

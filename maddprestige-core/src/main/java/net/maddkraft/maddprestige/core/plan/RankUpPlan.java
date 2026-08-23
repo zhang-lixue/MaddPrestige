@@ -14,6 +14,7 @@ import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.api.operation.OperationPlan;
 import net.maddkraft.maddprestige.api.rank.RankProjectionRequest;
 import net.maddkraft.maddprestige.api.reward.PlannedReward;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
 import net.maddkraft.maddprestige.core.requirement.BoundRequirementEvaluation;
 import net.maddkraft.maddprestige.core.requirement.RequirementEvaluationResult;
 import net.maddkraft.maddprestige.core.stage.StageProjection;
@@ -43,7 +44,8 @@ public record RankUpPlan(
         List<String> blockers,
         boolean executionAllowed,
         OperationPlan operationPlan,
-        RankUpAuthorization authorization) {
+        RankUpAuthorization authorization,
+        List<AuthorizationBlocker> authorizationBlockers) {
     public RankUpPlan {
         operationId = Objects.requireNonNull(operationId, "operation ID");
         requestId = Objects.requireNonNull(requestId, "request ID");
@@ -66,9 +68,41 @@ public record RankUpPlan(
         blockers = List.copyOf(Objects.requireNonNull(blockers, "blockers"));
         operationPlan = Objects.requireNonNull(operationPlan, "operation plan");
         authorization = Objects.requireNonNull(authorization, "authorization");
+        authorizationBlockers = List.copyOf(Objects.requireNonNull(authorizationBlockers,
+                "authorization blockers"));
         if (executionAllowed != blockers.isEmpty()) {
             throw new IllegalArgumentException("Execution allowance must agree with blockers");
         }
+        if (!authorizationBlockers.isEmpty()
+                && !blockers.equals(AuthorizationBlocker.diagnostics(authorizationBlockers))) {
+            throw new IllegalArgumentException("Diagnostic and structured plan blockers must agree");
+        }
+    }
+
+    public RankUpPlan(
+            OperationId operationId,
+            UUID requestId,
+            UUID playerId,
+            StageId sourceStage,
+            StageId targetStage,
+            long expectedStateRevision,
+            ConfigRevisionId expectedPlayerConfigRevision,
+            ConfigRevisionId configRevision,
+            Map<ProviderId, Long> providerGenerations,
+            BoundRequirementEvaluation requirementEvaluation,
+            List<PlannedCost> costs,
+            List<PlannedReward> rewards,
+            Optional<StageProjection> externalRankProjection,
+            Optional<RankProjectionRequest> rankProjectionRequest,
+            Set<ProviderId> unavailableProviders,
+            List<String> blockers,
+            boolean executionAllowed,
+            OperationPlan operationPlan,
+            RankUpAuthorization authorization) {
+        this(operationId, requestId, playerId, sourceStage, targetStage, expectedStateRevision,
+                expectedPlayerConfigRevision, configRevision, providerGenerations, requirementEvaluation, costs,
+                rewards, externalRankProjection, rankProjectionRequest, unavailableProviders, blockers,
+                executionAllowed, operationPlan, authorization, AuthorizationBlocker.unknownAll(blockers));
     }
 
     public RankUpPlan(
@@ -93,7 +127,7 @@ public record RankUpPlan(
         this(operationId, UUID.randomUUID(), playerId, sourceStage, targetStage, expectedStateRevision,
                 expectedPlayerConfigRevision, configRevision, providerGenerations, requirementEvaluation, costs,
                 rewards, externalRankProjection, rankProjectionRequest, unavailableProviders, blockers,
-                executionAllowed, operationPlan, authorization);
+                executionAllowed, operationPlan, authorization, AuthorizationBlocker.unknownAll(blockers));
     }
 
     public RequirementEvaluationResult requirements() {

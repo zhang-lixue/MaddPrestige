@@ -139,13 +139,13 @@ class PhaseSixAdministrationUxTest {
     @Test
     @DisplayName("[A44] Measurement help uses canonical schema metadata in plain language")
     void explainsMeasurementPlainly() {
-        List<String> lines = new ContextualHelpService(PhaseSixSchema.create())
+        var lines = new ContextualHelpService(PhaseSixSchema.create())
                 .help(subject(PhaseSixPermissions.USE), "measurement");
 
-        String help = String.join(" ", lines);
-        assertTrue(help.contains("since-stage-start"));
-        assertTrue(help.contains("change after the saved boundary"));
-        assertTrue(help.contains("provider must advertise support"));
+        assertEquals(List.of("command.help.measurement.title", "command.help.measurement.description",
+                "command.help.valid_values", "command.help.measurement.baseline_safety"),
+                lines.stream().map(value -> value.key()).toList());
+        assertTrue(lines.get(2).argument("value").orElseThrow().contains("since-stage-start"));
     }
 
     @Test
@@ -154,6 +154,7 @@ class PhaseSixAdministrationUxTest {
         ProviderRegistry providers = new ProviderRegistry();
         var registration = providers.register("test-owner", new TestMetricProvider());
         providers.activate(registration);
+        providers.register("test-owner", new TestRankAdapter(Set.of()));
         var active = new ActiveConfiguration(new ConfigRevisionId("healthy_revision"), compiled("ok: true\n"));
         var database = new DatabaseDiagnosticProbe(() -> CompletableFuture.completedFuture(
                 new DatabaseHealth(true, true, "SQLite", "migration 6")));
@@ -177,6 +178,8 @@ class PhaseSixAdministrationUxTest {
         assertTrue(report.findings().size() >= 10);
         assertTrue(report.findings().stream().anyMatch(value -> value.code().equals("config.active")));
         assertTrue(report.findings().stream().anyMatch(value -> value.code().equals("provider.available")));
+        assertTrue(report.findings().stream().anyMatch(value -> value.component().equals("provider")
+                && value.severity() == DiagnosticSeverity.DEFERRED));
         assertTrue(report.findings().stream().anyMatch(value -> value.code().equals("database.healthy")));
         assertTrue(report.findings().stream().noneMatch(value -> value.code().startsWith("doctor.not_checked")));
     }
@@ -340,7 +343,9 @@ class PhaseSixAdministrationUxTest {
                 new net.maddkraft.maddprestige.core.admin.ui.GuiSessionService(revision::get,
                         (subject, action) -> {
                             executions.incrementAndGet();
-                            return CompletableFuture.completedFuture(action.kind().name());
+                            return CompletableFuture.completedFuture(
+                                    net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                                            "gui.result.configuration_inactive"));
                         }, new net.maddkraft.maddprestige.core.admin.ui.GuiConfigurationAuthority() {
                             @Override
                             public ConfigurationApplyKind draftKind(PermissionSubject subject, UUID draftId) {

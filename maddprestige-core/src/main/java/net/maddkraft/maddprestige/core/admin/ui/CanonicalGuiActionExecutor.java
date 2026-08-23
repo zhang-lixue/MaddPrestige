@@ -12,6 +12,7 @@ import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 /** Routes visual controls to the same canonical services used by the command surface. */
 public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
@@ -38,23 +39,26 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
     }
 
     @Override
-    public CompletionStage<String> execute(PermissionSubject subject, GuiAction action) {
+    public CompletionStage<MessageReference> execute(PermissionSubject subject, GuiAction action) {
         return switch (action.kind()) {
             case VIEW_PROGRESS -> playerViews.view(subject, target(action)).thenApply(value ->
-                    "Rank-up: " + render(value.rankUp()) + " | Prestige: " + render(value.prestige()));
+                    m("gui.result.progress", "player", value.playerId(),
+                            "rankup_status", status(value.rankUp()), "prestige_status", status(value.prestige())));
             case SIMULATE_RANK_UP -> previews.simulateRankUp(subject, target(action))
-                    .thenApply(CanonicalGuiActionExecutor::render);
+                    .thenApply(value -> preview("gui.result.simulate_rankup", value));
             case SIMULATE_PRESTIGE -> previews.simulatePrestige(subject, target(action))
-                    .thenApply(CanonicalGuiActionExecutor::render);
+                    .thenApply(value -> preview("gui.result.simulate_prestige", value));
             case PREPARE_RANK_UP -> confirmations.prepareRankUp(subject, target(action))
-                    .thenApply(value -> render(value.preview()) + " | Confirmation: " + value.confirmationId());
+                    .thenApply(value -> m("gui.result.prepare_rankup", "status", status(value.preview()),
+                            "confirmation", value.confirmationId(), "expires", value.expiresAt()));
             case PREPARE_PRESTIGE -> confirmations.preparePrestige(subject, target(action))
-                    .thenApply(value -> render(value.preview()) + " | Confirmation: " + value.confirmationId());
-            case VIEW_DOCTOR -> doctor.inspect(subject).thenApply(value -> "Doctor: " + value.status()
-                    + "; findings=" + value.findings().size());
+                    .thenApply(value -> m("gui.result.prepare_prestige", "status", status(value.preview()),
+                            "confirmation", value.confirmationId(), "expires", value.expiresAt()));
+            case VIEW_DOCTOR -> doctor.inspect(subject).thenApply(value -> m("gui.result.doctor",
+                    "status", value.status(), "count", value.findings().size()));
             case VIEW_CONFIGURATION -> CompletableFuture.completedFuture(configuration.active(subject)
-                    .map(value -> "Active configuration: " + value.revisionId().value())
-                    .orElse("No active configuration"));
+                    .map(value -> m("gui.result.configuration_active", "revision", value.revisionId().value()))
+                    .orElseGet(() -> m("gui.result.configuration_inactive")));
             case EDIT_CONFIGURATION, ADD_CONFIGURATION_VALUE, REMOVE_CONFIGURATION_VALUE, ADD_STAGE,
                     PREVIEW_CONFIGURATION, PREPARE_CONFIGURATION_ACKNOWLEDGEMENT,
                     CONFIRM_CONFIGURATION_ACKNOWLEDGEMENT, APPLY_CONFIGURATION, ROLLBACK_CONFIGURATION,
@@ -69,9 +73,16 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
                 "Reopen the player view to create a complete server-owned action."));
     }
 
-    private static String render(OperationPreview preview) {
-        return preview.kind() + " " + preview.stateChange() + "; blockers="
-                + (preview.blockers().isEmpty() ? "none" : String.join("; ", preview.blockers()))
-                + "; revision=" + preview.configRevision().value();
+    private static MessageReference preview(String key, OperationPreview preview) {
+        return m(key, "player", preview.playerId(), "status", status(preview),
+                "blockers", preview.blockers().size(), "revision", preview.configRevision().value());
+    }
+
+    private static String status(OperationPreview preview) {
+        return preview.executable() ? "ELIGIBLE" : "BLOCKED";
+    }
+
+    private static MessageReference m(String key, Object... arguments) {
+        return MessageReference.of(key, arguments);
     }
 }

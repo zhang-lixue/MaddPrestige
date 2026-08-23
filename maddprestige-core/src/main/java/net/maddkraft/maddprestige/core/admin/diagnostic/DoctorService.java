@@ -113,7 +113,8 @@ public final class DoctorService {
         if (findings.stream().anyMatch(value -> value.severity() == DiagnosticSeverity.WARNING)) {
             return DiagnosticSeverity.WARNING;
         }
-        if (findings.stream().anyMatch(value -> value.severity() == DiagnosticSeverity.DEFERRED)) {
+        if (findings.stream().anyMatch(value -> value.severity() == DiagnosticSeverity.DEFERRED
+                && !value.code().startsWith("provider."))) {
             return DiagnosticSeverity.DEFERRED;
         }
         return DiagnosticSeverity.HEALTHY;

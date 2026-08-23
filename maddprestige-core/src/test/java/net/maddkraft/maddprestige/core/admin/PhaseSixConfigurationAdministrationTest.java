@@ -9,6 +9,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -87,9 +89,10 @@ class PhaseSixConfigurationAdministrationTest {
         var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
 
         assertFalse(preview.configuration().validation().hasErrors(), preview.configuration().validation().toString());
-        assertEquals(List.of("Member → Veteran", "Requirement: none", "Cost: none", "Reward: none",
-                        "Prestige: disabled"),
-                preview.playerExperience());
+        assertEquals(List.of("command.setup.experience_transition", "command.setup.experience_requirement",
+                        "command.setup.experience_cost", "command.setup.experience_reward",
+                        "command.setup.experience_prestige_disabled"),
+                preview.playerExperience().stream().map(value -> value.key()).toList());
         assertTrue(fixture.canonical.active().isEmpty());
         AdministrationException arbitrary = assertThrows(AdministrationException.class, () -> wizard.apply(OWNER,
                 session, acknowledgements(preview.configuration()), "Unsafe caller codes"));
@@ -103,6 +106,94 @@ class PhaseSixConfigurationAdministrationTest {
                 .toCompletableFuture().join();
         assertTrue(fixture.canonical.active().orElseThrow().compiled().documents().get("progression.yml")
                 .contains("order:\n  - member\n  - veteran\n"));
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-09] Real setup and config failures retain exact public facts")
+    void realAdministrationFailuresRetainExactSemanticFacts() {
+        Fixture fixture = new Fixture();
+        SetupWizardService wizard = new SetupWizardService(fixture.service, new ProviderRegistry());
+        UUID session = wizard.start(OWNER);
+        SetupStage member = new SetupStage(new StageId("member"), "Member", Optional.empty());
+        wizard.addStage(OWNER, session, member);
+
+        AdministrationException duplicate = assertThrows(AdministrationException.class,
+                () -> wizard.addStage(OWNER, session, member));
+        AdministrationException baseline = assertThrows(AdministrationException.class,
+                () -> wizard.selectBaseline(OWNER, session, new StageId("missing")));
+        var introspection = new net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService(
+                PhaseSixSchema.create(), fixture.canonical::active, () -> ValidationReport.VALID);
+        AdministrationException path = assertThrows(AdministrationException.class,
+                () -> introspection.explain(OWNER, "prestige.unknown"));
+        AdministrationException prestige = assertThrows(AdministrationException.class,
+                () -> wizard.configurePrestige(OWNER, session, new SetupPrestige(true,
+                        Optional.of(new StageId("legacy")), Optional.of(new StageId("member")))));
+
+        UUID requirements = wizard.start(OWNER);
+        wizard.addStage(OWNER, requirements,
+                new SetupStage(new StageId("member"), "Member", Optional.empty()));
+        wizard.addStage(OWNER, requirements,
+                new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
+        wizard.addStage(OWNER, requirements,
+                new SetupStage(new StageId("elite"), "Elite", Optional.empty()));
+        SetupRequirement repeated = new SetupRequirement(new RequirementId("playtime"),
+                new ProviderId("statistics"), new MetricId("play_time"), "greater-or-equal", "10",
+                "absolute", "live");
+        wizard.configureRequirementForStage(OWNER, requirements, new StageId("veteran"), repeated);
+        AdministrationException duplicateRequirement = assertThrows(AdministrationException.class,
+                () -> wizard.configureRequirementForStage(OWNER, requirements, new StageId("elite"), repeated));
+
+        UUID missingMetricSession = wizard.start(OWNER);
+        wizard.addStage(OWNER, missingMetricSession,
+                new SetupStage(new StageId("member"), "Member", Optional.empty()));
+        wizard.addStage(OWNER, missingMetricSession,
+                new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
+        wizard.configureRequirement(OWNER, missingMetricSession, repeated);
+        AdministrationException missingMetric = assertThrows(AdministrationException.class,
+                () -> wizard.preview(OWNER, missingMetricSession));
+
+        UUID missingGroupSession = wizard.start(OWNER);
+        wizard.selectRankProvider(OWNER, missingGroupSession, Optional.of(new ProviderId("luckperms")));
+        wizard.addStage(OWNER, missingGroupSession,
+                new SetupStage(new StageId("member"), "Member", Optional.of("Member")));
+        wizard.addStage(OWNER, missingGroupSession,
+                new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
+        AdministrationException missingGroup = assertThrows(AdministrationException.class,
+                () -> wizard.preview(OWNER, missingGroupSession));
+
+        UUID incompleteDraft = fixture.service.beginInitialDraft(OWNER,
+                Map.of("progression.yml", "schema-version: 4\n"), "semantic-fact-test");
+        AdministrationException missingDocument = assertThrows(AdministrationException.class,
+                () -> fixture.service.editScalar(OWNER, incompleteDraft, "prestige.enabled", "true"));
+        StageId sameStage = new StageId("legacy");
+        AdministrationException invalidRemap = assertThrows(AdministrationException.class,
+                () -> fixture.service.selectStageRemap(OWNER, incompleteDraft, sameStage, sameStage));
+
+        PermissionSubject unauthorized = new PermissionSubject(
+                new Actor("staff", Optional.empty(), "Staff"), Set.of());
+        AdministrationException denied = assertThrows(AdministrationException.class,
+                () -> unauthorized.require("maddprestige.admin.config.apply"));
+
+        assertEquals("setup.stage.duplicate", duplicate.code());
+        assertEquals("member", duplicate.facts().get("stage"));
+        assertEquals("setup.baseline.unknown", baseline.code());
+        assertEquals("missing", baseline.facts().get("stage"));
+        assertEquals("config.path.unknown", path.code());
+        assertEquals("prestige.unknown", path.facts().get("path"));
+        assertEquals("setup.prestige.stage_unknown", prestige.code());
+        assertEquals(Map.of("stage", "legacy", "purpose", "eligibility"), prestige.facts());
+        assertEquals("setup.requirement.duplicate", duplicateRequirement.code());
+        assertEquals(Map.of("requirement", "playtime", "stage", "elite"), duplicateRequirement.facts());
+        assertEquals("setup.requirement.metric_unknown", missingMetric.code());
+        assertEquals(Map.of("provider", "statistics", "metric", "play_time"), missingMetric.facts());
+        assertEquals("setup.group.missing", missingGroup.code());
+        assertEquals(Map.of("stage", "veteran", "provider", "luckperms"), missingGroup.facts());
+        assertEquals("config.document.missing", missingDocument.code());
+        assertEquals(Map.of("document", "lifecycle.yml"), missingDocument.facts());
+        assertEquals("stage.change.remap_invalid", invalidRemap.code());
+        assertEquals(Map.of("source", "legacy", "target", "legacy"), invalidRemap.facts());
+        assertEquals("permission.denied", denied.code());
+        assertEquals(Map.of("permission", "maddprestige.admin.config.apply"), denied.facts());
     }
 
     @Test
@@ -131,10 +222,10 @@ class PhaseSixConfigurationAdministrationTest {
         var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
 
         assertFalse(preview.configuration().validation().hasErrors(), preview.configuration().validation().toString());
-        assertTrue(preview.playerExperience().contains("Requirement: play"));
-        assertTrue(preview.playerExperience().contains("Cost: payment"));
-        assertTrue(preview.playerExperience().contains("Reward: grant"));
-        assertTrue(preview.playerExperience().contains("Prestige: eligible at veteran, resets to member"));
+        assertTrue(experienceHas(preview, "command.setup.experience_requirement", "id", "play"));
+        assertTrue(experienceHas(preview, "command.setup.experience_cost", "id", "payment"));
+        assertTrue(experienceHas(preview, "command.setup.experience_reward", "id", "grant"));
+        assertTrue(experienceHas(preview, "command.setup.experience_prestige_enabled", "stage", "veteran"));
         var authority = wizard.prepareAcknowledgement(OWNER, session);
         wizard.confirmAcknowledgement(OWNER, authority.acknowledgementId(), "Complete simple setup")
                 .toCompletableFuture().join();
@@ -145,6 +236,105 @@ class PhaseSixConfigurationAdministrationTest {
         assertTrue(active.get("requirements.yml").contains("metric: play_time"));
         assertTrue(active.get("lifecycle.yml").contains("required-stages: [veteran]"));
         assertTrue(active.get("lifecycle.yml").contains("reset-stage: member"));
+    }
+
+    @Test
+    @DisplayName("[A02][A70] Canonical setup assigns distinct validated requirements to ordered target stages")
+    void setupWizardBuildsStageSpecificRequirements() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new SetupProvider()));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = new SetupWizardService(fixture.service, providers);
+        UUID session = wizard.start(OWNER);
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("member"), "Member", Optional.empty()));
+        wizard.addStage(OWNER, session,
+                new SetupStage(new StageId("adventurer"), "Adventurer", Optional.empty()));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
+        wizard.configureRequirementForStage(OWNER, session, new StageId("adventurer"), new SetupRequirement(
+                new RequirementId("play_60"), new ProviderId("setup_metric"), new MetricId("play_time"),
+                "greater-or-equal", "60", "absolute", "live"));
+        wizard.configureRequirementForStage(OWNER, session, new StageId("veteran"), new SetupRequirement(
+                new RequirementId("play_180"), new ProviderId("setup_metric"), new MetricId("play_time"),
+                "greater-or-equal", "180", "absolute", "live"));
+
+        var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
+
+        assertFalse(preview.configuration().validation().hasErrors(), preview.configuration().validation().toString());
+        assertEquals("setup.requirement.baseline", assertThrows(AdministrationException.class, () ->
+                wizard.configureRequirementForStage(OWNER, session, new StageId("member"), new SetupRequirement(
+                        new RequirementId("invalid"), new ProviderId("setup_metric"), new MetricId("play_time"),
+                        "greater-or-equal", "1", "absolute", "live"))).code());
+        var authority = wizard.prepareAcknowledgement(OWNER, session);
+        wizard.confirmAcknowledgement(OWNER, authority.acknowledgementId(), "Stage-specific setup")
+                .toCompletableFuture().join();
+        Map<String, String> documents = fixture.canonical.active().orElseThrow().compiled().documents();
+        assertTrue(documents.get("progression.yml")
+                .contains("requirements: setup_eligibility_adventurer"));
+        assertTrue(documents.get("progression.yml")
+                .contains("requirements: setup_eligibility_veteran"));
+        assertTrue(documents.get("requirements.yml")
+                .contains("setup_eligibility_adventurer:"));
+        assertTrue(documents.get("requirements.yml")
+                .contains("setup_eligibility_veteran:"));
+        assertTrue(experienceHas(preview, "command.setup.experience_stage_requirement", "id", "play_60"));
+        assertTrue(experienceHas(preview, "command.setup.experience_stage_requirement", "id", "play_180"));
+    }
+
+    @Test
+    @DisplayName("[A02][A70][OR8D-04][OR8D-05] Frozen setup output is deterministic and byte-exact public profile")
+    void canonicalSetupOutputMatchesPublicExampleExactly() throws IOException {
+        Map<String, String> first = generateCanonicalProfile();
+        Map<String, String> second = generateCanonicalProfile();
+
+        assertEquals(first, second, "identical setup inputs must produce identical canonical documents");
+        assertEquals(List.of("progression.yml", "requirements.yml", "rewards.yml", "lifecycle.yml",
+                "integrations.yml"), List.copyOf(first.keySet()));
+        String requirements = first.get("requirements.yml");
+        assertTrue(requirements.indexOf("playtime_60_seconds:")
+                < requirements.indexOf("playtime_180_seconds:"));
+        assertTrue(requirements.indexOf("setup_eligibility_adventurer:")
+                < requirements.indexOf("setup_eligibility_veteran:"));
+
+        Path root = Path.of("").toAbsolutePath();
+        if (!Files.isDirectory(root.resolve("examples/member-adventurer-veteran"))) {
+            root = root.getParent();
+        }
+        for (String document : first.keySet()) {
+            assertEquals(Files.readString(root.resolve("examples/member-adventurer-veteran").resolve(document),
+                    StandardCharsets.UTF_8), first.get(document), document);
+        }
+    }
+
+    private static Map<String, String> generateCanonicalProfile() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new CanonicalRankAdapter()));
+        providers.activate(providers.register("test", new CanonicalMetricProvider()));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = new SetupWizardService(fixture.service, providers);
+        UUID session = wizard.start(OWNER);
+        wizard.selectRankProvider(OWNER, session, Optional.of(new ProviderId("luckperms")));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("member"), "Member", Optional.of("Member")));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("adventurer"), "Adventurer",
+                Optional.of("Adventurer")));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("veteran"), "Veteran",
+                Optional.of("Veteran")));
+        wizard.selectBaseline(OWNER, session, new StageId("member"));
+        wizard.configureRequirementForStage(OWNER, session, new StageId("adventurer"), new SetupRequirement(
+                new RequirementId("playtime_60_seconds"), new ProviderId("paper_statistics"),
+                new MetricId("play_one_minute"), "GREATER_OR_EQUAL", "PT1M", "SINCE_PRESTIGE_START", "LIVE"));
+        wizard.configureRequirementForStage(OWNER, session, new StageId("veteran"), new SetupRequirement(
+                new RequirementId("playtime_180_seconds"), new ProviderId("paper_statistics"),
+                new MetricId("play_one_minute"), "GREATER_OR_EQUAL", "PT3M", "SINCE_PRESTIGE_START", "LIVE"));
+        wizard.configurePrestige(OWNER, session, new SetupPrestige(true, Optional.of(new StageId("veteran")),
+                Optional.of(new StageId("member"))));
+        Map<String, String> generated = wizard.generatedDocuments(OWNER, session);
+        var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
+        assertFalse(preview.configuration().validation().hasErrors(), preview.configuration().validation().toString());
+        var acknowledgement = wizard.prepareAcknowledgement(OWNER, session);
+        wizard.confirmAcknowledgement(OWNER, acknowledgement.acknowledgementId(), "Canonical public profile")
+                .toCompletableFuture().join();
+        assertEquals(generated, fixture.canonical.active().orElseThrow().compiled().documents());
+        return generated;
     }
 
     @Test
@@ -159,9 +349,11 @@ class PhaseSixConfigurationAdministrationTest {
         UUID cancelled = wizard.start(OWNER);
         wizard.addStage(OWNER, cancelled, new SetupStage(new StageId("member"), "Member", Optional.empty()));
         wizard.addStage(OWNER, cancelled, new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
-        assertEquals(List.of("Member → Veteran", "Requirement: none", "Cost: none", "Reward: none",
-                        "Prestige: disabled"),
-                wizard.preview(OWNER, cancelled).toCompletableFuture().join().playerExperience());
+        assertEquals(List.of("command.setup.experience_transition", "command.setup.experience_requirement",
+                        "command.setup.experience_cost", "command.setup.experience_reward",
+                        "command.setup.experience_prestige_disabled"),
+                wizard.preview(OWNER, cancelled).toCompletableFuture().join().playerExperience().stream()
+                        .map(value -> value.key()).toList());
         assertTrue(fixture.canonical.active().isEmpty(), "resumed preview is zero mutation");
         wizard.cancel(OWNER, cancelled);
         assertEquals("setup.session.unknown", assertThrows(AdministrationException.class,
@@ -250,12 +442,171 @@ class PhaseSixConfigurationAdministrationTest {
         assertTrue(preview.validation().findings().stream().anyMatch(finding ->
                 finding.code().equals("phase3.provider.unavailable")
                         && finding.path().equals("providers.absent_provider")));
+        AdministrationException acknowledgementFailure = assertThrows(AdministrationException.class,
+                () -> fixture.service.prepareAcknowledgement(OWNER, draft));
+        assertEquals(Optional.of(AdministrationSemanticVariant.CONFIG_VALIDATION_ACKNOWLEDGEMENT_PREPARATION),
+                acknowledgementFailure.semanticVariant());
+        assertTrue(Long.parseLong(acknowledgementFailure.facts().get("errors")) > 0);
         CompletionException wrapped = assertThrows(CompletionException.class, () -> fixture.service
                 .applySetup(OWNER, draft, Set.of(), "Invalid provider test")
                 .toCompletableFuture().join());
         AdministrationException failure = (AdministrationException) wrapped.getCause();
         assertEquals("config.validation.blocked", failure.code());
+        assertEquals(Optional.of(AdministrationSemanticVariant.CONFIG_VALIDATION_APPLY),
+                failure.semanticVariant());
+        assertTrue(Long.parseLong(failure.facts().get("errors")) > 0);
         assertTrue(fixture.canonical.active().isEmpty());
+
+        Fixture highRisk = new Fixture();
+        StoredConfigurationRevision first = highRisk.applyInitial(defaultDocuments());
+        UUID riskyDraft = highRisk.service.beginDraft(OWNER, "command");
+        highRisk.service.addStage(OWNER, riskyDraft, new StageId("member"), "Member",
+                Optional.empty(), Optional.empty());
+        var riskyPreview = highRisk.service.preview(OWNER, riskyDraft).toCompletableFuture().join();
+        assertFalse(riskyPreview.validation().hasErrors());
+        assertFalse(riskyPreview.validation().canApply(Set.of()));
+        AdministrationException unacknowledged = failure(highRisk.service.applyDraft(OWNER, riskyDraft,
+                Optional.of(first.id()), Set.of(), "Unacknowledged high risk"));
+        assertEquals(Optional.of(AdministrationSemanticVariant.CONFIG_VALIDATION_APPLY),
+                unacknowledged.semanticVariant());
+        assertEquals("0", unacknowledged.facts().get("errors"));
+        assertTrue(Long.parseLong(unacknowledged.facts().get("findings")) > 0);
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-09] List and map paths are supported while scalar listing is rejected accurately")
+    void configurationCollectionListingSupportsListAndMap() {
+        Fixture fixture = new Fixture();
+        fixture.applyInitial(defaultDocuments());
+        UUID draft = fixture.service.beginDraft(OWNER, "collection-semantics");
+
+        assertEquals(List.of(), fixture.service.listValues(OWNER, draft, "progression.order"));
+        assertEquals(List.of(), fixture.service.listValues(OWNER, draft, "requirements.requirements"));
+        AdministrationException scalar = assertThrows(AdministrationException.class,
+                () -> fixture.service.listValues(OWNER, draft, "prestige.enabled"));
+
+        assertEquals("config.path.not_listable", scalar.code());
+        assertEquals(Map.of("path", "prestige.enabled"), scalar.facts());
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-11] Draft hash and version drift invalidate only the retained preview")
+    void draftHashAndVersionDriftAreRejectedAsPreviewStaleness() {
+        Fixture hashFixture = new Fixture();
+        StoredConfigurationRevision hashBase = hashFixture.applyInitial(defaultDocuments());
+        UUID hashDraft = hashFixture.service.beginDraft(OWNER, "preview-hash-stale");
+        hashFixture.service.preview(OWNER, hashDraft).toCompletableFuture().join();
+        net.maddkraft.maddprestige.core.config.ConfigDraft retained =
+                (net.maddkraft.maddprestige.core.config.ConfigDraft) draftStateComponent(
+                        hashFixture.service, hashDraft, "draft");
+        LinkedHashMap<String, String> changedDocuments = new LinkedHashMap<>(retained.documents());
+        changedDocuments.compute("lifecycle.yml", (ignored, content) -> content + "\n# changed after preview\n");
+        var changedDraft = new net.maddkraft.maddprestige.core.config.ConfigDraft(
+                retained.draftId(), retained.baseRevision(), changedDocuments, retained.actor(), retained.createdAt());
+        replaceDraftStateComponents(hashFixture.service, hashDraft, Map.<String, Object>of("draft", changedDraft));
+
+        AdministrationException hashStale = assertThrows(AdministrationException.class, () ->
+                hashFixture.service.applyDraft(OWNER, hashDraft, Optional.of(hashBase.id()), Set.of(),
+                        "hash drift after preview"));
+        assertEquals("config.preview.stale", hashStale.code());
+        assertEquals(hashBase.id(), hashFixture.canonical.active().orElseThrow().revisionId());
+
+        Fixture versionFixture = new Fixture();
+        StoredConfigurationRevision versionBase = versionFixture.applyInitial(defaultDocuments());
+        UUID versionDraft = versionFixture.service.beginDraft(OWNER, "preview-version-stale");
+        versionFixture.service.preview(OWNER, versionDraft).toCompletableFuture().join();
+        long retainedVersion = (Long) draftStateComponent(versionFixture.service, versionDraft, "version");
+        replaceDraftStateComponents(versionFixture.service, versionDraft,
+                Map.<String, Object>of("version", Math.addExact(retainedVersion, 1L)));
+
+        AdministrationException versionStale = assertThrows(AdministrationException.class, () ->
+                versionFixture.service.applyDraft(OWNER, versionDraft, Optional.of(versionBase.id()), Set.of(),
+                        "version drift after preview"));
+        assertEquals("config.preview.stale", versionStale.code());
+        assertEquals(versionBase.id(), versionFixture.canonical.active().orElseThrow().revisionId());
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-11] Rollback apply identifies a draft lacking rollback-workflow provenance")
+    void rollbackApplyRejectsDraftWithoutRollbackWorkflowProvenance() {
+        Fixture fixture = new Fixture();
+        StoredConfigurationRevision active = fixture.applyInitial(defaultDocuments());
+        UUID rollbackDraft = fixture.service.beginRollback(OWNER, active.id(), "rollback-provenance");
+        fixture.service.preview(OWNER, rollbackDraft).toCompletableFuture().join();
+        replaceDraftStateComponents(fixture.service, rollbackDraft,
+                Map.<String, Object>of("rollbackSource", Optional.empty()));
+
+        AdministrationException rejected = assertThrows(AdministrationException.class, () ->
+                fixture.service.applyRollback(OWNER, rollbackDraft, Optional.of(active.id()), Set.of(),
+                        "missing rollback provenance"));
+
+        assertEquals("config.rollback.not_prepared", rejected.code());
+        assertEquals(active.id(), fixture.canonical.active().orElseThrow().revisionId());
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-11] Snapshot preparation failure occurs before activation and preserves active state")
+    void snapshotPreparationFailureLeavesActiveConfigurationUnchanged() {
+        InMemorySnapshots snapshots = new InMemorySnapshots();
+        Fixture fixture = new Fixture(new ProviderRegistry(), CLOCK, new InMemoryHistory(), snapshots,
+                new InMemoryStageReferenceMigrationStore());
+        StoredConfigurationRevision active = fixture.applyInitial(defaultDocuments());
+        UUID draft = fixture.service.beginDraft(OWNER, "snapshot-preparation-failure");
+        fixture.service.editScalar(OWNER, draft, "prestige.current-count-increment", "2");
+        var preview = fixture.service.preview(OWNER, draft).toCompletableFuture().join();
+        snapshots.failNextPrepare();
+
+        AdministrationException rejected = failure(fixture.service.applyDraft(OWNER, draft, Optional.of(active.id()),
+                acknowledgements(preview), "snapshot preparation failure"));
+
+        assertEquals("config.snapshot.prepare_failed", rejected.code());
+        assertEquals(active.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(Optional.of(active.id()), snapshots.currentRevision());
+        assertTrue(rejected.remediation().contains("active configuration is unchanged"));
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-09] Apply failure distinguishes unchanged, restored, and reconciliation outcomes")
+    void configurationApplyFailureRetainsExactRecoveryOutcome() {
+        AdministrationException unchanged = failedInitialApply(new FailingAppendHistory(), new InMemorySnapshots());
+        assertEquals(Optional.of(AdministrationSemanticVariant.CONFIG_APPLY_PRIOR_STATE_UNCHANGED),
+                unchanged.semanticVariant());
+
+        FailingRuntimeSnapshots restorable = new FailingRuntimeSnapshots(false);
+        AdministrationException restored = failedInitialApply(new InMemoryHistory(), restorable);
+        assertEquals(Optional.of(AdministrationSemanticVariant.CONFIG_APPLY_PRIOR_STATE_RESTORED),
+                restored.semanticVariant());
+        assertTrue(restorable.currentRevision().isEmpty());
+
+        FailingRuntimeSnapshots uncertain = new FailingRuntimeSnapshots(true);
+        AdministrationException reconciliation = failedInitialApply(new InMemoryHistory(), uncertain);
+        assertEquals(Optional.of(AdministrationSemanticVariant.CONFIG_APPLY_RECONCILIATION_REQUIRED),
+                reconciliation.semanticVariant());
+        assertTrue(uncertain.currentRevision().isPresent());
+        assertTrue(reconciliation.remediation().contains("explicit reconciliation"));
+        assertFalse(reconciliation.remediation().contains("retry"));
+        assertTrue(unchanged.facts().containsKey("revision"));
+        assertTrue(restored.facts().containsKey("revision"));
+        assertTrue(reconciliation.facts().containsKey("revision"));
+    }
+
+    @Test
+    @DisplayName("[A68][OR8D-09] Persisted reference changes invalidate the exact remap preview")
+    void persistedReferenceChangeInvalidatesRemapPreview() {
+        InMemoryStageReferenceMigrationStore references = new InMemoryStageReferenceMigrationStore(true);
+        Fixture fixture = new Fixture(new ProviderRegistry(), CLOCK, new InMemoryHistory(), new InMemorySnapshots(),
+                references);
+        StoredConfigurationRevision first = fixture.applyInitial(activeInternalDocuments());
+        UUID draft = fixture.service.beginDraft(OWNER, "remap-stale");
+        fixture.service.removeStage(OWNER, draft, new StageId("first"), Optional.of(new StageId("second")));
+        fixture.service.preview(OWNER, draft).toCompletableFuture().join();
+
+        AdministrationException stale = failure(fixture.service.applyDraft(OWNER, draft, Optional.of(first.id()),
+                Set.of(), "Persisted references changed"));
+
+        assertEquals("stage.change.remap_snapshot_stale", stale.code());
+        assertEquals(Map.of("source", "first", "target", "second", "before", "1", "after", "2"),
+                stale.facts());
     }
 
     @Test
@@ -523,6 +874,88 @@ class PhaseSixConfigurationAdministrationTest {
         return (AdministrationException) wrapped.getCause();
     }
 
+    private static Object draftStateComponent(
+            ConfigurationAdministrationService service,
+            UUID draftId,
+            String componentName) {
+        Object state = draftStates(service).get(draftId);
+        if (state == null) {
+            throw new AssertionError("Missing retained draft state " + draftId);
+        }
+        try {
+            for (java.lang.reflect.RecordComponent component : state.getClass().getRecordComponents()) {
+                if (component.getName().equals(componentName)) {
+                    var accessor = component.getAccessor();
+                    accessor.setAccessible(true);
+                    return accessor.invoke(state);
+                }
+            }
+            throw new AssertionError("Unknown draft-state component " + componentName);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Could not inspect retained draft state", exception);
+        }
+    }
+
+    private static void replaceDraftStateComponents(
+            ConfigurationAdministrationService service,
+            UUID draftId,
+            Map<String, Object> replacements) {
+        Map<UUID, Object> states = draftStates(service);
+        Object state = states.get(draftId);
+        if (state == null) {
+            throw new AssertionError("Missing retained draft state " + draftId);
+        }
+        try {
+            java.lang.reflect.RecordComponent[] components = state.getClass().getRecordComponents();
+            Object[] arguments = new Object[components.length];
+            Class<?>[] parameterTypes = new Class<?>[components.length];
+            for (int index = 0; index < components.length; index++) {
+                java.lang.reflect.RecordComponent component = components[index];
+                var accessor = component.getAccessor();
+                accessor.setAccessible(true);
+                Object current = accessor.invoke(state);
+                arguments[index] = replacements.getOrDefault(component.getName(), current);
+                parameterTypes[index] = component.getType();
+            }
+            var constructor = state.getClass().getDeclaredConstructor(parameterTypes);
+            constructor.setAccessible(true);
+            states.put(draftId, constructor.newInstance(arguments));
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Could not replace retained draft state", exception);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<UUID, Object> draftStates(ConfigurationAdministrationService service) {
+        try {
+            var field = ConfigurationAdministrationService.class.getDeclaredField("drafts");
+            field.setAccessible(true);
+            return (Map<UUID, Object>) field.get(service);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Could not inspect configuration draft registry", exception);
+        }
+    }
+
+    private static AdministrationException failedInitialApply(
+            ConfigurationHistoryStore history,
+            ConfigurationSnapshotStore snapshots) {
+        Fixture fixture = new Fixture(new ProviderRegistry(), CLOCK, history, snapshots,
+                new InMemoryStageReferenceMigrationStore());
+        UUID draft = fixture.service.beginInitialDraft(OWNER, defaultDocuments(), "apply-recovery-test");
+        var preview = fixture.service.preview(OWNER, draft).toCompletableFuture().join();
+        assertTrue(preview.validation().canApply(Set.of()));
+        return failure(fixture.service.applySetup(OWNER, draft, Set.of(), "Apply recovery outcome"));
+    }
+
+    private static boolean experienceHas(
+            net.maddkraft.maddprestige.core.admin.setup.SetupPreview preview,
+            String key,
+            String argument,
+            String value) {
+        return preview.playerExperience().stream().anyMatch(message -> message.key().equals(key)
+                && message.argument(argument).filter(value::equals).isPresent());
+    }
+
     private static Set<String> acknowledgements(
             net.maddkraft.maddprestige.core.admin.config.ConfigurationPreview preview) {
         return preview.validation().findings().stream().map(finding -> finding.code())
@@ -562,7 +995,32 @@ class PhaseSixConfigurationAdministrationTest {
                     enabled: true
                     display-name: Second
                     projection: {type: group, provider: rank, group: veteran}
-                order: [first, second]
+                order:
+                  - first
+                  - second
+                """);
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> activeInternalDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(defaultDocuments());
+        documents.put("progression.yml", """
+                schema-version: 3
+                active: true
+                reconciliation-policy: warn-only
+                baseline: first
+                stages:
+                  first:
+                    enabled: true
+                    display-name: First
+                    projection: none
+                  second:
+                    enabled: true
+                    display-name: Second
+                    projection: none
+                order:
+                  - first
+                  - second
                 """);
         return Map.copyOf(documents);
     }
@@ -619,8 +1077,8 @@ class PhaseSixConfigurationAdministrationTest {
 
     private static final class Fixture {
         private final ConfigurationService canonical = new ConfigurationService();
-        private final InMemoryHistory history = new InMemoryHistory();
-        private final InMemorySnapshots snapshots = new InMemorySnapshots();
+        private final ConfigurationHistoryStore history;
+        private final ConfigurationSnapshotStore snapshots;
         private final ConfigurationAdministrationService service;
 
         private Fixture() {
@@ -632,9 +1090,21 @@ class PhaseSixConfigurationAdministrationTest {
         }
 
         private Fixture(ProviderRegistry providers, Clock clock) {
+            this(providers, clock, new InMemoryHistory(), new InMemorySnapshots(),
+                    new InMemoryStageReferenceMigrationStore());
+        }
+
+        private Fixture(
+                ProviderRegistry providers,
+                Clock clock,
+                ConfigurationHistoryStore history,
+                ConfigurationSnapshotStore snapshots,
+                InMemoryStageReferenceMigrationStore stageReferences) {
+            this.history = history;
+            this.snapshots = snapshots;
             service = new ConfigurationAdministrationService(canonical,
                     new PhaseSixConfigurationWorkflow(canonical, providers,
-                            new InMemoryStageReferenceMigrationStore(), List.of()),
+                            stageReferences, List.of()),
                     PhaseSixSchema.create(), history, snapshots, clock);
         }
 
@@ -714,6 +1184,68 @@ class PhaseSixConfigurationAdministrationTest {
             return CompletableFuture.completedFuture(Map.of());
         }
 
+    }
+
+    private static final class CanonicalMetricProvider implements net.maddkraft.maddprestige.api.metric.MetricProvider {
+        @Override
+        public ProviderDescriptor descriptor() {
+            return new ProviderDescriptor(new ProviderId("paper_statistics"), "test", "1", "1", List.of(),
+                    List.of(new CapabilityDescriptor("metric", "metric", "test", Map.of())));
+        }
+
+        @Override
+        public ProviderHealth health() {
+            return setupHealth();
+        }
+
+        @Override
+        public Set<net.maddkraft.maddprestige.api.metric.MetricDescriptor> metrics() {
+            return Set.of(new net.maddkraft.maddprestige.api.metric.MetricDescriptor(
+                    new ProviderId("paper_statistics"), new MetricId("play_one_minute"),
+                    net.maddkraft.maddprestige.api.metric.MetricValueType.DURATION,
+                    Set.of(net.maddkraft.maddprestige.api.metric.MetricOperator.GREATER_OR_EQUAL),
+                    Set.of(net.maddkraft.maddprestige.api.metric.MetricReadMode.CURRENT), true,
+                    net.maddkraft.maddprestige.api.metric.MetricMonotonicity.MONOTONIC,
+                    net.maddkraft.maddprestige.api.metric.MetricResetPolicy.NOT_APPLICABLE, Map.of(), "Play time",
+                    "Play time", "duration", "authoritative"));
+        }
+
+        @Override
+        public CompletionStage<Map<net.maddkraft.maddprestige.api.metric.MetricQuery,
+                net.maddkraft.maddprestige.api.metric.MetricSample>> read(
+                UUID playerId,
+                List<net.maddkraft.maddprestige.api.metric.MetricQuery> queries,
+                long providerGeneration) {
+            return CompletableFuture.completedFuture(Map.of());
+        }
+    }
+
+    private static final class CanonicalRankAdapter implements RankAdapter {
+        @Override
+        public ProviderDescriptor descriptor() {
+            return new ProviderDescriptor(new ProviderId("luckperms"), "test", "1", "1", List.of(),
+                    List.of(new CapabilityDescriptor("rank", "rank", "test", Map.of())));
+        }
+
+        @Override
+        public ProviderHealth health() {
+            return setupHealth();
+        }
+
+        @Override
+        public CompletionStage<Result<Set<String>>> validateTargets(Set<String> groupNames) {
+            return CompletableFuture.completedFuture(Result.success(Set.copyOf(groupNames)));
+        }
+
+        @Override
+        public CompletionStage<Result<ManagedRankState>> readManagedState(UUID playerId, Set<String> managedGroups) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public CompletionStage<Result<RankProjectionResult>> project(RankProjectionRequest request) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     private static final class SetupCostProvider implements net.maddkraft.maddprestige.api.cost.CostProvider {
@@ -869,9 +1401,34 @@ class PhaseSixConfigurationAdministrationTest {
 
     private static final class InMemoryStageReferenceMigrationStore implements
             net.maddkraft.maddprestige.core.admin.config.StageReferenceMigrationStore {
+        private final boolean changePlannedReferences;
+        private int plannedCaptures;
+
+        private InMemoryStageReferenceMigrationStore() {
+            this(false);
+        }
+
+        private InMemoryStageReferenceMigrationStore(boolean changePlannedReferences) {
+            this.changePlannedReferences = changePlannedReferences;
+        }
+
         @Override
         public net.maddkraft.maddprestige.core.admin.config.StageReferenceSnapshot capture(
                 Optional<net.maddkraft.maddprestige.core.stage.StageRemapPlan> plan) {
+            if (changePlannedReferences && plan.isPresent()) {
+                int count = ++plannedCaptures;
+                var mapping = plan.orElseThrow().mappings().entrySet().iterator().next();
+                List<net.maddkraft.maddprestige.core.admin.config.StageRemapEntry> entries =
+                        java.util.stream.IntStream.range(0, count).mapToObj(index ->
+                                new net.maddkraft.maddprestige.core.admin.config.StageRemapEntry(
+                                        UUID.nameUUIDFromBytes(("remap-player-" + index).getBytes(StandardCharsets.UTF_8)),
+                                        mapping.getKey(), mapping.getValue(), index,
+                                        new ConfigRevisionId("r_source"))).toList();
+                return new net.maddkraft.maddprestige.core.admin.config.StageReferenceSnapshot(
+                        Map.of(mapping.getKey(), (long) count),
+                        Optional.of(net.maddkraft.maddprestige.core.admin.config.StageRemapSnapshot.create(
+                                plan.orElseThrow(), entries)));
+            }
             return new net.maddkraft.maddprestige.core.admin.config.StageReferenceSnapshot(Map.of(),
                     plan.map(value -> net.maddkraft.maddprestige.core.admin.config.StageRemapSnapshot.create(
                             value, List.of())));
@@ -917,11 +1474,20 @@ class PhaseSixConfigurationAdministrationTest {
 
     private static final class InMemorySnapshots implements ConfigurationSnapshotStore {
         private Optional<ConfigRevisionId> active = Optional.empty();
+        private boolean failNextPrepare;
+
+        private void failNextPrepare() {
+            failNextPrepare = true;
+        }
 
         @Override
         public PreparedConfigurationSnapshot prepare(
                 ConfigRevisionId revisionId,
                 CompiledConfiguration configuration) {
+            if (failNextPrepare) {
+                failNextPrepare = false;
+                throw new IllegalStateException("SNAPSHOT_PREPARATION_FAILURE_INTERNAL");
+            }
             Optional<ConfigRevisionId> prior = active;
             BackupMetadata backup = new BackupMetadata(prior.map(ConfigRevisionId::value).orElse("empty"),
                     RevisionHasher.hashText(prior.map(ConfigRevisionId::value).orElse("")), CLOCK.instant(), true);
@@ -945,6 +1511,78 @@ class PhaseSixConfigurationAdministrationTest {
                 public void close() {
                 }
             };
+        }
+
+        @Override
+        public Optional<ConfigRevisionId> currentRevision() {
+            return active;
+        }
+    }
+
+    private static final class FailingRuntimeSnapshots implements ConfigurationSnapshotStore {
+        private final boolean restoreFails;
+        private Optional<ConfigRevisionId> active = Optional.empty();
+
+        private FailingRuntimeSnapshots(boolean restoreFails) {
+            this.restoreFails = restoreFails;
+        }
+
+        @Override
+        public PreparedConfigurationSnapshot prepare(
+                ConfigRevisionId revisionId,
+                CompiledConfiguration configuration) {
+            Optional<ConfigRevisionId> prior = active;
+            return new PreparedConfigurationSnapshot() {
+                @Override
+                public BackupMetadata backup() {
+                    return new BackupMetadata("runtime-failure", RevisionHasher.hashText("runtime-failure"),
+                            CLOCK.instant(), false);
+                }
+
+                @Override
+                public void activate() {
+                    active = Optional.of(revisionId);
+                }
+
+                @Override
+                public void restorePrevious() {
+                    if (restoreFails) {
+                        throw new IllegalStateException("RESTORE_FAILURE_INTERNAL");
+                    }
+                    active = prior;
+                }
+
+                @Override
+                public void close() {
+                }
+            };
+        }
+
+        @Override
+        public Optional<ConfigRevisionId> currentRevision() {
+            return active;
+        }
+    }
+
+    private static final class FailingAppendHistory implements ConfigurationHistoryStore {
+        @Override
+        public void append(StoredConfigurationRevision revision) {
+            throw new IllegalStateException("HISTORY_APPEND_FAILURE_INTERNAL");
+        }
+
+        @Override
+        public void replaceOutcome(StoredConfigurationRevision revision) {
+            throw new AssertionError("No history outcome exists after append failure");
+        }
+
+        @Override
+        public Optional<StoredConfigurationRevision> find(ConfigRevisionId revisionId) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<StoredConfigurationRevision> recent(int limit) {
+            return List.of();
         }
     }
 }

@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.OperationId;
 import net.maddkraft.maddprestige.api.id.StageId;
@@ -38,6 +39,7 @@ import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
 import net.maddkraft.maddprestige.core.admin.ui.CanonicalGuiMutationExecutor;
@@ -62,6 +64,35 @@ class PhaseSixCommandServiceTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-16T12:00:00Z"), ZoneOffset.UTC);
 
     @Test
+    @DisplayName("[OR8D-02] Manual Prestige mutation establishes lifecycle before its audited CAS")
+    void manualPrestigeMutationUsesLifecycleBoundaryBeforeStore() {
+        UUID playerId = UUID.randomUUID();
+        AtomicInteger initializations = new AtomicInteger();
+        AtomicInteger adjustments = new AtomicInteger();
+        ConfigRevisionId revision = new ConfigRevisionId("manual_lifecycle_revision");
+        ManualPrestigeAdministrationService service = new ManualPrestigeAdministrationService(adjustment -> {
+            assertEquals(1, initializations.get());
+            adjustments.incrementAndGet();
+            return new PlayerPrestigeState(adjustment.playerId(), adjustment.currentPrestige(),
+                    adjustment.lifetimePrestige(), adjustment.expectedStateRevision() + 1,
+                    adjustment.configRevision(), new net.maddkraft.maddprestige.api.id.ScopeId("manual"),
+                    Optional.empty(), CLOCK.instant(), CLOCK.instant());
+        }, () -> revision, Runnable::run, requested -> {
+            assertEquals(playerId, requested);
+            initializations.incrementAndGet();
+            return Optional.empty();
+        });
+
+        PlayerPrestigeState result = service.set(subject(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT), playerId,
+                0, 2, 3, "command", "owner correction").toCompletableFuture().join();
+
+        assertEquals(1, initializations.get());
+        assertEquals(1, adjustments.get());
+        assertEquals(2, result.currentPrestige());
+        assertEquals(3, result.lifetimePrestige());
+    }
+
+    @Test
     @DisplayName("[A42][A44][A56] Command router exposes canonical help/read paths and denies equivalent mutation")
     void routesCanonicalServicesWithStableActionableErrors() {
         Fixture fixture = new Fixture();
@@ -75,12 +106,21 @@ class PhaseSixCommandServiceTest {
                 .toCompletableFuture().join();
 
         assertTrue(help.successful());
-        assertTrue(String.join(" ", help.lines()).contains("since-prestige-start"));
+        assertTrue(help.messages().stream().flatMap(message -> message.arguments().values().stream())
+                .anyMatch(value -> value.contains("since-prestige-start")));
         assertTrue(explain.successful());
-        assertTrue(String.join(" ", explain.lines()).contains("prestige.enabled = false"));
+        assertTrue(explain.messages().stream().anyMatch(message -> message.key().equals("command.config.value")
+                && message.argument("path").filter("prestige.enabled"::equals).isPresent()
+                && message.argument("value").filter("false"::equals).isPresent()));
+        assertTrue(explain.messages().stream().anyMatch(message ->
+                message.key().equals("command.config.description.prestige_enabled")));
         assertFalse(denied.successful());
         assertEquals("permission.denied", denied.code());
-        assertTrue(String.join(" ", denied.lines()).contains(PhaseSixPermissions.CONFIG_EDIT));
+        assertEquals(List.of("command.error.administration.permission_denied.summary",
+                "command.error.administration.permission_denied.remediation"),
+                denied.messages().stream().map(MessageReference::key).toList());
+        assertTrue(denied.messages().stream().allMatch(message ->
+                message.argument("permission").filter(PhaseSixPermissions.CONFIG_EDIT::equals).isPresent()));
     }
 
     @Test
@@ -93,11 +133,40 @@ class PhaseSixCommandServiceTest {
                 .toCompletableFuture().join();
         var doctor = fixture.commands.execute(new CommandInvocation(player, List.of("doctor")))
                 .toCompletableFuture().join();
+        var usage = fixture.commands.execute(new CommandInvocation(player, List.of("simulate")))
+                .toCompletableFuture().join();
 
         assertEquals("command.unknown", unknown.code());
         assertEquals("permission.denied", doctor.code());
+        assertEquals("command.invalid", usage.code());
+        assertEquals("command.error.usage", usage.messages().getFirst().key());
+        assertEquals("/maddprestige simulate <rankup|prestige> [player-uuid]",
+                usage.messages().getFirst().argument("usage").orElseThrow());
         assertTrue(unknown.lines().stream().noneMatch(line -> line.contains("Exception")));
         assertTrue(doctor.lines().stream().noneMatch(line -> line.contains("Exception")));
+    }
+
+    @Test
+    @DisplayName("[A45][A46][A47][A68][OR8D-07] Command boundary emits actionable Doctor and exact Why semantics")
+    void commandBoundaryPreservesDoctorAndWhySemantics() {
+        Fixture fixture = new Fixture();
+        PermissionSubject owner = subject(PhaseSixPermissions.all().toArray(String[]::new));
+        UUID player = UUID.randomUUID();
+
+        var why = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("why", "rankup", player.toString()))).toCompletableFuture().join();
+        var doctor = fixture.commands.execute(new CommandInvocation(owner, List.of("doctor")))
+                .toCompletableFuture().join();
+
+        assertTrue(why.successful());
+        assertTrue(why.messages().stream().anyMatch(message ->
+                message.key().equals("command.why.blocker.no_active_stage_snapshot")));
+        assertTrue(doctor.successful());
+        assertTrue(doctor.messages().stream().anyMatch(message -> message.key().endsWith(".summary")));
+        assertTrue(doctor.messages().stream().anyMatch(message -> message.key().endsWith(".remediation")));
+        assertTrue(doctor.messages().stream().filter(message -> message.key().endsWith(".summary"))
+                .allMatch(message -> message.argument("path").isPresent()
+                        && message.argument("code").isPresent()));
     }
 
     @Test
@@ -184,7 +253,7 @@ class PhaseSixCommandServiceTest {
                 Optional.empty(), Optional.empty());
         fixture.configuration.preview(owner, addDraft).toCompletableFuture().join();
         var addAcknowledgement = fixture.gui.openAcknowledgement(owner, addDraft);
-        String addPrepared = fixture.gui.click(owner, addAcknowledgement.sessionId(),
+        var addPrepared = fixture.gui.click(owner, addAcknowledgement.sessionId(),
                 addAcknowledgement.actions().getFirst().actionId()).toCompletableFuture().join();
         UUID addToken = acknowledgementId(addPrepared);
         var addConfirmation = fixture.gui.openAcknowledgementConfirmation(owner, addToken, "add member");
@@ -193,10 +262,9 @@ class PhaseSixCommandServiceTest {
         ConfigRevisionId currentWithMember = fixture.canonical.active().orElseThrow().revisionId();
 
         var selector = fixture.gui.openRollbackSelector(owner, targetWithoutMember);
-        String selected = fixture.gui.click(owner, selector.sessionId(), selector.actions().getFirst().actionId())
+        var selected = fixture.gui.click(owner, selector.sessionId(), selector.actions().getFirst().actionId())
                 .toCompletableFuture().join();
-        UUID rollbackDraft = UUID.fromString(selected.substring("Rollback draft ".length(),
-                selected.indexOf(" prepared")));
+        UUID rollbackDraft = UUID.fromString(selected.argument("draft").orElseThrow());
         var preview = fixture.gui.openDraftPreview(owner, rollbackDraft);
         fixture.gui.click(owner, preview.sessionId(), preview.actions().getFirst().actionId())
                 .toCompletableFuture().join();
@@ -210,7 +278,7 @@ class PhaseSixCommandServiceTest {
         var rollbackAcknowledgement = fixture.gui.openAcknowledgement(owner, rollbackDraft);
         assertEquals(PhaseSixPermissions.CONFIG_ROLLBACK,
                 rollbackAcknowledgement.actions().getFirst().requiredPermission());
-        String rollbackPrepared = fixture.gui.click(owner, rollbackAcknowledgement.sessionId(),
+        var rollbackPrepared = fixture.gui.click(owner, rollbackAcknowledgement.sessionId(),
                 rollbackAcknowledgement.actions().getFirst().actionId()).toCompletableFuture().join();
         UUID rollbackToken = acknowledgementId(rollbackPrepared);
         var confirmation = fixture.gui.openAcknowledgementConfirmation(owner, rollbackToken,
@@ -238,9 +306,9 @@ class PhaseSixCommandServiceTest {
                 .toCompletableFuture().join();
         var commandRollback = command.commands.execute(new CommandInvocation(owner,
                 List.of("config", "rollback", commandTarget.value()))).toCompletableFuture().join();
-        UUID commandRollbackDraft = UUID.fromString(commandRollback.lines().stream()
-                .filter(line -> line.startsWith("Rollback draft: ")).findFirst().orElseThrow()
-                .substring("Rollback draft: ".length()));
+        UUID commandRollbackDraft = UUID.fromString(commandRollback.messages().stream()
+                .filter(message -> message.key().equals("command.config.rollback_draft"))
+                .findFirst().orElseThrow().argument("draft").orElseThrow());
         var commandRollbackPreview = command.configuration.preview(owner, commandRollbackDraft)
                 .toCompletableFuture().join();
         var commandRollbackAck = command.commands.execute(new CommandInvocation(owner,
@@ -278,9 +346,9 @@ class PhaseSixCommandServiceTest {
         addRemapTargets(gui, owner, guiDraft);
         var selector = gui.gui.openStageRemapSelector(owner, guiDraft, new StageId("missing_stage"),
                 new StageId("first"));
-        String response = gui.gui.click(owner, selector.sessionId(), selector.actions().getFirst().actionId())
+        var response = gui.gui.click(owner, selector.sessionId(), selector.actions().getFirst().actionId())
                 .toCompletableFuture().join();
-        assertTrue(response.contains(guiDraft.toString()));
+        assertEquals(guiDraft.toString(), response.argument("draft").orElseThrow());
         var guiPreview = gui.configuration.preview(owner, guiDraft).toCompletableFuture().join();
         assertEquals(commandPreview.validation().findings().stream().map(finding -> finding.code()).toList(),
                 guiPreview.validation().findings().stream().map(finding -> finding.code()).toList());
@@ -415,9 +483,9 @@ class PhaseSixCommandServiceTest {
         var prepared = fixture.commands.execute(new CommandInvocation(owner,
                 List.of("config", "rollback", target.value()))).toCompletableFuture().join();
         assertTrue(prepared.successful());
-        String prefix = "Rollback draft: ";
-        UUID draft = UUID.fromString(prepared.lines().stream().filter(line -> line.startsWith(prefix)).findFirst()
-                .orElseThrow().substring(prefix.length()));
+        UUID draft = UUID.fromString(prepared.messages().stream()
+                .filter(message -> message.key().equals("command.config.rollback_draft"))
+                .findFirst().orElseThrow().argument("draft").orElseThrow());
         var applied = fixture.commands.execute(new CommandInvocation(owner, List.of("config", "rollback-apply",
                 draft.toString(), expected.value(), "command", "rollback"))).toCompletableFuture().join();
         assertTrue(applied.successful());
@@ -429,10 +497,9 @@ class PhaseSixCommandServiceTest {
             ConfigRevisionId target,
             ConfigRevisionId expected) {
         var selector = fixture.gui.openRollbackSelector(owner, target);
-        String prepared = fixture.gui.click(owner, selector.sessionId(), selector.actions().getFirst().actionId())
+        var prepared = fixture.gui.click(owner, selector.sessionId(), selector.actions().getFirst().actionId())
                 .toCompletableFuture().join();
-        String prefix = "Rollback draft ";
-        UUID draft = UUID.fromString(prepared.substring(prefix.length(), prepared.indexOf(" prepared")));
+        UUID draft = UUID.fromString(prepared.argument("draft").orElseThrow());
         var preview = fixture.gui.openDraftPreview(owner, draft);
         fixture.gui.click(owner, preview.sessionId(), preview.actions().getFirst().actionId())
                 .toCompletableFuture().join();
@@ -450,15 +517,16 @@ class PhaseSixCommandServiceTest {
         return fixture.canonical.active().orElseThrow().compiled().documents();
     }
 
-    private static UUID acknowledgementId(String response) {
-        String prefix = "Acknowledgement ";
-        return UUID.fromString(response.substring(prefix.length(), response.indexOf(';')));
+    private static UUID acknowledgementId(
+            net.maddkraft.maddprestige.core.admin.presentation.MessageReference response) {
+        return UUID.fromString(response.argument("acknowledgement").orElseThrow());
     }
 
     private static UUID commandAcknowledgementId(
             net.maddkraft.maddprestige.core.admin.command.CommandResponse response) {
-        return UUID.fromString(response.lines().stream().filter(line -> line.startsWith("Server acknowledgement: "))
-                .findFirst().orElseThrow().substring("Server acknowledgement: ".length()));
+        return UUID.fromString(response.messages().stream()
+                .filter(message -> message.key().equals("command.acknowledgement.id"))
+                .findFirst().orElseThrow().argument("acknowledgement").orElseThrow());
     }
 
     private static void assertEquivalentAppliedHistory(MemoryHistory history) {
@@ -470,6 +538,12 @@ class PhaseSixCommandServiceTest {
 
     private static PermissionSubject subject(String... permissions) {
         return new PermissionSubject(new Actor("console", Optional.empty(), "Console"), Set.of(permissions));
+    }
+
+    private static net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker blocker(
+            net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind kind,
+            String diagnostic) {
+        return net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker.of(kind, diagnostic);
     }
 
     private static final class Fixture {
@@ -490,8 +564,14 @@ class PhaseSixCommandServiceTest {
             var introspection = new ConfigurationIntrospectionService(schema, canonical::active,
                     () -> ValidationReport.VALID);
             var preview = new OperationPreviewService(intent -> CompletableFuture.completedFuture(
-                    RankUpAuthorizationResult.rejected("not configured")), intent ->
-                    CompletableFuture.completedFuture(PrestigeAuthorizationResult.rejected("not configured")));
+                    RankUpAuthorizationResult.rejected(blocker(
+                            net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                                    .NO_ACTIVE_STAGE_SNAPSHOT,
+                            "not configured"))), intent -> CompletableFuture.completedFuture(
+                                    PrestigeAuthorizationResult.rejected(blocker(
+                                            net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                                                    .NO_ACTIVE_PRESTIGE_CONFIGURATION,
+                                            "not configured"))));
             var confirmation = new OperationConfirmationService(preview,
                     plan -> CompletableFuture.completedFuture(new RankUpExecutionResult(plan.operationId(),
                             RankUpExecutionStatus.FAILED, "unused")),
@@ -500,8 +580,14 @@ class PhaseSixCommandServiceTest {
                     Duration.ofMinutes(1), CLOCK);
             var doctor = new DoctorService(new ProviderRegistry(), canonical::active, List.of(), CLOCK);
             var why = new WhyService(intent -> CompletableFuture.completedFuture(
-                    RankUpAuthorizationResult.rejected("not configured")), intent ->
-                    CompletableFuture.completedFuture(PrestigeAuthorizationResult.rejected("not configured")));
+                    RankUpAuthorizationResult.rejected(blocker(
+                            net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                                    .NO_ACTIVE_STAGE_SNAPSHOT,
+                            "not configured"))), intent -> CompletableFuture.completedFuture(
+                                    PrestigeAuthorizationResult.rejected(blocker(
+                                            net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                                                    .NO_ACTIVE_PRESTIGE_CONFIGURATION,
+                                            "not configured"))));
             var manual = new ManualPrestigeAdministrationService(adjustment -> new PlayerPrestigeState(
                     adjustment.playerId(), adjustment.currentPrestige(), adjustment.lifetimePrestige(),
                     adjustment.expectedStateRevision() + 1, adjustment.configRevision(),

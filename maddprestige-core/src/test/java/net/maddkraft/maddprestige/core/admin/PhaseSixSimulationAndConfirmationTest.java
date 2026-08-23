@@ -15,9 +15,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
+import net.maddkraft.maddprestige.api.id.CostId;
 import net.maddkraft.maddprestige.api.id.OperationId;
 import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.api.operation.Actor;
@@ -25,6 +27,7 @@ import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationService;
+import net.maddkraft.maddprestige.core.plan.RankUpIntent;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionResult;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
 import net.maddkraft.maddprestige.core.plan.RankUpProgressContext;
@@ -68,6 +71,110 @@ class PhaseSixSimulationAndConfirmationTest {
         assertEquals(before, fixture.state);
         assertEquals(1, fixture.authorizationReads.get());
         assertEquals(0, fixture.executions.get());
+    }
+
+    @Test
+    @DisplayName("[A47][A68][OR8D-10] Real no-plan simulation retains exact authorization blockers")
+    void realNoPlanSimulationRetainsStructuredAuthorizationBlockers() {
+        UUID player = UUID.randomUUID();
+        PermissionSubject self = new PermissionSubject(new Actor("player", Optional.of(player), "Player"),
+                Set.of(PhaseSixPermissions.RANK_UP));
+        RankUpAuthorizationService unavailable = new RankUpAuthorizationService(
+                () -> Optional.empty(),
+                ignored -> Optional.empty(),
+                (ignored, state, active) -> {
+                    throw new AssertionError("inactive snapshot must reject before context load");
+                }, Fixture.emptyRequirementState(), new ProviderRegistry(), CLOCK);
+        OperationPreviewService previews = new OperationPreviewService(unavailable::authorize,
+                ignored -> CompletableFuture.completedFuture(PrestigeAuthorizationResult.rejected(
+                        net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker.of(
+                                net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                                        .PRESTIGE_DISABLED,
+                                "diagnostic"))));
+
+        CompletionException wrapped = assertThrows(CompletionException.class,
+                () -> previews.simulateRankUp(self, player).toCompletableFuture().join());
+        AdministrationException rejected = (AdministrationException) wrapped.getCause();
+
+        assertEquals("operation.preview.blocked", rejected.code());
+        assertEquals(List.of(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                .NO_ACTIVE_STAGE_SNAPSHOT), rejected.authorizationBlockers().stream()
+                        .map(net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker::kind).toList());
+        assertEquals("rank-up", rejected.facts().get("operation"));
+        assertEquals(List.of("command.error.administration.operation_preview_blocked.summary",
+                "command.why.blocker.no_active_stage_snapshot",
+                "command.error.administration.operation_preview_blocked.remediation"),
+                net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation.administration(rejected)
+                        .stream().map(net.maddkraft.maddprestige.core.admin.presentation.MessageReference::key)
+                        .toList());
+    }
+
+    @Test
+    @DisplayName("[A47][OR8D-08] Real RankUp boundary exposes exact inactive, stale-target, and cost identities")
+    void realRankUpBoundaryExposesExactStructuredRejections() {
+        UUID player = UUID.randomUUID();
+        PlayerStageState state = new PlayerStageState(player, new StageId("first"), 0, REVISION,
+                NOW.minusSeconds(60), NOW.minusSeconds(60), NOW.minusSeconds(60), Optional.empty(),
+                Optional.empty(), Optional.empty());
+
+        var inactive = authorize(rankUpConfiguration(false, false, false), state, Optional.empty());
+        var staleTarget = authorize(rankUpConfiguration(true, true, false), state,
+                Optional.of(new StageId("third")));
+        var missingCost = authorize(rankUpConfiguration(true, false, true), state, Optional.empty());
+
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind.STAGE_LADDER_INACTIVE,
+                inactive.authorizationBlockers().getFirst().kind());
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind.ILLEGAL_OR_STALE_TARGET,
+                staleTarget.authorizationBlockers().getFirst().kind());
+        assertEquals("third", staleTarget.authorizationBlockers().getFirst().facts().get("intended_target"));
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind.UNKNOWN_CONFIGURED_COST,
+                missingCost.authorizationBlockers().getFirst().kind());
+        assertEquals("missing_cost",
+                missingCost.authorizationBlockers().getFirst().facts().get("configured_cost"));
+    }
+
+    @Test
+    @DisplayName("[A47][A68][OR8D-08] Real cost preflight retains provider detail as structured facts")
+    void realCostPreflightRetainsStructuredDetail() {
+        UUID player = UUID.randomUUID();
+        StageId firstId = new StageId("first");
+        StageId secondId = new StageId("second");
+        CostId costId = new CostId("coins");
+        net.maddkraft.maddprestige.api.id.ProviderId providerId =
+                new net.maddkraft.maddprestige.api.id.ProviderId("vault");
+        BlockingCostProvider provider = new BlockingCostProvider(providerId);
+        ProviderRegistry registry = new ProviderRegistry();
+        var registration = registry.register("test", provider);
+        registry.activate(registration);
+        var cost = new net.maddkraft.maddprestige.api.cost.CostDefinition(costId, providerId, "debit",
+                net.maddkraft.maddprestige.api.metric.MetricValue.decimal("25"), Map.of(), "Twenty-five coins");
+        StageDefinition first = new StageDefinition(firstId, true, "First", Map.of(), StageProjection.none());
+        StageDefinition second = new StageDefinition(secondId, true, "Second", Map.of(), StageProjection.none(),
+                Optional.empty(), List.of(costId), List.of());
+        StageConfiguration stages = new StageConfiguration(3, true, Map.of(firstId, first, secondId, second),
+                List.of(firstId, secondId), Optional.of(firstId), ReconciliationPolicy.WARN_ONLY);
+        PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16, Map.of(), Map.of(),
+                Map.of(costId, cost), Map.of(),
+                net.maddkraft.maddprestige.core.command.CommandActionPolicy.safeDefaults());
+        ActiveStageConfiguration active = new ActiveStageConfiguration(
+                new StageConfigurationSnapshot(REVISION, stages),
+                new PhaseThreeConfigurationSnapshot(REVISION, phaseThree,
+                        Map.of(providerId, registration.generation())));
+        PlayerStageState state = new PlayerStageState(player, firstId, 0, REVISION, NOW.minusSeconds(60),
+                NOW.minusSeconds(60), NOW.minusSeconds(60), Optional.empty(), Optional.empty(), Optional.empty());
+        RankUpAuthorizationService service = new RankUpAuthorizationService(() -> Optional.of(active),
+                ignored -> Optional.of(state), (ignored, authoritative, configuration) -> new RankUpProgressContext(
+                        player, REVISION, 0, ExactDecimal.ZERO, new ScopeContext(Map.of())),
+                Fixture.emptyRequirementState(), registry, CLOCK);
+
+        var plan = service.authorize(new RankUpIntent(new Actor("player", Optional.of(player), "Player"), player,
+                Optional.empty(), "cost-preflight-test")).toCompletableFuture().join().plan().orElseThrow();
+        var blocker = plan.authorizationBlockers().getFirst();
+
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind.COST_PREFLIGHT_BLOCKED,
+                blocker.kind());
+        assertEquals(Map.of("id", "coins", "provider", "vault", "amount", "25", "type", "debit",
+                "status", "BLOCKED", "detail", "Insufficient exact balance"), blocker.facts());
     }
 
     @Test
@@ -156,6 +263,42 @@ class PhaseSixSimulationAndConfirmationTest {
         }
     }
 
+    private static net.maddkraft.maddprestige.core.plan.RankUpAuthorizationResult authorize(
+            ActiveStageConfiguration active,
+            PlayerStageState state,
+            Optional<StageId> intendedTarget) {
+        RankUpAuthorizationService service = new RankUpAuthorizationService(() -> Optional.of(active),
+                ignored -> Optional.of(state), (ignored, authoritative, configuration) -> new RankUpProgressContext(
+                        state.playerId(), REVISION, 0, ExactDecimal.ZERO, new ScopeContext(Map.of())),
+                Fixture.emptyRequirementState(), new ProviderRegistry(), CLOCK);
+        return service.authorize(new RankUpIntent(new Actor("player", Optional.of(state.playerId()), "Player"),
+                state.playerId(), intendedTarget, "structured-blocker-test")).toCompletableFuture().join();
+    }
+
+    private static ActiveStageConfiguration rankUpConfiguration(
+            boolean enabled,
+            boolean third,
+            boolean missingCost) {
+        StageId firstId = new StageId("first");
+        StageId secondId = new StageId("second");
+        StageId thirdId = new StageId("third");
+        StageDefinition first = new StageDefinition(firstId, true, "First", Map.of(), StageProjection.none());
+        StageDefinition second = new StageDefinition(secondId, true, "Second", Map.of(), StageProjection.none(),
+                Optional.empty(), missingCost ? List.of(new CostId("missing_cost")) : List.of(), List.of());
+        java.util.LinkedHashMap<StageId, StageDefinition> definitions = new java.util.LinkedHashMap<>();
+        definitions.put(firstId, first);
+        definitions.put(secondId, second);
+        if (third) {
+            definitions.put(thirdId,
+                    new StageDefinition(thirdId, true, "Third", Map.of(), StageProjection.none()));
+        }
+        List<StageId> order = third ? List.of(firstId, secondId, thirdId) : List.of(firstId, secondId);
+        StageConfiguration stages = new StageConfiguration(3, enabled, definitions, order, Optional.of(firstId),
+                ReconciliationPolicy.WARN_ONLY);
+        return new ActiveStageConfiguration(new StageConfigurationSnapshot(REVISION, stages),
+                new PhaseThreeConfigurationSnapshot(REVISION, PhaseThreeConfiguration.empty(), Map.of()));
+    }
+
     private static final class Fixture {
         private final UUID playerId = UUID.fromString("11111111-1111-1111-1111-111111111111");
         private final PlayerStageState state = new PlayerStageState(playerId, new StageId("first"), 4, REVISION,
@@ -208,6 +351,52 @@ class PhaseSixSimulationAndConfirmationTest {
                     return Optional.empty();
                 }
             };
+        }
+    }
+
+    private static final class BlockingCostProvider implements net.maddkraft.maddprestige.api.cost.CostProvider {
+        private final net.maddkraft.maddprestige.api.provider.ProviderDescriptor descriptor;
+
+        private BlockingCostProvider(net.maddkraft.maddprestige.api.id.ProviderId id) {
+            descriptor = new net.maddkraft.maddprestige.api.provider.ProviderDescriptor(id, "test", "1", "1",
+                    List.of(), List.of());
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.provider.ProviderDescriptor descriptor() {
+            return descriptor;
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.provider.ProviderHealth health() {
+            return new net.maddkraft.maddprestige.api.provider.ProviderHealth(
+                    net.maddkraft.maddprestige.api.provider.ProviderHealthState.AVAILABLE,
+                    "available", "ready", NOW);
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.action.ActionCharacteristics characteristics(
+                net.maddkraft.maddprestige.api.cost.CostDefinition definition) {
+            return new net.maddkraft.maddprestige.api.action.ActionCharacteristics(true, true, true, false);
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.validation.ValidationReport validate(
+                net.maddkraft.maddprestige.api.cost.CostDefinition definition) {
+            return net.maddkraft.maddprestige.api.validation.ValidationReport.VALID;
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<net.maddkraft.maddprestige.api.cost.CostPreflight> preflight(
+                net.maddkraft.maddprestige.api.cost.PlannedCost proposed) {
+            return CompletableFuture.completedFuture(
+                    net.maddkraft.maddprestige.api.cost.CostPreflight.blocked("Insufficient exact balance"));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<net.maddkraft.maddprestige.api.action.ActionExecutionResult> execute(
+                net.maddkraft.maddprestige.api.cost.PlannedCost plannedCost) {
+            throw new AssertionError("blocked cost cannot execute");
         }
     }
 }
