@@ -457,13 +457,9 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
     }
 
     private long dbCount(String table, UUID target) {
-        if (!Set.of("mp_operations", "mp_stage_history", "mp_prestige_history").contains(table)) {
-            throw new IllegalArgumentException("unexpected table");
-        }
+        HistoryQuery query = HistoryQuery.forTable(table);
         try (Connection connection = sqliteConnection();
-                PreparedStatement statement = connection.prepareStatement(
-                        "SELECT COUNT(*) FROM " + table + " WHERE "
-                                + (table.equals("mp_operations") ? "target_uuid" : "player_uuid") + " = ?")) {
+                PreparedStatement statement = connection.prepareStatement(query.sql())) {
             statement.setString(1, target.toString());
             try (ResultSet rows = statement.executeQuery()) {
                 require(rows.next(), "count query returned no row");
@@ -485,6 +481,33 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
             throw new IllegalStateException("SQLite driver rejected disposable database URL");
         }
         return connection;
+    }
+
+    private enum HistoryQuery {
+        OPERATIONS("mp_operations", "SELECT COUNT(*) FROM mp_operations WHERE target_uuid = ?"),
+        STAGE_HISTORY("mp_stage_history", "SELECT COUNT(*) FROM mp_stage_history WHERE player_uuid = ?"),
+        PRESTIGE_HISTORY("mp_prestige_history", "SELECT COUNT(*) FROM mp_prestige_history WHERE player_uuid = ?");
+
+        private final String table;
+        private final String sql;
+
+        HistoryQuery(String table, String sql) {
+            this.table = table;
+            this.sql = sql;
+        }
+
+        private static HistoryQuery forTable(String table) {
+            for (HistoryQuery query : values()) {
+                if (query.table.equals(table)) {
+                    return query;
+                }
+            }
+            throw new IllegalArgumentException("unexpected qualification history table");
+        }
+
+        private String sql() {
+            return sql;
+        }
     }
 
     private Runnable commandStep(java.util.function.Supplier<String> command, String label) {

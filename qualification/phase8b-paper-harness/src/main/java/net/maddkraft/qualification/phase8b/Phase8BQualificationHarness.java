@@ -665,11 +665,27 @@ public final class Phase8BQualificationHarness extends JavaPlugin {
                 java.util.Arrays.copyOfRange(tokens, 1, tokens.length)), "command was not accepted: " + command);
         eventually("command response: " + command, () -> !messages.isEmpty(), () -> {
             List<String> output = List.copyOf(messages);
-            require(output.stream().noneMatch(line -> line.matches(
-                    "^\\[[^]]*(failed|blocked|unknown|rejected|stale)[^]]*].*")),
+            require(output.stream().noneMatch(Phase8BQualificationHarness::isFailureDiagnostic),
                     "command failed safely without completing: " + command + " output=" + output);
             continuation.accept(output);
         });
+    }
+
+    private static boolean isFailureDiagnostic(String line) {
+        if (line.isEmpty() || line.charAt(0) != '[') {
+            return false;
+        }
+        int closingBracket = line.indexOf(']');
+        if (closingBracket < 0) {
+            return false;
+        }
+        for (String marker : List.of("failed", "blocked", "unknown", "rejected", "stale")) {
+            int markerIndex = line.indexOf(marker, 1);
+            if (markerIndex >= 0 && markerIndex < closingBracket) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private <T> void await(String label, CompletionStage<T> stage, Consumer<T> continuation) {

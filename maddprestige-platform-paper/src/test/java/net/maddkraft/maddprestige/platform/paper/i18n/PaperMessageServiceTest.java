@@ -897,12 +897,32 @@ class PaperMessageServiceTest {
                 String text = Files.readString(path, StandardCharsets.UTF_8);
                 if (text.contains("sendMessage(Component.text(")
                         || text.contains("displayName(Component.text(")
-                        || text.matches("(?s).*Bukkit\\.createInventory\\([^;]*Component\\.text\\(.*")) {
+                        || createsInventoryWithLiteralText(text)) {
                     violations.add(source.relativize(path).toString());
                 }
             }
         }
         assertEquals(List.of(), violations);
+    }
+
+    private static boolean createsInventoryWithLiteralText(String source) {
+        String inventoryCall = "Bukkit.createInventory(";
+        String literalText = "Component.text(";
+        int searchFrom = 0;
+        while (searchFrom < source.length()) {
+            int inventory = source.indexOf(inventoryCall, searchFrom);
+            if (inventory < 0) {
+                return false;
+            }
+            int statementEnd = source.indexOf(';', inventory + inventoryCall.length());
+            int searchEnd = statementEnd < 0 ? source.length() : statementEnd;
+            int literal = source.indexOf(literalText, inventory + inventoryCall.length(), searchEnd);
+            if (literal >= 0) {
+                return true;
+            }
+            searchFrom = statementEnd < 0 ? source.length() : statementEnd + 1;
+        }
+        return false;
     }
 
     @Test

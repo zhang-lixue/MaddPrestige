@@ -322,6 +322,37 @@ class SqliteBackupServiceTest {
     }
 
     @Test
+    @DisplayName("[SONAR] Database-derived table names never become executable SQL identifiers")
+    void rejectsUnexpectedTableNameWithoutExecutingIdentifierText() throws Exception {
+        Path database = currentDatabase("hostile-table-name.sqlite");
+        SqliteFoundation foundation = new SqliteFoundation(database);
+        try (Connection connection = foundation.open(); Statement statement = connection.createStatement()) {
+            statement.execute("CREATE TABLE \"mp_hostile\"\"; DROP TABLE mp_operations; --\" (value TEXT)");
+        }
+
+        assertThrows(PersistenceException.class,
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+        assertEquals("1", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mp_operations'"));
+    }
+
+    @Test
+    @DisplayName("[SONAR] Database-derived index names are bound values, never SQL fragments")
+    void bindsHostileIndexNameWithoutExecutingIdentifierText() throws Exception {
+        Path database = currentDatabase("hostile-index-name.sqlite");
+        SqliteFoundation foundation = new SqliteFoundation(database);
+        try (Connection connection = foundation.open(); Statement statement = connection.createStatement()) {
+            statement.execute("CREATE UNIQUE INDEX \"mp_hostile\"\"; DROP TABLE mp_operations; --\" "
+                    + "ON mp_audit_log(audit_id)");
+        }
+
+        assertThrows(PersistenceException.class,
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+        assertEquals("1", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mp_operations'"));
+    }
+
+    @Test
     @DisplayName("[A63] Invalid header, truncation, and bit-flipped SQLite are rejected independently")
     void rejectsCorruptAndTruncatedDatabases() throws Exception {
         var result = accepted("corruption-source.sqlite", "corruption-backups");

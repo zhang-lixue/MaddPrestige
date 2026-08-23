@@ -17,7 +17,8 @@ They are never copied into source control or the owner-review bundle.
 
 ## Build and run
 
-1. Run `mvnw.cmd --no-transfer-progress -DskipTests package` from the repository root.
+1. Run `mvnw.cmd --no-transfer-progress -DskipTests install` from the repository root. This builds the distribution and
+   installs the public API through the normal local Maven repository used by the isolated harness build.
 2. Run `mvnw.cmd --no-transfer-progress -f qualification/phase8b-paper-harness/pom.xml clean package`.
 3. Create a fresh short disposable directory under `target`, add `paper.jar`, the two external dependency JARs,
    `maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar` and

@@ -12,10 +12,10 @@ unavailable result while shutting down. `onDisable` unregisters the Paper servic
 operations are safe to repeat. A real provider would replace the constant value with a bounded read of its own
 authoritative storage.
 
-Build after the MaddPrestige API JAR exists:
+Install the public MaddPrestige API into the normal local Maven repository, then build the isolated consumer:
 
 ```text
-.\mvnw.cmd --no-transfer-progress -pl maddprestige-api package
+.\mvnw.cmd --no-transfer-progress -pl maddprestige-api -am -DskipTests install
 .\mvnw.cmd --no-transfer-progress -f examples/provider-sdk/pom.xml clean package
 ```
 

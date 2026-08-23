@@ -25,6 +25,8 @@ public final class MigrationHistorySchema {
             ON mp_schema_migrations(version)
             WHERE result = 'APPLIED'
             """;
+    private static final String DROP_APPLIED_INDEX =
+            "DROP INDEX IF EXISTS mp_schema_migrations_applied_version_uq";
 
     private MigrationHistorySchema() {
     }
@@ -32,7 +34,7 @@ public final class MigrationHistorySchema {
     public static void initialize(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
             statement.execute(CREATE_HISTORY);
-            statement.execute("DROP INDEX IF EXISTS " + APPLIED_INDEX);
+            statement.execute(DROP_APPLIED_INDEX);
             statement.execute(CREATE_APPLIED_INDEX);
         }
     }

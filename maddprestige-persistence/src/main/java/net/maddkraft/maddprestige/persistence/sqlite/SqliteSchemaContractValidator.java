@@ -47,7 +47,8 @@ final class SqliteSchemaContractValidator {
         LinkedHashMap<String, Long> rowCounts = new LinkedHashMap<>();
         for (String table : tableNames(actual)) {
             if (!MigrationHistorySchema.TABLE.equals(table)) {
-                rowCounts.put(table, countAndReadRepresentative(actual, table));
+                ApplicationTable applicationTable = ApplicationTable.fromDatabaseName(table);
+                rowCounts.put(table, countAndReadRepresentative(actual, applicationTable));
             }
         }
         return rowCounts;
@@ -107,13 +108,15 @@ final class SqliteSchemaContractValidator {
 
     private static List<ColumnContract> columns(Connection connection, String table) throws SQLException {
         ArrayList<ColumnContract> columns = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-                ResultSet rows = statement.executeQuery("PRAGMA table_xinfo(" + quote(table) + ")")) {
-            while (rows.next()) {
-                columns.add(new ColumnContract(
-                        rows.getInt("cid"), rows.getString("name"), normalizeType(rows.getString("type")),
-                        rows.getInt("notnull"), rows.getString("dflt_value"), rows.getInt("pk"),
-                        rows.getInt("hidden")));
+        try (var statement = connection.prepareStatement("SELECT * FROM pragma_table_xinfo(?)")) {
+            statement.setString(1, table);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    columns.add(new ColumnContract(
+                            rows.getInt("cid"), rows.getString("name"), normalizeType(rows.getString("type")),
+                            rows.getInt("notnull"), rows.getString("dflt_value"), rows.getInt("pk"),
+                            rows.getInt("hidden")));
+                }
             }
         }
         return List.copyOf(columns);
@@ -121,13 +124,15 @@ final class SqliteSchemaContractValidator {
 
     private static List<ForeignKeyContract> foreignKeys(Connection connection, String table) throws SQLException {
         ArrayList<ForeignKeyContract> keys = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-                ResultSet rows = statement.executeQuery("PRAGMA foreign_key_list(" + quote(table) + ")")) {
-            while (rows.next()) {
-                keys.add(new ForeignKeyContract(
-                        rows.getInt("id"), rows.getInt("seq"), rows.getString("table"), rows.getString("from"),
-                        rows.getString("to"), rows.getString("on_update"), rows.getString("on_delete"),
-                        rows.getString("match")));
+        try (var statement = connection.prepareStatement("SELECT * FROM pragma_foreign_key_list(?)")) {
+            statement.setString(1, table);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    keys.add(new ForeignKeyContract(
+                            rows.getInt("id"), rows.getInt("seq"), rows.getString("table"), rows.getString("from"),
+                            rows.getString("to"), rows.getString("on_update"), rows.getString("on_delete"),
+                            rows.getString("match")));
+                }
             }
         }
         return List.copyOf(keys);
@@ -136,16 +141,18 @@ final class SqliteSchemaContractValidator {
     private static Map<String, UniqueIndexContract> uniqueIndexes(Connection connection, String table)
             throws SQLException {
         LinkedHashMap<String, UniqueIndexContract> indexes = new LinkedHashMap<>();
-        try (Statement statement = connection.createStatement();
-                ResultSet rows = statement.executeQuery("PRAGMA index_list(" + quote(table) + ")")) {
-            while (rows.next()) {
-                if (rows.getInt("unique") == 0) {
-                    continue;
+        try (var statement = connection.prepareStatement("SELECT * FROM pragma_index_list(?)")) {
+            statement.setString(1, table);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    if (rows.getInt("unique") == 0) {
+                        continue;
+                    }
+                    String name = rows.getString("name");
+                    indexes.put(name, new UniqueIndexContract(
+                            rows.getString("origin"), rows.getInt("partial"), indexColumns(connection, name),
+                            indexSql(connection, name)));
                 }
-                String name = rows.getString("name");
-                indexes.put(name, new UniqueIndexContract(
-                        rows.getString("origin"), rows.getInt("partial"), indexColumns(connection, name),
-                        indexSql(connection, name)));
             }
         }
         return Map.copyOf(indexes);
@@ -153,12 +160,14 @@ final class SqliteSchemaContractValidator {
 
     private static List<IndexColumnContract> indexColumns(Connection connection, String index) throws SQLException {
         ArrayList<IndexColumnContract> columns = new ArrayList<>();
-        try (Statement statement = connection.createStatement();
-                ResultSet rows = statement.executeQuery("PRAGMA index_xinfo(" + quote(index) + ")")) {
-            while (rows.next()) {
-                columns.add(new IndexColumnContract(
-                        rows.getInt("seqno"), rows.getInt("cid"), rows.getString("name"), rows.getInt("desc"),
-                        rows.getString("coll"), rows.getInt("key")));
+        try (var statement = connection.prepareStatement("SELECT * FROM pragma_index_xinfo(?)")) {
+            statement.setString(1, index);
+            try (ResultSet rows = statement.executeQuery()) {
+                while (rows.next()) {
+                    columns.add(new IndexColumnContract(
+                            rows.getInt("seqno"), rows.getInt("cid"), rows.getString("name"), rows.getInt("desc"),
+                            rows.getString("coll"), rows.getInt("key")));
+                }
             }
         }
         return List.copyOf(columns);
@@ -186,18 +195,19 @@ final class SqliteSchemaContractValidator {
         return Collections.unmodifiableSet(names);
     }
 
-    private static long countAndReadRepresentative(Connection connection, String table) throws SQLException {
+    private static long countAndReadRepresentative(Connection connection, ApplicationTable table) throws SQLException {
         long count;
         try (Statement statement = connection.createStatement();
-                ResultSet rows = statement.executeQuery("SELECT COUNT(*) FROM " + quote(table))) {
+                ResultSet rows = statement.executeQuery(table.countSql())) {
             rows.next();
             count = rows.getLong(1);
         }
         if (count > 0) {
             try (Statement statement = connection.createStatement();
-                    ResultSet rows = statement.executeQuery("SELECT * FROM " + quote(table) + " LIMIT 1")) {
+                    ResultSet rows = statement.executeQuery(table.representativeSql())) {
                 if (!rows.next()) {
-                    throw new PersistenceException("Could not read representative row from " + table);
+                    throw new PersistenceException(
+                            "Could not read representative row from " + table.databaseName());
                 }
                 for (int column = 1; column <= rows.getMetaData().getColumnCount(); column++) {
                     rows.getObject(column);
@@ -252,10 +262,6 @@ final class SqliteSchemaContractValidator {
         return type == null ? "" : type.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
     }
 
-    private static String quote(String identifier) {
-        return "\"" + identifier.replace("\"", "\"\"") + "\"";
-    }
-
     private record TableContract(
             String createSql,
             List<ColumnContract> columns,
@@ -278,5 +284,104 @@ final class SqliteSchemaContractValidator {
 
     private record IndexColumnContract(
             int sequence, int columnId, String name, int descending, String collation, int keyColumn) {
+    }
+
+    private enum ApplicationTable {
+        CONFIG_REVISIONS("mp_config_revisions", "SELECT COUNT(*) FROM mp_config_revisions",
+                "SELECT * FROM mp_config_revisions LIMIT 1"),
+        OPERATIONS("mp_operations", "SELECT COUNT(*) FROM mp_operations",
+                "SELECT * FROM mp_operations LIMIT 1"),
+        OPERATION_ACTIONS("mp_operation_actions", "SELECT COUNT(*) FROM mp_operation_actions",
+                "SELECT * FROM mp_operation_actions LIMIT 1"),
+        CURRENCY_ACCOUNTS("mp_currency_accounts", "SELECT COUNT(*) FROM mp_currency_accounts",
+                "SELECT * FROM mp_currency_accounts LIMIT 1"),
+        AUDIT_LOG("mp_audit_log", "SELECT COUNT(*) FROM mp_audit_log",
+                "SELECT * FROM mp_audit_log LIMIT 1"),
+        PLAYER_STAGE_STATE("mp_player_stage_state", "SELECT COUNT(*) FROM mp_player_stage_state",
+                "SELECT * FROM mp_player_stage_state LIMIT 1"),
+        REQUIREMENT_BASELINES("mp_requirement_baselines", "SELECT COUNT(*) FROM mp_requirement_baselines",
+                "SELECT * FROM mp_requirement_baselines LIMIT 1"),
+        REQUIREMENT_LATCHES("mp_requirement_latches", "SELECT COUNT(*) FROM mp_requirement_latches",
+                "SELECT * FROM mp_requirement_latches LIMIT 1"),
+        MANUAL_PROGRESS("mp_manual_progress", "SELECT COUNT(*) FROM mp_manual_progress",
+                "SELECT * FROM mp_manual_progress LIMIT 1"),
+        PLAYER_PRESTIGE_STATE("mp_player_prestige_state", "SELECT COUNT(*) FROM mp_player_prestige_state",
+                "SELECT * FROM mp_player_prestige_state LIMIT 1"),
+        PRESTIGE_OPERATION_DETAILS("mp_prestige_operation_details",
+                "SELECT COUNT(*) FROM mp_prestige_operation_details",
+                "SELECT * FROM mp_prestige_operation_details LIMIT 1"),
+        CURRENCY_LEDGER("mp_currency_ledger", "SELECT COUNT(*) FROM mp_currency_ledger",
+                "SELECT * FROM mp_currency_ledger LIMIT 1"),
+        STAGE_HISTORY("mp_stage_history", "SELECT COUNT(*) FROM mp_stage_history",
+                "SELECT * FROM mp_stage_history LIMIT 1"),
+        PRESTIGE_HISTORY("mp_prestige_history", "SELECT COUNT(*) FROM mp_prestige_history",
+                "SELECT * FROM mp_prestige_history LIMIT 1"),
+        MILESTONE_AWARDS("mp_milestone_awards", "SELECT COUNT(*) FROM mp_milestone_awards",
+                "SELECT * FROM mp_milestone_awards LIMIT 1"),
+        SEASONS("mp_seasons", "SELECT COUNT(*) FROM mp_seasons", "SELECT * FROM mp_seasons LIMIT 1"),
+        PLAYER_SEASON_STATE("mp_player_season_state", "SELECT COUNT(*) FROM mp_player_season_state",
+                "SELECT * FROM mp_player_season_state LIMIT 1"),
+        SEASON_HISTORY("mp_season_history", "SELECT COUNT(*) FROM mp_season_history",
+                "SELECT * FROM mp_season_history LIMIT 1"),
+        RECOVERY_EVENTS("mp_recovery_events", "SELECT COUNT(*) FROM mp_recovery_events",
+                "SELECT * FROM mp_recovery_events LIMIT 1"),
+        PRESTIGE_RECOVERY_REWARDS("mp_prestige_recovery_rewards",
+                "SELECT COUNT(*) FROM mp_prestige_recovery_rewards",
+                "SELECT * FROM mp_prestige_recovery_rewards LIMIT 1"),
+        PRESTIGE_RECOVERY_COSTS("mp_prestige_recovery_costs",
+                "SELECT COUNT(*) FROM mp_prestige_recovery_costs",
+                "SELECT * FROM mp_prestige_recovery_costs LIMIT 1"),
+        CONFIGURATION_REVISIONS("mp_configuration_revisions_v2",
+                "SELECT COUNT(*) FROM mp_configuration_revisions_v2",
+                "SELECT * FROM mp_configuration_revisions_v2 LIMIT 1"),
+        CONFIGURATION_DOCUMENTS("mp_configuration_revision_documents",
+                "SELECT COUNT(*) FROM mp_configuration_revision_documents",
+                "SELECT * FROM mp_configuration_revision_documents LIMIT 1"),
+        STAGE_REMAP_OPERATIONS("mp_stage_remap_operations", "SELECT COUNT(*) FROM mp_stage_remap_operations",
+                "SELECT * FROM mp_stage_remap_operations LIMIT 1"),
+        STAGE_REMAP_ENTRIES("mp_stage_remap_entries", "SELECT COUNT(*) FROM mp_stage_remap_entries",
+                "SELECT * FROM mp_stage_remap_entries LIMIT 1"),
+        STAGE_TRANSITION_LEASES("mp_stage_transition_leases", "SELECT COUNT(*) FROM mp_stage_transition_leases",
+                "SELECT * FROM mp_stage_transition_leases LIMIT 1"),
+        CONFIGURATION_STAGE_TRANSITIONS("mp_configuration_stage_transitions",
+                "SELECT COUNT(*) FROM mp_configuration_stage_transitions",
+                "SELECT * FROM mp_configuration_stage_transitions LIMIT 1"),
+        CONFIGURATION_TRANSITION_STAGES("mp_configuration_transition_stages",
+                "SELECT COUNT(*) FROM mp_configuration_transition_stages",
+                "SELECT * FROM mp_configuration_transition_stages LIMIT 1"),
+        CONFIGURATION_STAGE_RESERVATIONS("mp_configuration_stage_reservations",
+                "SELECT COUNT(*) FROM mp_configuration_stage_reservations",
+                "SELECT * FROM mp_configuration_stage_reservations LIMIT 1");
+
+        private final String databaseName;
+        private final String countSql;
+        private final String representativeSql;
+
+        ApplicationTable(String databaseName, String countSql, String representativeSql) {
+            this.databaseName = databaseName;
+            this.countSql = countSql;
+            this.representativeSql = representativeSql;
+        }
+
+        private static ApplicationTable fromDatabaseName(String databaseName) {
+            for (ApplicationTable table : values()) {
+                if (table.databaseName.equals(databaseName)) {
+                    return table;
+                }
+            }
+            throw new PersistenceException("Table is not in the trusted MaddPrestige schema set: " + databaseName);
+        }
+
+        private String databaseName() {
+            return databaseName;
+        }
+
+        private String countSql() {
+            return countSql;
+        }
+
+        private String representativeSql() {
+            return representativeSql;
+        }
     }
 }
