@@ -169,6 +169,20 @@ class StageConfigurationCompilerTest {
         }
     }
 
+    @Test
+    @DisplayName("[A63] Unknown future progression schema fails closed")
+    void rejectsFutureSchema() {
+        var compilation = compile("""
+                schema-version: 99
+                active: false
+                stages: {}
+                order: []
+                """);
+
+        assertTrue(compilation.validation().hasErrors());
+        assertTrue(codes(compilation.validation()).contains("stage.schema.version"));
+    }
+
     private static StageConfigurationCompilation compile(String source) {
         Map<String, String> documents = Map.of("progression.yml", source);
         return new StageConfigurationCompiler().compile(

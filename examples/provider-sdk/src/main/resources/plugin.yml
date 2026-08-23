@@ -1,0 +1,6 @@
+name: ExampleProgressProvider
+version: '1.0.0'
+main: org.example.maddprestige.ExampleProgressProviderPlugin
+api-version: '26.1.2'
+depend: [MaddPrestige]
+description: Minimal public MaddPrestige metric-provider example.

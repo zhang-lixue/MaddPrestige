@@ -280,14 +280,18 @@ public final class LuckPermsRankAdapter implements RankAdapter {
         HashSet<String> permanent = new HashSet<>();
         ArrayList<AmbiguousRankMembership> ambiguous = new ArrayList<>();
         for (Node node : user.data().toCollection()) {
-            if (node instanceof InheritanceNode inheritance && managedGroups.contains(inheritance.getGroupName())) {
+            if (node instanceof InheritanceNode inheritance) {
+                Optional<String> configuredGroup = configuredGroup(managedGroups, inheritance.getGroupName());
+                if (configuredGroup.isEmpty()) {
+                    continue;
+                }
                 if (node.hasExpiry() || !node.getContexts().isEmpty()) {
                     Optional<java.time.Instant> expiry = node.hasExpiry()
                             ? Optional.of(node.getExpiry()) : Optional.empty();
-                    ambiguous.add(new AmbiguousRankMembership(inheritance.getGroupName(),
+                    ambiguous.add(new AmbiguousRankMembership(configuredGroup.orElseThrow(),
                             node.getContexts().toMap(), expiry));
                 } else {
-                    permanent.add(inheritance.getGroupName());
+                    permanent.add(configuredGroup.orElseThrow());
                 }
             }
         }
@@ -298,11 +302,16 @@ public final class LuckPermsRankAdapter implements RankAdapter {
         return user.data().toCollection().stream()
                 .filter(InheritanceNode.class::isInstance)
                 .map(InheritanceNode.class::cast)
-                .filter(node -> managedGroups.contains(node.getGroupName()))
+                .filter(node -> configuredGroup(managedGroups, node.getGroupName()).isPresent())
                 .filter(node -> !node.hasExpiry() && node.getContexts().isEmpty())
                 .collect(java.util.stream.Collectors.groupingBy(
-                        InheritanceNode::getGroupName, java.util.LinkedHashMap::new,
+                        node -> configuredGroup(managedGroups, node.getGroupName()).orElseThrow(),
+                        java.util.LinkedHashMap::new,
                         java.util.stream.Collectors.toList()));
+    }
+
+    private static Optional<String> configuredGroup(Set<String> managedGroups, String luckPermsGroup) {
+        return managedGroups.stream().filter(group -> group.equalsIgnoreCase(luckPermsGroup)).findFirst();
     }
 
     private static boolean rollback(

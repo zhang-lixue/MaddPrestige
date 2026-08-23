@@ -1,7 +1,9 @@
 package net.maddkraft.maddprestige.api.provider;
 
 import java.util.Objects;
+import net.maddkraft.maddprestige.api.annotation.Experimental;
 
+@Experimental
 public record ProviderSnapshot(
         ProviderDescriptor descriptor,
         ProviderLifecycle lifecycle,

@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -16,6 +17,7 @@ import net.maddkraft.maddprestige.api.provider.Provider;
 import net.maddkraft.maddprestige.api.provider.ProviderDescriptor;
 import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
+import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.integrations.IntegrationProviderLifecycle;
 import net.maddkraft.maddprestige.integrations.IntegrationProviderLifecycle.ManagedProvider;
@@ -65,7 +67,7 @@ class PhaseSevenOptionalCompositionTest {
         assertTrue(plan.economyShopGuiCompatibility());
         assertTrue(plan.quickShopCompatibility());
         assertEquals(Map.of(
-                "Vault", "2.20.2", "mcMMO", "2.2.053", "PlaceholderAPI", "2.12.3",
+                "Vault", "2.20.2", "mcMMO", "2.2.053", "PlaceholderAPI", "2.12.2",
                 "EconomyShopGUI", "7.2.0", "QuickShop-Hikari", "6.2.0.11",
                 "GriefPrevention", "16.18.7", "WorldGuard", "7.0.18+2392-fa605e6",
                 "CraftEngine", "26.7.4"),
@@ -128,6 +130,31 @@ class PhaseSevenOptionalCompositionTest {
         assertFalse(registry.acceptsEvent(replacementRegistration));
         lifecycle.dependencyUnavailable("item registry removed the binding");
         assertTrue(registry.find(id).isEmpty());
+    }
+
+    @Test
+    @DisplayName("[OR8B-04] Every runtime-relevant enable and definition change has deterministic rebind authority")
+    void canonicalChangesDriveExactStructuralReconciliation() {
+        var disabled = net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration.disabled();
+        var allEnabled = new net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration(
+                7, true, true, true, Map.of("balance",
+                        new net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration
+                                .PlaceholderInput("%vault_eco_balance%", MetricValueType.EXACT_DECIMAL,
+                                        Duration.ofSeconds(5))),
+                true, false, true, false, true, true, true, 128);
+
+        for (String integration : List.of("Vault", "mcMMO", "PlaceholderAPI", "EconomyShopGUI",
+                "QuickShop-Hikari", "GriefPrevention", "WorldGuard", "CraftEngine")) {
+            assertTrue(PhaseSevenOptionalIntegrationManager.structuralChange(integration, disabled, allEnabled),
+                    integration);
+            assertFalse(PhaseSevenOptionalIntegrationManager.structuralChange(integration, allEnabled, allEnabled),
+                    integration);
+        }
+        var craftDefinitionChanged = new net.maddkraft.maddprestige.integrations.config
+                .PhaseFiveIntegrationConfiguration(7, true, true, true, allEnabled.placeholderInputs(), true,
+                        false, true, false, true, true, true, 256);
+        assertTrue(PhaseSevenOptionalIntegrationManager.structuralChange(
+                "CraftEngine", allEnabled, craftDefinitionChanged));
     }
 
     private static Provider provider(ProviderId id, String definition) {

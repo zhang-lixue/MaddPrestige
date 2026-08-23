@@ -1,0 +1,29 @@
+schema-version: 4
+prestige:
+  enabled: true
+  required-stages: [veteran]
+  reset-stage: member
+  current-count-increment: 1
+  lifetime-count-increment: 1
+  maximum: unlimited
+  cooldown: PT0S
+  costs: []
+  rewards: []
+  external-resets:
+    enabled: false
+  reset-policy:
+    progression-stage: RESET
+    active-requirement-progress: RESET
+    latched-completions: RESET
+    baselines: RESET
+    prestige-scoped-currency: RESET
+    purchased-perks: PRESERVE
+    milestone-history: PRESERVE
+    season-progress: PRESERVE
+    historical-statistics: PRESERVE
+currencies: {}
+entitlements: {}
+milestones: {}
+seasons: {}
+competition:
+  enabled: false

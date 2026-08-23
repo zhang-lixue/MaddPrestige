@@ -32,9 +32,9 @@ import net.maddkraft.maddprestige.api.provider.CapabilityDescriptor;
 import net.maddkraft.maddprestige.api.provider.ProviderDescriptor;
 import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import org.bukkit.Material;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.Statistic;
 import org.bukkit.entity.EntityType;
-import org.bukkit.entity.Player;
 
 public final class VanillaStatisticsProvider implements MetricProvider {
     private static final Set<String> TICK_STATISTICS = Set.of(
@@ -43,7 +43,7 @@ public final class VanillaStatisticsProvider implements MetricProvider {
     private final ProviderId providerId;
     private final String ownerIdentity;
     private final PaperTaskScheduler scheduler;
-    private final Function<UUID, Player> players;
+    private final Function<UUID, OfflinePlayer> players;
     private final Supplier<ProviderHealth> health;
     private final Runnable threadGuard;
     private final Map<MetricId, SupportedStatistic> statistics;
@@ -52,7 +52,7 @@ public final class VanillaStatisticsProvider implements MetricProvider {
             ProviderId providerId,
             String ownerIdentity,
             PaperTaskScheduler scheduler,
-            Function<UUID, Player> players,
+            Function<UUID, OfflinePlayer> players,
             Supplier<ProviderHealth> health) {
         this(providerId, ownerIdentity, scheduler, players, health, new PaperStatisticDimensionCatalog(),
                 () -> PaperThreadGuard.requireServerThread("Vanilla statistic batch read"));
@@ -62,7 +62,7 @@ public final class VanillaStatisticsProvider implements MetricProvider {
             ProviderId providerId,
             String ownerIdentity,
             PaperTaskScheduler scheduler,
-            Function<UUID, Player> players,
+            Function<UUID, OfflinePlayer> players,
             Supplier<ProviderHealth> health,
             StatisticDimensionCatalog dimensions,
             Runnable threadGuard) {
@@ -117,12 +117,12 @@ public final class VanillaStatisticsProvider implements MetricProvider {
             UUID playerId, List<MetricQuery> queries, long providerGeneration) {
         threadGuard.run();
         LinkedHashMap<MetricQuery, MetricSample> samples = new LinkedHashMap<>();
-        Player player = players.apply(playerId);
+        OfflinePlayer player = players.apply(playerId);
         Instant now = Instant.now();
         if (player == null) {
             queries.forEach(query -> samples.put(query, MetricSample.unavailable(providerGeneration, now,
                     "Paper Player statistics",
-                    "Player statistic source is unavailable; this provider currently requires an online Player")));
+                    "Paper persisted player statistic source is unavailable")));
             return Map.copyOf(samples);
         }
         for (MetricQuery query : queries) {
@@ -147,7 +147,7 @@ public final class VanillaStatisticsProvider implements MetricProvider {
         return Map.copyOf(samples);
     }
 
-    private static int readStatistic(Player player, Statistic statistic, Map<String, String> filters) {
+    private static int readStatistic(OfflinePlayer player, Statistic statistic, Map<String, String> filters) {
         return switch (statistic.getType()) {
             case UNTYPED -> {
                 requireNoFilters(filters);

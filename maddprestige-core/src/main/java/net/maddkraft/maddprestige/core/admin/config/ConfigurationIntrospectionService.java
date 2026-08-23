@@ -50,11 +50,11 @@ public final class ConfigurationIntrospectionService {
         subject.require(PhaseSixPermissions.CONFIG_VIEW);
         SchemaNode node = schema.resolve(actualPath).orElseThrow(() -> new AdministrationException(
                 "config.path.unknown", "Unknown canonical configuration path: " + actualPath,
-                "Use config search to discover schema-owned paths."));
+                "Use config search to discover schema-owned paths.", "path", actualPath));
         Optional<String> value = currentValue(node, actualPath);
-        return new ConfigurationExplanation(actualPath, node.type(), value, safeDefault(node), node.description(),
-                node.allowedValues().staticValues(), node.examples(), node.risk(), node.reloadBehavior(),
-                node.editPermission(), node.applyPermission());
+        return new ConfigurationExplanation(actualPath, node.id().value(), node.type(), value, safeDefault(node),
+                node.description(), node.allowedValues().staticValues(), node.examples(), node.risk(),
+                node.reloadBehavior(), node.editPermission(), node.applyPermission());
     }
 
     private ConfigurationSearchResult searchResult(SchemaNode node) {

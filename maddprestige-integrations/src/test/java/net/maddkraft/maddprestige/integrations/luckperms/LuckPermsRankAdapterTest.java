@@ -87,6 +87,23 @@ class LuckPermsRankAdapterTest {
     }
 
     @Test
+    @DisplayName("[A06][A70] LuckPerms-normalized group nodes retain configured external spelling")
+    void mapsNormalizedGroupNodesToConfiguredNames() {
+        Harness harness = new Harness(false, Set.of("Member", "Adventurer"), List.of(group("member")));
+
+        var result = harness.adapter(() -> true).project(request(harness.playerId,
+                Set.of("Member", "Adventurer"), Optional.of("Adventurer")))
+                .toCompletableFuture().join();
+
+        assertTrue(result.isSuccess(), result.errors().toString());
+        assertEquals(Set.of("Member"),
+                result.value().orElseThrow().before().permanentContextFreeGroups());
+        assertEquals(Set.of("Adventurer"),
+                result.value().orElseThrow().after().permanentContextFreeGroups());
+        assertFalse(harness.inheritanceGroups().contains("member"));
+    }
+
+    @Test
     @DisplayName("[A06][A07] Contextual and temporary managed nodes are reported and preserved")
     void ambiguousManagedNodesFailClosed() {
         InheritanceNode contextual = contextualGroup("second_group", "server", "example");

@@ -1,6 +1,7 @@
 package net.maddkraft.maddprestige.core.admin;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,6 +13,8 @@ import net.maddkraft.maddprestige.core.plan.RankUpPlan;
 import net.maddkraft.maddprestige.core.prestige.PrestigeAuthorizationResult;
 import net.maddkraft.maddprestige.core.prestige.PrestigeIntent;
 import net.maddkraft.maddprestige.core.prestige.PrestigePlan;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
 
 public final class OperationPreviewService {
     private final Function<RankUpIntent, CompletionStage<RankUpAuthorizationResult>> rankUp;
@@ -29,7 +32,7 @@ public final class OperationPreviewService {
         return rankUp.apply(new RankUpIntent(subject.actor(), playerId, Optional.empty(),
                 "simulate-rankup-" + UUID.randomUUID())).thenApply(result -> result.plan()
                         .map(OperationPreviewService::rankUpPreview)
-                        .orElseThrow(() -> rejected("rank-up", result.blockers())));
+                        .orElseThrow(() -> rejected("rank-up", result.authorizationBlockers())));
     }
 
     public CompletionStage<OperationPreview> simulatePrestige(PermissionSubject subject, UUID playerId) {
@@ -37,7 +40,7 @@ public final class OperationPreviewService {
         return prestige.apply(new PrestigeIntent(subject.actor(), playerId,
                 "simulate-prestige-" + UUID.randomUUID())).thenApply(result -> result.plan()
                         .map(OperationPreviewService::prestigePreview)
-                        .orElseThrow(() -> rejected("Prestige", List.of(result.rejection().orElse("unavailable")))));
+                        .orElseThrow(() -> rejected("Prestige", result.authorizationBlockers())));
     }
 
     public CompletionStage<RankUpPlan> authorizeRankUp(PermissionSubject subject, UUID playerId) {
@@ -49,8 +52,8 @@ public final class OperationPreviewService {
                             && plan.orElseThrow().blockers().isEmpty()) {
                         return plan.orElseThrow();
                     }
-                    List<String> blockers = plan.map(RankUpPlan::blockers).filter(values -> !values.isEmpty())
-                            .orElse(result.blockers());
+                    List<AuthorizationBlocker> blockers = plan.map(RankUpPlan::authorizationBlockers)
+                            .filter(values -> !values.isEmpty()).orElse(result.authorizationBlockers());
                     throw rejected("rank-up", blockers);
                 });
     }
@@ -64,13 +67,25 @@ public final class OperationPreviewService {
                             && plan.orElseThrow().blockers().isEmpty()) {
                         return plan.orElseThrow();
                     }
-                    List<String> blockers = plan.map(PrestigePlan::blockers).filter(values -> !values.isEmpty())
-                            .orElseGet(() -> List.of(result.rejection().orElse("blocked")));
+                    List<AuthorizationBlocker> blockers = plan.map(PrestigePlan::authorizationBlockers)
+                            .filter(values -> !values.isEmpty()).orElse(result.authorizationBlockers());
                     throw rejected("Prestige", blockers);
                 });
     }
 
     public static OperationPreview rankUpPreview(RankUpPlan plan) {
+        ArrayList<MessageReference> details = new ArrayList<>();
+        details.add(m("command.preview.state_change", "current_stage", plan.sourceStage().value(),
+                "target_stage", plan.targetStage().value()));
+        plan.costs().forEach(cost -> details.add(m("command.preview.cost", "id", cost.definition().id().value(),
+                "provider", cost.definition().providerId().value(), "type", cost.definition().type(),
+                "amount", cost.definition().amount(), "value", cost.definition().displayName())));
+        plan.rewards().forEach(reward -> details.add(m("command.preview.reward", "id",
+                reward.definition().id().value(), "provider", reward.definition().providerId().value(),
+                "type", reward.definition().type(), "amount", reward.definition().value(),
+                "value", reward.definition().displayName())));
+        plan.rankProjectionRequest().ifPresent(projection -> details.add(m("command.preview.rank_projection",
+                "rank", projection.desiredGroup().orElse("NONE"))));
         return new OperationPreview(OperationKind.RANK_UP, plan.playerId(), plan.executionAllowed(),
                 plan.sourceStage().value() + " → " + plan.targetStage().value(),
                 Optional.of(plan.requirements().explanation()),
@@ -78,11 +93,36 @@ public final class OperationPreviewService {
                 plan.rewards().stream().map(reward -> reward.redactedPreview()).toList(),
                 plan.rankProjectionRequest().map(value -> List.of("External managed rank projection to "
                         + value.desiredGroup().orElse("none"))).orElse(List.of()),
-                plan.blockers(), plan.configRevision(), plan.providerGenerations(), List.of());
+                plan.blockers(), plan.configRevision(), plan.providerGenerations(), List.of(), details,
+                plan.authorizationBlockers());
     }
 
     public static OperationPreview prestigePreview(PrestigePlan plan) {
         var simulation = plan.simulation();
+        ArrayList<MessageReference> details = new ArrayList<>();
+        details.add(m("command.preview.prestige_state_change", "current_stage", simulation.sourceStage().value(),
+                "target_stage", simulation.resetStage().value(), "current_prestige",
+                simulation.currentPrestigeBefore(), "target_prestige", simulation.currentPrestigeAfter(),
+                "current_lifetime", simulation.lifetimePrestigeBefore(), "target_lifetime",
+                simulation.lifetimePrestigeAfter()));
+        plan.costs().forEach(cost -> details.add(m("command.preview.cost", "id", cost.definition().id().value(),
+                "provider", cost.definition().providerId().value(), "type", cost.definition().type(),
+                "amount", cost.definition().amount(), "value", cost.definition().displayName())));
+        plan.rewards().forEach(reward -> details.add(m("command.preview.reward", "id",
+                reward.definition().id().value(), "provider", reward.definition().providerId().value(),
+                "type", reward.definition().type(), "amount", reward.definition().value(),
+                "value", reward.definition().displayName())));
+        simulation.componentConsequences().forEach(consequence -> details.add(m(
+                "command.preview.component_consequence", "component", consequence.component(),
+                "disposition", consequence.disposition())));
+        simulation.currencyChanges().forEach(change -> details.add(m("command.preview.currency_change",
+                "currency", change.currencyId().value(), "before", change.before(), "delta", change.delta(),
+                "after", change.after())));
+        simulation.providerActions().stream().filter(value -> value.uncertaintyPossible()).forEach(action ->
+                details.add(m("command.preview.external_uncertainty", "operation", action.actionId(),
+                        "provider", action.providerId().value())));
+        plan.rankProjectionRequest().ifPresent(projection -> details.add(m("command.preview.rank_projection",
+                "rank", projection.desiredGroup().orElse("NONE"))));
         List<String> consequences = java.util.stream.Stream.concat(
                 simulation.componentConsequences().stream().map(Object::toString),
                 simulation.currencyChanges().stream().map(Object::toString)).toList();
@@ -94,7 +134,7 @@ public final class OperationPreviewService {
                 plan.costs().stream().map(cost -> cost.redactedPreview()).toList(),
                 plan.rewards().stream().map(reward -> reward.redactedPreview()).toList(), consequences,
                 plan.blockers(), plan.configRevision(), plan.providerGenerations(),
-                simulation.uncertainExternalEffects());
+                simulation.uncertainExternalEffects(), details, plan.authorizationBlockers());
     }
 
     private static void requireSimulation(PermissionSubject subject, UUID playerId, String selfPermission) {
@@ -113,8 +153,11 @@ public final class OperationPreviewService {
         }
     }
 
-    private static AdministrationException rejected(String operation, List<String> blockers) {
-        return new AdministrationException("operation.preview.blocked", operation + " is blocked: "
-                + String.join("; ", blockers), "Use why to inspect canonical blockers and correct them first.");
+    private static AdministrationException rejected(String operation, List<AuthorizationBlocker> blockers) {
+        return AdministrationException.authorizationRejected(operation, blockers);
+    }
+
+    private static MessageReference m(String key, Object... arguments) {
+        return MessageReference.of(key, arguments);
     }
 }

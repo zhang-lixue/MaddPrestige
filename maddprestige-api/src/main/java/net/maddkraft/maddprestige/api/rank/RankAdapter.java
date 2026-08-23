@@ -5,7 +5,9 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import net.maddkraft.maddprestige.api.provider.Provider;
 import net.maddkraft.maddprestige.api.result.Result;
+import net.maddkraft.maddprestige.api.annotation.Experimental;
 
+@Experimental
 public interface RankAdapter extends Provider {
     CompletionStage<Result<Set<String>>> validateTargets(Set<String> groupNames);
 

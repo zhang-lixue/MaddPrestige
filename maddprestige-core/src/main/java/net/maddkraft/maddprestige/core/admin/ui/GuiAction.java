@@ -5,11 +5,12 @@ import java.util.Optional;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.StageId;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 public record GuiAction(
         UUID actionId,
         GuiActionKind kind,
-        String label,
+        MessageReference label,
         String requiredPermission,
         boolean mutating,
         Optional<ConfigRevisionId> expectedConfigRevision,
@@ -35,7 +36,7 @@ public record GuiAction(
     public GuiAction(
             UUID actionId,
             GuiActionKind kind,
-            String label,
+            MessageReference label,
             String requiredPermission,
             boolean mutating,
             Optional<ConfigRevisionId> expectedConfigRevision,

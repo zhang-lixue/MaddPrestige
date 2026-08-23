@@ -20,27 +20,8 @@ import net.maddkraft.maddprestige.persistence.VerifiedBackup;
 import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 
 public final class MigrationRunner {
-    private static final String HISTORY_TABLE = "mp_schema_migrations";
-    private static final String APPLIED_INDEX = "mp_schema_migrations_applied_version_uq";
-    private static final String CREATE_HISTORY = """
-            CREATE TABLE IF NOT EXISTS mp_schema_migrations (
-                attempt_id VARCHAR(36) PRIMARY KEY,
-                version BIGINT NOT NULL,
-                checksum VARCHAR(64) NOT NULL,
-                description VARCHAR(255) NOT NULL,
-                applied_at VARCHAR(40) NOT NULL,
-                result VARCHAR(16) NOT NULL,
-                detail VARCHAR(1024) NOT NULL,
-                CHECK (result IN ('APPLIED', 'FAILED'))
-            )
-            """;
-    private static final String DROP_LEGACY_APPLIED_INDEX = "DROP INDEX IF EXISTS " + APPLIED_INDEX;
-    private static final String CREATE_APPLIED_INDEX = """
-            CREATE UNIQUE INDEX mp_schema_migrations_applied_version_uq
-            ON mp_schema_migrations(version)
-            WHERE result = 'APPLIED'
-            """;
-
+    private static final MigrationHistorySnapshot EMPTY_HISTORY =
+            new MigrationHistorySnapshot(List.of(), List.of());
     private final ConnectionProvider connections;
     private final BackupService backups;
     private final Clock clock;
@@ -53,23 +34,33 @@ public final class MigrationRunner {
 
     public MigrationReport migrate(List<Migration> requestedMigrations) {
         List<Migration> migrations = validateChain(requestedMigrations);
+        MigrationHistorySnapshot beforeBackup = inspectHistory(migrations);
+        List<MigrationRecord> applied = beforeBackup.applied();
+        if (applied.size() == migrations.size()) {
+            return new MigrationReport(applied, false);
+        }
+
+        List<Migration> pending = migrations.subList(applied.size(), migrations.size());
+        VerifiedBackup backup = backups.createVerifiedBackup("schema migrations "
+                + pending.getFirst().version() + " through " + pending.getLast().version());
+        if (!backup.verified()) {
+            throw new PersistenceException("Migration blocked because a verified backup could not be produced: "
+                    + backup.detail());
+        }
+
         try (Connection connection = connections.open()) {
-            List<MigrationRecord> applied = historyTableExists(connection)
-                    ? appliedRecords(connection)
-                    : List.of();
-            validateAppliedHistory(migrations, applied);
-            if (applied.size() == migrations.size()) {
-                return new MigrationReport(applied, false);
+            MigrationHistorySnapshot afterBackup = historyTableExists(connection)
+                    ? validatedHistory(connection, migrations) : EMPTY_HISTORY;
+            validateAppliedHistory(migrations, afterBackup.applied());
+            if (!afterBackup.equals(beforeBackup)) {
+                throw new PersistenceException("Complete migration attempt ledger changed while the pre-migration "
+                        + "backup was sealed; refusing to apply a stale plan");
             }
-
-            List<Migration> pending = migrations.subList(applied.size(), migrations.size());
-            VerifiedBackup backup = backups.createVerifiedBackup("schema migrations "
-                    + pending.getFirst().version() + " through " + pending.getLast().version());
-            if (!backup.verified()) {
-                throw new PersistenceException("Migration blocked because a verified backup could not be produced: "
-                        + backup.detail());
+            if (afterBackup.applied().isEmpty()
+                    && !historyTableExists(connection)
+                    && applicationSchemaExists(connection)) {
+                throw new PersistenceException("Application schema appeared while the pre-migration backup was sealed");
             }
-
             initializeHistory(connection);
             ArrayList<MigrationRecord> newRecords = new ArrayList<>();
             for (Migration migration : pending) {
@@ -80,6 +71,22 @@ public final class MigrationRunner {
             return new MigrationReport(all, true);
         } catch (SQLException exception) {
             throw new PersistenceException("Migration infrastructure failed", exception);
+        }
+    }
+
+    private MigrationHistorySnapshot inspectHistory(List<Migration> migrations) {
+        try (Connection connection = connections.open()) {
+            boolean hasHistory = historyTableExists(connection);
+            if (!hasHistory && applicationSchemaExists(connection)) {
+                throw new PersistenceException("Database contains MaddPrestige schema objects but no migration "
+                        + "history; refusing an ambiguous migration replay");
+            }
+            MigrationHistorySnapshot history = hasHistory
+                    ? validatedHistory(connection, migrations) : EMPTY_HISTORY;
+            validateAppliedHistory(migrations, history.applied());
+            return history;
+        } catch (SQLException exception) {
+            throw new PersistenceException("Migration history inspection failed", exception);
         }
     }
 
@@ -199,12 +206,13 @@ public final class MigrationRunner {
     private static List<Migration> validateChain(List<Migration> requested) {
         Objects.requireNonNull(requested, "migrations");
         List<Migration> migrations = List.copyOf(requested);
-        long prior = 0;
+        long expectedVersion = 1;
         for (Migration migration : migrations) {
-            if (migration.version() <= prior) {
-                throw new IllegalArgumentException("Migration versions must be unique and strictly ordered");
+            if (migration.version() != expectedVersion) {
+                throw new IllegalArgumentException("Migration chain must be the exact contiguous prefix 1 through N; "
+                        + "expected version " + expectedVersion + " but found " + migration.version());
             }
-            prior = migration.version();
+            expectedVersion++;
         }
         return migrations;
     }
@@ -231,17 +239,68 @@ public final class MigrationRunner {
             if (!expected.checksum().equals(record.checksum())) {
                 throw new PersistenceException("Applied migration checksum mismatch at version " + record.version());
             }
+            if (!expected.description().equals(record.description())) {
+                throw new PersistenceException("Applied migration description mismatch at version "
+                        + record.version());
+            }
         }
     }
 
+    private static MigrationHistorySnapshot validatedHistory(
+            Connection connection, List<Migration> migrations) throws SQLException {
+        Map<Long, Migration> expected = new LinkedHashMap<>();
+        migrations.forEach(migration -> expected.put(migration.version(), migration));
+        String sql = "SELECT attempt_id, version, checksum, description, applied_at, result, detail "
+                + "FROM mp_schema_migrations ORDER BY version, applied_at, attempt_id";
+        ArrayList<MigrationRecord> records = new ArrayList<>();
+        ArrayList<MigrationRecord> applied = new ArrayList<>();
+        try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
+            while (rows.next()) {
+                long version = rows.getLong(2);
+                if (!expected.containsKey(version)) {
+                    throw new PersistenceException("Database contains unknown migration history version " + version);
+                }
+                MigrationRecord record;
+                try {
+                    record = new MigrationRecord(
+                            UUID.fromString(rows.getString(1)), version, new ContentHash(rows.getString(3)),
+                            rows.getString(4), Instant.parse(rows.getString(5)),
+                            MigrationResult.valueOf(rows.getString(6)), rows.getString(7));
+                } catch (IllegalArgumentException | NullPointerException exception) {
+                    throw new PersistenceException("Malformed migration history at version " + version, exception);
+                }
+                if (record.result() == MigrationResult.APPLIED) {
+                    applied.add(record);
+                }
+                records.add(record);
+            }
+        }
+        if (applied.isEmpty() && applicationSchemaExists(connection)) {
+            throw new PersistenceException("Migration history is empty but application schema objects exist; "
+                    + "refusing an ambiguous migration replay");
+        }
+        MigrationHistoryRules.validateAttemptOrdering(records, applied.size(), migrations.size());
+        return new MigrationHistorySnapshot(records, applied);
+    }
+
     private static boolean historyTableExists(Connection connection) throws SQLException {
-        try (ResultSet tables = connection.getMetaData().getTables(null, null, HISTORY_TABLE, new String[] {"TABLE"})) {
+        try (ResultSet tables = connection.getMetaData().getTables(
+                null, null, MigrationHistorySchema.TABLE, new String[] {"TABLE"})) {
             while (tables.next()) {
-                if (HISTORY_TABLE.equalsIgnoreCase(tables.getString("TABLE_NAME"))) {
+                if (MigrationHistorySchema.TABLE.equalsIgnoreCase(tables.getString("TABLE_NAME"))) {
                     return true;
                 }
             }
             return false;
+        }
+    }
+
+    private static boolean applicationSchemaExists(Connection connection) throws SQLException {
+        String sql = "SELECT COUNT(*) FROM sqlite_master WHERE type IN ('table', 'index', 'trigger', 'view') "
+                + "AND name LIKE 'mp\\_%' ESCAPE '\\' AND name <> '" + MigrationHistorySchema.TABLE + "' "
+                + "AND name <> '" + MigrationHistorySchema.APPLIED_INDEX + "'";
+        try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
+            return rows.next() && rows.getLong(1) > 0;
         }
     }
 
@@ -251,11 +310,7 @@ public final class MigrationRunner {
         SQLException restorationFailure = null;
         try {
             connection.setAutoCommit(false);
-            try (Statement statement = connection.createStatement()) {
-                statement.execute(CREATE_HISTORY);
-                statement.execute(DROP_LEGACY_APPLIED_INDEX);
-                statement.execute(CREATE_APPLIED_INDEX);
-            }
+            MigrationHistorySchema.initialize(connection);
             connection.commit();
         } catch (SQLException exception) {
             primaryFailure = exception;
@@ -283,21 +338,6 @@ public final class MigrationRunner {
         }
     }
 
-    private static List<MigrationRecord> appliedRecords(Connection connection) throws SQLException {
-        ArrayList<MigrationRecord> result = new ArrayList<>();
-        String sql = "SELECT attempt_id, version, checksum, description, applied_at, result, detail "
-                + "FROM mp_schema_migrations WHERE result = 'APPLIED' ORDER BY version";
-        try (Statement statement = connection.createStatement(); ResultSet rows = statement.executeQuery(sql)) {
-            while (rows.next()) {
-                result.add(new MigrationRecord(
-                        UUID.fromString(rows.getString(1)), rows.getLong(2), new ContentHash(rows.getString(3)),
-                        rows.getString(4), Instant.parse(rows.getString(5)), MigrationResult.valueOf(rows.getString(6)),
-                        rows.getString(7)));
-            }
-        }
-        return List.copyOf(result);
-    }
-
     private static void insertRecord(Connection connection, MigrationRecord record) throws SQLException {
         String sql = "INSERT INTO mp_schema_migrations "
                 + "(attempt_id, version, checksum, description, applied_at, result, detail) VALUES (?, ?, ?, ?, ?, ?, ?)";
@@ -317,6 +357,13 @@ public final class MigrationRunner {
         COMMITTED,
         ROLLED_BACK,
         UNCERTAIN
+    }
+
+    private record MigrationHistorySnapshot(List<MigrationRecord> attempts, List<MigrationRecord> applied) {
+        private MigrationHistorySnapshot {
+            attempts = List.copyOf(attempts);
+            applied = List.copyOf(applied);
+        }
     }
 
 }

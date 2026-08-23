@@ -1,0 +1,31 @@
+schema-version: 3
+maximum-depth: 16
+requirements:
+  playtime_60_seconds:
+    provider: paper_statistics
+    metric: play_one_minute
+    value-type: DURATION
+    operator: GREATER_OR_EQUAL
+    target: PT1M
+    scope: SINCE_PRESTIGE_START
+    completion: LIVE
+  playtime_180_seconds:
+    provider: paper_statistics
+    metric: play_one_minute
+    value-type: DURATION
+    operator: GREATER_OR_EQUAL
+    target: PT3M
+    scope: SINCE_PRESTIGE_START
+    completion: LIVE
+trees:
+  setup_eligibility_adventurer:
+    id: setup_eligibility_adventurer
+    mode: all
+    children:
+      - requirement: playtime_60_seconds
+  setup_eligibility_veteran:
+    id: setup_eligibility_veteran
+    mode: all
+    children:
+      - requirement: playtime_180_seconds
+costs: {}

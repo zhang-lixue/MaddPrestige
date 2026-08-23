@@ -1,0 +1,67 @@
+MaddPrestige V2 Phase 8C correction pass 2 - sanitized Paper process qualification
+Date: 2026-08-18 (America/Los_Angeles)
+Result: PASS
+
+QUALIFIED RUNTIME
+Paper: 26.1.2 build 74 (API 26.1.2.build.74-stable)
+Java: OpenJDK 25.0.3+9-LTS, Windows amd64
+Paper server JAR: 52,893,229 bytes
+Paper SHA-256: 1D70B1DAB9CF4A6DE615209A536F3A45A2186240253C428213CE2188AB95E5F7
+Qualified shaded MaddPrestige JAR: 16,393,824 bytes
+Qualified shaded JAR SHA-256: DC3FB83120485FA91FC9E07B6B84A03D89926B9964B1CC0030A32A7EE886FC92
+First-party Phase 8C harness JAR: 22,480 bytes
+Harness SHA-256: 8AB653D10751A961DC0751185B8C48C09F29FA6B7C40DB4AB2693FC69A33C96E
+Runtime-only LuckPerms: 5.5.71
+Runtime-only PlaceholderAPI: 2.12.2
+
+FIXTURE AUTHORITY
+The disposable server held a generic two-stage configuration and an existing player with stage/Prestige state.
+After clean server shutdown, the first-party fixture utility required integrity-clean current schema and created a
+declared schema-10 historical input using prepared parameters. It inserted only sanitized fixed identities:
+- historical stage-only player: 8c000000-0000-0000-0000-000000000001
+- NEEDS_RECONCILIATION operation: 8c000000-0000-0000-0000-000000000002
+- one UNCERTAIN action and its recovery evidence
+The utility used fixed time 2026-08-17T20:30:00Z and required PRAGMA integrity_check=ok before commit. The separate JVM
+fixture uses 2026-08-17T20:00:00Z. No live MaddKraft data was used.
+
+FIRST PRODUCTION BOOT - 8/8 PASS
+[00:06:07] PASS 1 schema-10 populated fixture migrated once to integrity-clean schema 11
+[00:06:07] PASS 2 SQLite-native pre-migration backup, manifest, checksum, integrity, and rehearsal validated
+[00:06:07] PASS 3 operation/action/recovery uncertainty survived migration without replay
+[00:06:07] PASS 4 existing populated player stage and Prestige identity survived the historical fixture
+[00:06:07] PASS 5 stage-only historical player received atomic zero Prestige state without revision loss
+[00:06:07] PASS 6 real rank-up completed from migrated state with distinct request/durable identities
+[00:06:07] PASS 7 real Prestige completed and exact migrated player state was durable
+[00:06:07] PASS 8 first-boot exact state/revision/recovery/backup evidence sealed
+[00:06:07] FIRST-BOOT COMPLETE pass-count=8
+[00:06:07] clean plugin/server shutdown
+
+SEALED GENERIC RESTART EVIDENCE
+source schema: 10
+current schema: 11
+stage: novice
+current Prestige: 1
+lifetime Prestige: 1
+stage revision: 19
+Prestige revision: 1
+operation rows: 5
+recovery rows: 1
+accepted backup manifests: 2
+
+UNCHANGED SECOND PRODUCTION BOOT - 3/3 PASS
+[00:06:30] PASS 1 unchanged restart recovered exact migrated stage/Prestige state and revisions
+[00:06:30] PASS 2 unchanged restart retained integrity, journal/recovery evidence, and accepted backup
+[00:06:30] PASS 3 clean second-boot shutdown qualified
+[00:06:30] COMPLETE two-boot production qualification pass-count=3
+[00:06:30] clean plugin/server shutdown
+
+CORRECTION-PASS-2 AUDIT
+- Actual shaded production MaddPrestige containing the correction-pass startup/schema/manifest logic ran in both boots.
+- The first boot used production migration, backup, manifest, full-schema validation, restore-rehearsal, compatibility
+  and recovery paths before service publication.
+- The accepted source-schema-10 backup was independently revalidated through production code in both boots, including
+  canonical UUID/artifact binding and re-observed journal mode.
+- The unchanged restart created/deleted no accepted migration backup and changed no sealed journal/recovery count.
+- No PHASE8C-Q FAIL occurred in either qualifying log.
+- Disposable runtime/world/database, environmental Paper logs and all third-party JARs are excluded from owner-review
+  artifacts. This file retains only sanitized assertions.

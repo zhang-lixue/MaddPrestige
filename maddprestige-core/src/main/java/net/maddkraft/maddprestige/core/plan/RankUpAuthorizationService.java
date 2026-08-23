@@ -17,6 +17,8 @@ import net.maddkraft.maddprestige.api.metric.MetricProvider;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.reward.RewardDefinition;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.requirement.MetricBinding;
 import net.maddkraft.maddprestige.core.requirement.RequirementEvaluationAuthorizer;
@@ -59,68 +61,102 @@ public final class RankUpAuthorizationService {
         Objects.requireNonNull(intent, "rank-up intent");
         Optional<ActiveStageConfiguration> active = activeConfiguration.get();
         if (active.isEmpty()) {
-            return rejected("No canonical Stage + Phase 3 snapshot is active");
+            return rejected(AuthorizationBlockerKind.NO_ACTIVE_STAGE_SNAPSHOT,
+                    "No canonical Stage + Phase 3 snapshot is active", "operation", "rank_up");
         }
         ActiveStageConfiguration snapshot = active.orElseThrow();
         if (!bindingsMatch(snapshot.phaseThree().providerGenerations())) {
-            return rejected("The active snapshot has a stale provider-generation binding");
+            String provider = snapshot.phaseThree().providerGenerations().keySet().stream()
+                    .filter(id -> !bindingMatches(snapshot.phaseThree().providerGenerations(), id))
+                    .map(ProviderId::value).sorted().findFirst().orElse("unknown");
+            return rejected(AuthorizationBlockerKind.STALE_PROVIDER_BINDING,
+                    "The active snapshot has a stale provider-generation binding", "operation", "rank_up",
+                    "provider", provider);
         }
         Optional<PlayerStageState> loaded;
         try {
             loaded = playerStates.find(intent.playerId());
         } catch (RuntimeException exception) {
-            return rejected("Authoritative player stage state could not be loaded: " + rootMessage(exception));
+            return rejected(AuthorizationBlockerKind.PLAYER_STAGE_STATE_LOAD_FAILED,
+                    "Authoritative player stage state could not be loaded: " + rootMessage(exception),
+                    "player", intent.playerId(), "operation", "rank_up");
         }
         if (loaded.isEmpty()) {
-            return rejected("Authoritative player stage state does not exist");
+            return rejected(AuthorizationBlockerKind.PLAYER_STAGE_STATE_MISSING,
+                    "Authoritative player stage state does not exist", "player", intent.playerId());
         }
         PlayerStageState state = loaded.orElseThrow();
         var stages = snapshot.stages().configuration();
         if (!stages.active()) {
-            return rejected("The canonical stage ladder is inactive");
+            return rejected(AuthorizationBlockerKind.STAGE_LADDER_INACTIVE,
+                    "The canonical stage ladder is inactive", "operation", "rank_up");
         }
         StageDefinition source = stages.stages().get(state.stageId());
         if (source == null) {
-            return rejected("Authoritative player stage is unknown in the current canonical ladder");
+            return rejected(AuthorizationBlockerKind.CURRENT_STAGE_UNKNOWN,
+                    "Authoritative player stage is unknown in the current canonical ladder",
+                    "current_stage", state.stageId().value());
         }
         if (!source.enabled()) {
-            return rejected("Authoritative player stage is disabled in the current canonical ladder");
+            return rejected(AuthorizationBlockerKind.CURRENT_STAGE_DISABLED,
+                    "Authoritative player stage is disabled in the current canonical ladder",
+                    "current_stage", state.stageId().value());
         }
         int sourceIndex = stages.order().indexOf(state.stageId());
         if (sourceIndex < 0 || sourceIndex + 1 >= stages.order().size()) {
-            return rejected("Player stage is not an ordered source with a legal next stage");
+            return rejected(AuthorizationBlockerKind.NO_LEGAL_NEXT_STAGE,
+                    "Player stage is not an ordered source with a legal next stage",
+                    "current_stage", state.stageId().value());
         }
         var legalTargetId = stages.order().get(sourceIndex + 1);
         if (intent.intendedTarget().isPresent() && !intent.intendedTarget().orElseThrow().equals(legalTargetId)) {
-            return rejected("Intended target is an illegal stage skip or stale target");
+            return rejected(AuthorizationBlockerKind.ILLEGAL_OR_STALE_TARGET,
+                    "Intended target is an illegal stage skip or stale target",
+                    "current_stage", state.stageId().value(), "intended_target",
+                    intent.intendedTarget().orElseThrow().value(), "target_stage", legalTargetId.value());
         }
         StageDefinition target = stages.stages().get(legalTargetId);
         if (target == null || !target.enabled()) {
-            return rejected("Canonical next stage is unknown or disabled");
+            return rejected(AuthorizationBlockerKind.TARGET_STAGE_UNKNOWN_OR_DISABLED,
+                    "Canonical next stage is unknown or disabled", "target_stage", legalTargetId.value());
         }
         var phaseThree = snapshot.phaseThree().configuration();
         List<CostDefinition> costs = exactCosts(target, phaseThree.costs());
         if (costs.size() != target.costIds().size()) {
-            return rejected("Canonical target references an unknown configured cost");
+            String missing = target.costIds().stream().filter(id -> !phaseThree.costs().containsKey(id))
+                    .map(value -> value.value()).sorted().collect(java.util.stream.Collectors.joining(","));
+            return rejected(AuthorizationBlockerKind.UNKNOWN_CONFIGURED_COST,
+                    "Canonical target references an unknown configured cost", "configured_cost", missing,
+                    "target_stage", target.id().value());
         }
         List<RewardDefinition> rewards = exactRewards(target, phaseThree.rewards());
         if (rewards.size() != target.rewardIds().size()) {
-            return rejected("Canonical target references an unknown configured reward");
+            String missing = target.rewardIds().stream().filter(id -> !phaseThree.rewards().containsKey(id))
+                    .map(value -> value.value()).sorted().collect(java.util.stream.Collectors.joining(","));
+            return rejected(AuthorizationBlockerKind.UNKNOWN_CONFIGURED_REWARD,
+                    "Canonical target references an unknown configured reward", "configured_reward", missing,
+                    "target_stage", target.id().value());
         }
         Optional<RequirementNode> tree = target.requirementTreeId().map(phaseThree.trees()::get);
         if (target.requirementTreeId().isPresent() && tree.isEmpty()) {
-            return rejected("Canonical target references an unknown requirement tree");
+            return rejected(AuthorizationBlockerKind.UNKNOWN_REQUIREMENT_TREE,
+                    "Canonical target references an unknown requirement tree", "requirement",
+                    target.requirementTreeId().orElseThrow().value(), "target_stage", target.id().value());
         }
         RankUpProgressContext progress;
         try {
             progress = Objects.requireNonNull(progressContexts.load(intent.playerId(), state, snapshot),
                     "trusted progress context");
         } catch (RuntimeException exception) {
-            return rejected("Trusted progression context could not be loaded: " + rootMessage(exception));
+            return rejected(AuthorizationBlockerKind.TRUSTED_CONTEXT_LOAD_FAILED,
+                    "Trusted progression context could not be loaded: " + rootMessage(exception),
+                    "player", intent.playerId(), "operation", "rank_up");
         }
         if (!progress.playerId().equals(intent.playerId())
                 || !progress.activeConfigRevision().equals(snapshot.stages().revisionId())) {
-            return rejected("Trusted progression context does not match the player and active configuration");
+            return rejected(AuthorizationBlockerKind.TRUSTED_CONTEXT_MISMATCH,
+                    "Trusted progression context does not match the player and active configuration",
+                    "player", intent.playerId(), "revision", snapshot.stages().revisionId().value());
         }
         Map<MetricBinding, MetricDescriptor> descriptors = descriptors(snapshot.phaseThree().providerGenerations());
         RequirementEvaluationContext context = new RequirementEvaluationContext(intent.playerId(),
@@ -141,18 +177,21 @@ public final class RankUpAuthorizationService {
                     : authorizer.noRequirements(populated);
             RankUpPlanningRequest request = RankUpPlanningRequest.canonical(intent.actor(), intent.playerId(), state,
                     target, snapshot.stages().revisionId(), snapshot.phaseThree().providerGenerations(), evaluation,
-                    costs, rewards, intent.idempotencyKey(), stages);
-            return planner.plan(request).thenApply(plan -> new RankUpAuthorizationResult(Optional.of(plan), List.of()));
+                    costs, rewards, intent.idempotencyKey(), stages, intent.requestId());
+            return planner.plan(request).thenApply(plan -> new RankUpAuthorizationResult(
+                    Optional.of(plan), List.of(), List.of()));
         });
     }
 
     private boolean bindingsMatch(Map<ProviderId, Long> generations) {
-        return generations.entrySet().stream().allMatch(entry -> {
-            var snapshot = providers.find(entry.getKey());
-            return snapshot.isPresent() && providers.provider(entry.getKey()).isPresent()
-                    && snapshot.orElseThrow().generation() == entry.getValue()
-                    && snapshot.orElseThrow().activation() == ActivationState.ACTIVE;
-        });
+        return generations.keySet().stream().allMatch(id -> bindingMatches(generations, id));
+    }
+
+    private boolean bindingMatches(Map<ProviderId, Long> generations, ProviderId id) {
+        var snapshot = providers.find(id);
+        return snapshot.isPresent() && providers.provider(id).isPresent()
+                && snapshot.orElseThrow().generation() == generations.get(id)
+                && snapshot.orElseThrow().activation() == ActivationState.ACTIVE;
     }
 
     private Map<MetricBinding, MetricDescriptor> descriptors(Map<ProviderId, Long> generations) {
@@ -187,8 +226,12 @@ public final class RankUpAuthorizationService {
         return List.copyOf(result);
     }
 
-    private static CompletionStage<RankUpAuthorizationResult> rejected(String blocker) {
-        return CompletableFuture.completedFuture(RankUpAuthorizationResult.rejected(blocker));
+    private static CompletionStage<RankUpAuthorizationResult> rejected(
+            AuthorizationBlockerKind kind,
+            String diagnostic,
+            Object... facts) {
+        return CompletableFuture.completedFuture(RankUpAuthorizationResult.rejected(
+                AuthorizationBlocker.of(kind, diagnostic, facts)));
     }
 
     private static String rootMessage(Throwable failure) {

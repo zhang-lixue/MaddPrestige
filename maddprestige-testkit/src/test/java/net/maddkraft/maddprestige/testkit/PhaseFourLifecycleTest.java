@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
@@ -69,6 +70,7 @@ import net.maddkraft.maddprestige.core.config.phase4.ResetDisposition;
 import net.maddkraft.maddprestige.core.currency.CurrencyDefinition;
 import net.maddkraft.maddprestige.core.currency.InternalCurrencyCostProvider;
 import net.maddkraft.maddprestige.core.currency.InternalCurrencyRewardProvider;
+import net.maddkraft.maddprestige.core.event.OperationLifecycleListener;
 import net.maddkraft.maddprestige.core.milestone.MilestoneDefinition;
 import net.maddkraft.maddprestige.core.milestone.MilestoneRepeatability;
 import net.maddkraft.maddprestige.core.milestone.MilestoneTriggerType;
@@ -112,6 +114,7 @@ import net.maddkraft.maddprestige.persistence.sqlite.SqliteConfigRevisionReposit
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteCurrencyAccountRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteCurrencyLedgerStore;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteOperationRepository;
+import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerInitializationStore;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerPrestigeRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerStageRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePrestigeLifecycleRepository;
@@ -596,6 +599,114 @@ class PhaseFourLifecycleTest {
     }
 
     @Test
+    @DisplayName("Prestige PRE cancellation creates no journal, cost, projection, or state mutation")
+    void prestigePreCancellationHasZeroEffects() throws Exception {
+        try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
+            Fixture fixture = fixture(database, false, false, Optional.empty(), Map.of());
+            PrestigePlan plan = fixture.plan("prestige-pre-cancel");
+            OperationLifecycleListener events = new OperationLifecycleListener() {
+                @Override
+                public boolean beforePrestige(PrestigePlan ignored) {
+                    return false;
+                }
+            };
+
+            assertEquals(PrestigeExecutionStatus.UNAUTHORIZED, fixture.executor(events).execute(plan).status());
+            assertTrue(fixture.operations.find(plan.operationId()).isEmpty());
+            assertEquals(SUMMIT, fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
+            assertEquals(0, fixture.prestigeStates.find(fixture.playerId).orElseThrow().currentPrestige());
+        }
+    }
+
+    @Test
+    @DisplayName("[OR8B-10] Prestige post-PRE revalidation precedes unknown-player materialization and effects")
+    void prestigePostPreInvalidationLeavesUnknownPlayerUnmaterialized() throws Exception {
+        try (DisposableSqliteFixture authorizationDatabase = DisposableSqliteFixture.create();
+                DisposableSqliteFixture executionDatabase = DisposableSqliteFixture.create()) {
+            ProviderRegistry providers = new ProviderRegistry();
+            ProviderId costId = new ProviderId("pre_stale_prestige_cost");
+            ProviderId rewardId = new ProviderId("pre_stale_prestige_reward");
+            ProviderId rankId = new ProviderId("pre_stale_prestige_rank");
+            FakeCostProvider cost = new FakeCostProvider(costId);
+            FakeRewardProvider reward = new FakeRewardProvider(rewardId);
+            CountingRankAdapter rank = new CountingRankAdapter(rankId);
+            var costRegistration = providers.register("maddprestige-testkit", cost);
+            var rewardRegistration = providers.register("maddprestige-testkit", reward);
+            var rankRegistration = providers.register("maddprestige-testkit", rank);
+            providers.activate(costRegistration);
+            providers.activate(rewardRegistration);
+            providers.activate(rankRegistration);
+            RewardDefinition rewardDefinition = new RewardDefinition(new RewardId("pre_stale_reward"), rewardId,
+                    "generic", MetricValue.count(1), Map.of(), "Pre stale reward", RewardFailurePolicy.REQUIRED,
+                    RewardRepeatability.ONCE_PER_OPERATION);
+            Fixture authorized = fixture(authorizationDatabase, false, false, Optional.of(genericCost(costId)),
+                    Optional.of(rewardDefinition), Map.of(
+                            costId, costRegistration.generation(),
+                            rewardId, rewardRegistration.generation(),
+                            rankId, rankRegistration.generation()), providers, ResetPreservePolicy.safeDefaults(),
+                    StageProjection.group(rankId, "origin"));
+            cost.balance(authorized.playerId, "5");
+            PrestigePlan plan = authorized.plan("prestige-pre-config-stale");
+
+            new SqliteConfigRevisionRepository(executionDatabase.foundation()).insert(REVISION,
+                    RevisionHasher.hashText("phase four lifecycle"));
+            SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(executionDatabase.foundation());
+            SqlitePlayerPrestigeRepository prestiges = new SqlitePlayerPrestigeRepository(
+                    executionDatabase.foundation());
+            SqliteOperationRepository operations = new SqliteOperationRepository(executionDatabase.foundation());
+            SqlitePrestigeLifecycleRepository lifecycle = new SqlitePrestigeLifecycleRepository(
+                    executionDatabase.foundation());
+            AtomicReference<ConfigRevisionId> active = new AtomicReference<>(REVISION);
+            OperationLifecycleListener events = new OperationLifecycleListener() {
+                @Override
+                public boolean beforePrestige(PrestigePlan ignored) {
+                    active.set(new ConfigRevisionId("phase4_after_pre"));
+                    return true;
+                }
+            };
+            PrestigeOperationExecutor executor = new PrestigeOperationExecutor(lifecycle, operations, providers,
+                    () -> Optional.of(active.get()), new InMemoryStageTransitionFence(), CLOCK, events,
+                    ignored -> true, ignored -> new SqlitePlayerInitializationStore(executionDatabase.foundation())
+                            .initialize(plan.playerId(), plan.simulation().sourceStage(), REVISION,
+                                    plan.simulation().prestigeScopeBefore(), NOW));
+
+            assertEquals(PrestigeExecutionStatus.STALE_GENERATION, executor.execute(plan).status());
+            assertTrue(operations.find(plan.operationId()).isEmpty());
+            assertTrue(stages.find(plan.playerId()).isEmpty());
+            assertTrue(prestiges.find(plan.playerId()).isEmpty());
+            assertEquals(0L, rowCount(executionDatabase, "mp_operations"));
+            assertEquals(0L, rowCount(executionDatabase, "mp_operation_actions"));
+            assertEquals(0L, rowCount(executionDatabase, "mp_stage_transition_leases"));
+            assertEquals(new java.math.BigDecimal("5"), cost.balance(plan.playerId()));
+            assertEquals(0, reward.executionAttempts());
+            assertEquals(0, rank.projectionAttempts.get());
+        }
+    }
+
+    @Test
+    @DisplayName("Prestige POST observes the durable terminal operation before execute returns")
+    void prestigePostObservesDurableTerminalState() throws Exception {
+        try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
+            Fixture fixture = fixture(database, false, false, Optional.empty(), Map.of());
+            PrestigePlan plan = fixture.plan("prestige-post-terminal");
+            AtomicBoolean observed = new AtomicBoolean();
+            OperationLifecycleListener events = new OperationLifecycleListener() {
+                @Override
+                public void afterPrestige(
+                        PrestigePlan ignored,
+                        net.maddkraft.maddprestige.core.prestige.PrestigeExecutionResult result) {
+                    assertEquals(OperationState.COMPLETED,
+                            fixture.operations.find(plan.operationId()).orElseThrow().state());
+                    observed.set(true);
+                }
+            };
+
+            assertEquals(PrestigeExecutionStatus.COMPLETED, fixture.executor(events).execute(plan).status());
+            assertTrue(observed.get());
+        }
+    }
+
+    @Test
     @DisplayName("[A69] Prestige sourced from a removed stage performs no cost, projection, commit, or reward")
     void configurationFenceRechecksPrestigeBeforeEveryEffect() throws Exception {
         try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
@@ -941,6 +1052,16 @@ class PhaseFourLifecycleTest {
         };
     }
 
+    private static long rowCount(DisposableSqliteFixture fixture, String table) {
+        try (var connection = fixture.foundation().open();
+                var statement = connection.createStatement();
+                var rows = statement.executeQuery("SELECT COUNT(*) FROM " + table)) {
+            return rows.getLong(1);
+        } catch (java.sql.SQLException failure) {
+            throw new AssertionError(failure);
+        }
+    }
+
     private static void await(CountDownLatch latch) {
         try {
             if (!latch.await(10, TimeUnit.SECONDS)) {
@@ -968,6 +1089,12 @@ class PhaseFourLifecycleTest {
 
         private PrestigeOperationExecutor executor() {
             return executor(new InMemoryStageTransitionFence());
+        }
+
+        private PrestigeOperationExecutor executor(OperationLifecycleListener events) {
+            return new PrestigeOperationExecutor(lifecycle, operations, providers,
+                    () -> Optional.of(activeRevision.get()), new InMemoryStageTransitionFence(), CLOCK, events,
+                    ignored -> true);
         }
 
         private PrestigeOperationExecutor executor(

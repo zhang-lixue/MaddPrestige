@@ -151,6 +151,7 @@ public final class RequirementEvaluator {
         RequirementEvaluationStatus status = satisfied
                 ? RequirementEvaluationStatus.SATISFIED : RequirementEvaluationStatus.UNSATISFIED;
         Map<String, String> facts = new LinkedHashMap<>();
+        facts.put("requirement", definition.id().value());
         facts.put("provider", definition.providerId().value());
         facts.put("metric", definition.metricId().value());
         facts.put("scope", definition.scope().name());
@@ -258,6 +259,7 @@ public final class RequirementEvaluator {
             BigDecimal threshold,
             String summary) {
         Map<String, String> facts = Map.of(
+                "requirement", group.id().value(),
                 "mode", group.mode().name(),
                 "progress", progress.toPlainString(),
                 "threshold", threshold.toPlainString());
@@ -320,7 +322,8 @@ public final class RequirementEvaluator {
             Optional<MetricValue> current,
             Optional<RequirementTarget> target) {
         ExplanationNode explanation = new ExplanationNode("requirement.leaf", explanation(status), summary,
-                Map.of("provider", definition.providerId().value(), "metric", definition.metricId().value()),
+                Map.of("requirement", definition.id().value(), "provider", definition.providerId().value(),
+                        "metric", definition.metricId().value()),
                 List.of());
         return new RequirementEvaluationResult(definition.id(), status, current, target, ExactDecimal.ZERO,
                 List.of(), explanation, Optional.empty());

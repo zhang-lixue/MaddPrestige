@@ -1,0 +1,32 @@
+schema-version: 3
+active: true
+reconciliation-policy: warn-only
+baseline: member
+stages:
+  member:
+    enabled: true
+    display-name: "Member"
+    projection:
+      type: group
+      provider: luckperms
+      group: "Member"
+  adventurer:
+    enabled: true
+    display-name: "Adventurer"
+    projection:
+      type: group
+      provider: luckperms
+      group: "Adventurer"
+    requirements: setup_eligibility_adventurer
+  veteran:
+    enabled: true
+    display-name: "Veteran"
+    projection:
+      type: group
+      provider: luckperms
+      group: "Veteran"
+    requirements: setup_eligibility_veteran
+order:
+  - member
+  - adventurer
+  - veteran

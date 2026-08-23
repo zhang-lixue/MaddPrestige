@@ -1,6 +1,5 @@
 package net.maddkraft.maddprestige.core.admin.diagnostic;
 
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,8 +29,9 @@ public final class WhyService {
                 "why-rankup-" + UUID.randomUUID());
         return rankUp.apply(intent).thenApply(result -> result.plan().map(plan -> new WhyReport(
                 plan.executionAllowed(), plan.blockers(), Optional.of(plan.requirements().explanation()),
-                Optional.of(plan.configRevision()))).orElseGet(() -> new WhyReport(false, result.blockers(),
-                        Optional.empty(), Optional.empty())));
+                Optional.of(plan.configRevision()), plan.authorizationBlockers()))
+                .orElseGet(() -> new WhyReport(false, result.blockers(), Optional.empty(), Optional.empty(),
+                        result.authorizationBlockers())));
     }
 
     public CompletionStage<WhyReport> prestige(PermissionSubject subject, UUID playerId) {
@@ -41,9 +41,10 @@ public final class WhyService {
         return prestige.apply(intent).thenApply(result -> result.plan().map(plan -> new WhyReport(
                 plan.executionAllowed(), plan.blockers(),
                 Optional.of(plan.simulation().requirements().result().explanation()),
-                Optional.of(plan.configRevision()))).orElseGet(() -> new WhyReport(false,
-                        List.of(result.rejection().orElse("Prestige is unavailable.")), Optional.empty(),
-                        Optional.empty())));
+                Optional.of(plan.configRevision()), plan.authorizationBlockers())).orElseGet(() -> new WhyReport(false,
+                        net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker.diagnostics(
+                                result.authorizationBlockers()),
+                        Optional.empty(), Optional.empty(), result.authorizationBlockers())));
     }
 
     private static void requireView(PermissionSubject subject, UUID playerId) {

@@ -134,7 +134,7 @@ class SqliteMigrationTest {
     }
 
     @Test
-    @DisplayName("[Phase1-hard-4] A partial schema cannot be relabeled as the current migration version")
+    @DisplayName("[A63] Application schema without history is ambiguous and is never replayed")
     void refusesPartialSchema() throws Exception {
         Path database = temporaryDirectory.resolve("partial.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
@@ -143,12 +143,10 @@ class SqliteMigrationTest {
         assertThrows(PersistenceException.class,
                 () -> runner(sqlite, database).migrate(SqliteMigrations.phaseOne()));
 
-        assertEquals("0", scalar(sqlite,
-                "SELECT COUNT(*) FROM mp_schema_migrations WHERE result = 'APPLIED'"));
+        assertFalse(tableExists(sqlite, "mp_schema_migrations"));
         assertEquals("0", scalar(sqlite,
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mp_config_revisions'"));
-        assertEquals("1", scalar(sqlite,
-                "SELECT COUNT(*) FROM mp_schema_migrations WHERE result = 'FAILED'"));
+        assertTrue(tableExists(sqlite, "mp_operations"));
     }
 
     @Test
@@ -191,6 +189,31 @@ class SqliteMigrationTest {
         assertEquals("0", scalar(sqlite,
                 "SELECT COUNT(*) FROM mp_schema_migrations WHERE result = 'FAILED'"));
         assertFalse(tableExists(sqlite, "mp_test_migration_2"));
+    }
+
+    @Test
+    @DisplayName("[OR8C-07] A complete attempt-ledger change invalidates the sealed migration backup")
+    void rejectsCompleteAttemptLedgerChangeDuringBackup() {
+        Path database = temporaryDirectory.resolve("changed-attempt-ledger.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        Clock boundary = Clock.fixed(Instant.parse("2026-08-17T20:00:00Z"), java.time.ZoneOffset.UTC);
+        List<Migration> chain = List.of(simpleMigration(1), simpleMigration(2));
+        runner(sqlite, database, boundary).migrate(List.of(chain.getFirst()));
+        FileBackupService delegate = new FileBackupService(
+                database, temporaryDirectory.resolve("changed-attempt-ledger-backups"), boundary);
+        MigrationRunner changingLedger = new MigrationRunner(sqlite, reason -> {
+            VerifiedBackup sealed = delegate.createVerifiedBackup(reason);
+            insertFailedAttempt(sqlite, 2, boundary.instant(), "concurrent next-version attempt");
+            return sealed;
+        }, boundary);
+
+        PersistenceException failure = assertThrows(PersistenceException.class,
+                () -> changingLedger.migrate(chain));
+
+        assertTrue(failure.getMessage().contains("Complete migration attempt ledger changed"));
+        assertFalse(tableExists(sqlite, "mp_test_migration_2"));
+        assertEquals("1", scalar(sqlite,
+                "SELECT COUNT(*) FROM mp_schema_migrations WHERE version=2 AND result='FAILED'"));
     }
 
     @Test
@@ -274,6 +297,160 @@ class SqliteMigrationTest {
 
         assertThrows(PersistenceException.class,
                 () -> runner(sqlite, database).migrate(List.of(migration)));
+    }
+
+    @Test
+    @DisplayName("[A63] Future FAILED history is still unknown schema evidence and fails closed")
+    void rejectsUnknownFutureFailedHistory() {
+        Path database = temporaryDirectory.resolve("future-failed-version.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        Migration migration = simpleMigration(1);
+        runner(sqlite, database).migrate(List.of(migration));
+        execute(sqlite, "INSERT INTO mp_schema_migrations (attempt_id, version, checksum, description, applied_at, "
+                + "result, detail) VALUES ('" + UUID.randomUUID() + "',99,'" + "0".repeat(64)
+                + "','future','2026-08-17T20:00:00Z','FAILED','unknown future attempt')");
+
+        assertThrows(PersistenceException.class,
+                () -> runner(sqlite, database).migrate(List.of(migration)));
+    }
+
+    @Test
+    @DisplayName("[OR8C-03] Known FAILED attempts beyond the immediate next migration fail closed")
+    void rejectsFailedAttemptBeyondNextPendingMigration() {
+        Path database = temporaryDirectory.resolve("failed-beyond-next.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        List<Migration> chain = List.of(simpleMigration(1), simpleMigration(2), simpleMigration(3));
+        runner(sqlite, database).migrate(List.of(chain.getFirst()));
+        insertFailedAttempt(sqlite, 3, "future known attempt");
+
+        assertThrows(PersistenceException.class, () -> runner(sqlite, database).migrate(chain));
+        assertFalse(tableExists(sqlite, "mp_test_migration_2"));
+    }
+
+    @Test
+    @DisplayName("[OR8C-03][OR8C-07] Causal prior and immediate-next failures remain repeatable")
+    void acceptsFailedAttemptsInAppliedPrefixAndAtNextPendingMigration() {
+        Path database = temporaryDirectory.resolve("valid-failed-order.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        Clock firstFailure = Clock.fixed(Instant.parse("2026-08-17T19:59:00Z"), java.time.ZoneOffset.UTC);
+        Clock firstApplied = Clock.fixed(Instant.parse("2026-08-17T20:00:00Z"), java.time.ZoneOffset.UTC);
+        Clock completion = Clock.fixed(Instant.parse("2026-08-17T20:01:00Z"), java.time.ZoneOffset.UTC);
+        Migration first = Migration.of(1, "causal first retry", List.of(
+                "CREATE TABLE mp_test_migration_1 (value TEXT)",
+                "CREATE TABLE retry_blocker_1 (value TEXT)"));
+        Migration second = Migration.of(2, "causal next retry", List.of(
+                "CREATE TABLE mp_test_migration_2 (value TEXT)",
+                "CREATE TABLE retry_blocker_2 (value TEXT)"));
+        List<Migration> chain = List.of(first, second, simpleMigration(3));
+
+        execute(sqlite, "CREATE TABLE retry_blocker_1 (value TEXT)");
+        assertThrows(PersistenceException.class,
+                () -> runner(sqlite, database, firstFailure).migrate(List.of(first)));
+        execute(sqlite, "DROP TABLE retry_blocker_1");
+        assertTrue(runner(sqlite, database, firstApplied).migrate(List.of(first)).changed());
+
+        execute(sqlite, "CREATE TABLE retry_blocker_2 (value TEXT)");
+        assertThrows(PersistenceException.class,
+                () -> runner(sqlite, database, firstApplied).migrate(List.of(first, second)));
+        execute(sqlite, "DROP TABLE retry_blocker_2");
+
+        assertTrue(runner(sqlite, database, completion).migrate(chain).changed());
+        assertTrue(tableExists(sqlite, "mp_test_migration_3"));
+        assertEquals("2", scalar(sqlite,
+                "SELECT COUNT(*) FROM mp_schema_migrations WHERE result='FAILED'"));
+    }
+
+    @Test
+    @DisplayName("[OR8C-07] FAILED v1 after its APPLIED completion is contradictory")
+    void rejectsFailedAttemptAfterSameVersionApplied() {
+        Path database = temporaryDirectory.resolve("failed-after-applied.db");
+        SqliteFoundation sqlite = SqlitePhase8cFixture.historical(database, 1);
+        insertFailedAttempt(sqlite, 1, Instant.parse("2026-08-17T20:00:01Z"), "impossible late v1");
+
+        assertThrows(PersistenceException.class,
+                () -> new MigrationRunner(sqlite, ignored -> VerifiedBackup.failure("unused", "unused"),
+                        SqlitePhase8cFixture.CLOCK).migrate(SqliteMigrations.phaseEightC()));
+    }
+
+    @Test
+    @DisplayName("[OR8C-07] FAILED v2 before APPLIED v1 completion is contradictory")
+    void rejectsNextFailureBeforePriorVersionApplied() {
+        Path database = temporaryDirectory.resolve("failed-before-prior-applied.db");
+        SqliteFoundation sqlite = SqlitePhase8cFixture.historical(database, 1);
+        insertFailedAttempt(sqlite, 2, Instant.parse("2026-08-17T19:59:59Z"), "impossible early v2");
+
+        assertThrows(PersistenceException.class,
+                () -> new MigrationRunner(sqlite, ignored -> VerifiedBackup.failure("unused", "unused"),
+                        SqlitePhase8cFixture.CLOCK).migrate(SqliteMigrations.phaseEightC()));
+    }
+
+    @Test
+    @DisplayName("[OR8C-07] Equal FAILED/APPLIED timestamp boundaries remain valid")
+    void acceptsEqualFailedAttemptBoundaries() {
+        Path database = temporaryDirectory.resolve("equal-failed-boundaries.sqlite");
+        SqliteFoundation sqlite = SqlitePhase8cFixture.historical(database, 1);
+        insertFailedAttempt(sqlite, 1, SqlitePhase8cFixture.CLOCK.instant(), "equal prior v1 retry");
+        insertFailedAttempt(sqlite, 2, SqlitePhase8cFixture.CLOCK.instant(), "equal next v2 retry");
+
+        SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC());
+    }
+
+    @Test
+    @DisplayName("[OR8C-03] Independent validation enforces FAILED-attempt prefix ordering")
+    void independentValidatorEnforcesFailedAttemptOrdering() {
+        Path validDatabase = temporaryDirectory.resolve("valid-failed-prefix.sqlite");
+        SqliteFoundation valid = SqlitePhase8cFixture.historical(validDatabase, 9);
+        insertFailedAttempt(valid, 9, "prior retry");
+        insertFailedAttempt(valid, 10, "next retry");
+        SqliteDatabaseValidator.validate(validDatabase, SqliteMigrations.phaseEightC());
+
+        Path invalidDatabase = temporaryDirectory.resolve("invalid-failed-prefix.sqlite");
+        SqliteFoundation invalid = SqlitePhase8cFixture.historical(invalidDatabase, 9);
+        insertFailedAttempt(invalid, 11, "skipped known migration");
+        assertThrows(PersistenceException.class,
+                () -> SqliteDatabaseValidator.validate(invalidDatabase, SqliteMigrations.phaseEightC()));
+
+        Path causallyInvalidDatabase = temporaryDirectory.resolve("invalid-failed-causality.sqlite");
+        SqliteFoundation causallyInvalid = SqlitePhase8cFixture.historical(causallyInvalidDatabase, 9);
+        insertFailedAttempt(causallyInvalid, 10, Instant.parse("2026-08-17T19:59:59Z"),
+                "next attempt predates applied prefix");
+        assertThrows(PersistenceException.class,
+                () -> SqliteDatabaseValidator.validate(causallyInvalidDatabase, SqliteMigrations.phaseEightC()));
+    }
+
+    @Test
+    @DisplayName("[A63] Duplicate APPLIED history fails closed even if a legacy index was removed")
+    void rejectsDuplicateAppliedHistory() {
+        Path database = temporaryDirectory.resolve("duplicate-history.db");
+        SqliteFoundation sqlite = new SqliteFoundation(database);
+        Migration migration = simpleMigration(1);
+        runner(sqlite, database).migrate(List.of(migration));
+        execute(sqlite, "DROP INDEX mp_schema_migrations_applied_version_uq");
+        execute(sqlite, "INSERT INTO mp_schema_migrations (attempt_id, version, checksum, description, applied_at, "
+                + "result, detail) VALUES ('" + UUID.randomUUID() + "',1,'" + migration.checksum().value()
+                + "','" + migration.description() + "','2026-08-17T20:00:01Z','APPLIED','duplicate')");
+
+        assertThrows(PersistenceException.class,
+                () -> runner(sqlite, database).migrate(List.of(migration)));
+    }
+
+    @Test
+    @DisplayName("[A63] Malformed attempt identity and altered description fail closed")
+    void rejectsMalformedAndInconsistentHistoryMetadata() {
+        Path malformedDatabase = temporaryDirectory.resolve("malformed-history.db");
+        SqliteFoundation malformed = new SqliteFoundation(malformedDatabase);
+        Migration migration = simpleMigration(1);
+        runner(malformed, malformedDatabase).migrate(List.of(migration));
+        execute(malformed, "UPDATE mp_schema_migrations SET attempt_id='not-a-uuid' WHERE result='APPLIED'");
+        assertThrows(PersistenceException.class,
+                () -> runner(malformed, malformedDatabase).migrate(List.of(migration)));
+
+        Path descriptionDatabase = temporaryDirectory.resolve("description-history.db");
+        SqliteFoundation description = new SqliteFoundation(descriptionDatabase);
+        runner(description, descriptionDatabase).migrate(List.of(migration));
+        execute(description, "UPDATE mp_schema_migrations SET description='altered' WHERE result='APPLIED'");
+        assertThrows(PersistenceException.class,
+                () -> runner(description, descriptionDatabase).migrate(List.of(migration)));
     }
 
     @Test
@@ -366,14 +543,29 @@ class SqliteMigrationTest {
     }
 
     private MigrationRunner runner(SqliteFoundation sqlite, Path database) {
+        return runner(sqlite, database, Clock.systemUTC());
+    }
+
+    private MigrationRunner runner(SqliteFoundation sqlite, Path database, Clock clock) {
         String backupName = database.getFileName().toString().replace(".db", "-backups");
-        var backup = new FileBackupService(database, temporaryDirectory.resolve(backupName), Clock.systemUTC());
-        return new MigrationRunner(sqlite, backup, Clock.systemUTC());
+        var backup = new FileBackupService(database, temporaryDirectory.resolve(backupName), clock);
+        return new MigrationRunner(sqlite, backup, clock);
     }
 
     private static Migration simpleMigration(long version) {
         return Migration.of(version, "test migration " + version,
                 List.of("CREATE TABLE mp_test_migration_" + version + " (value TEXT)"));
+    }
+
+    private static void insertFailedAttempt(SqliteFoundation sqlite, long version, String detail) {
+        insertFailedAttempt(sqlite, version, Instant.parse("2026-08-17T20:00:00Z"), detail);
+    }
+
+    private static void insertFailedAttempt(
+            SqliteFoundation sqlite, long version, Instant attemptedAt, String detail) {
+        execute(sqlite, "INSERT INTO mp_schema_migrations (attempt_id, version, checksum, description, applied_at, "
+                + "result, detail) VALUES ('" + UUID.randomUUID() + "'," + version + ",'" + "0".repeat(64)
+                + "','diagnostic failed metadata','" + attemptedAt + "','FAILED','" + detail + "')");
     }
 
     private static void insertLegacyOperation(

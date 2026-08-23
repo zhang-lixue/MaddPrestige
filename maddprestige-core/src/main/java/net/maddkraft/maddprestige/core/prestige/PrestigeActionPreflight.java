@@ -5,11 +5,12 @@ import java.util.Set;
 import net.maddkraft.maddprestige.api.cost.PlannedCost;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.reward.PlannedReward;
+import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
 
 record PrestigeActionPreflight(
         List<PlannedCost> costs,
         List<PlannedReward> rewards,
-        List<String> blockers,
+        List<AuthorizationBlocker> blockers,
         Set<ProviderId> unavailableProviders) {
     PrestigeActionPreflight {
         costs = List.copyOf(costs);

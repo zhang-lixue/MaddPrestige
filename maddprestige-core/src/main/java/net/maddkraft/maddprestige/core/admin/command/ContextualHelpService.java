@@ -7,6 +7,7 @@ import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.schema.SchemaNode;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 public final class ContextualHelpService {
     private final SchemaRegistry schema;
@@ -15,22 +16,25 @@ public final class ContextualHelpService {
         this.schema = Objects.requireNonNull(schema, "schema");
     }
 
-    public List<String> help(PermissionSubject subject, String topic) {
+    public List<MessageReference> help(PermissionSubject subject, String topic) {
         subject.require(PhaseSixPermissions.USE);
         String normalized = Objects.requireNonNull(topic, "topic").toLowerCase(Locale.ROOT);
         if (normalized.equals("measurement")) {
             SchemaNode node = schema.resolve("requirements.requirements.example.measurement-scope")
                     .orElseThrow(() -> new IllegalStateException("Measurement schema metadata is absent"));
-            return List.of("Measurement scope", node.description(),
-                    "Valid values: " + String.join(", ", node.allowedValues().staticValues()),
-                    "Simulation and why use the same saved baselines as real execution and never create one.");
+            return List.of(MessageReference.of("command.help.measurement.title"),
+                    MessageReference.of("command.help.measurement.description"),
+                    MessageReference.of("command.help.valid_values", "value",
+                            String.join(", ", node.allowedValues().staticValues())),
+                    MessageReference.of("command.help.measurement.baseline_safety"));
         }
         return schema.nodes().stream()
                 .filter(node -> node.canonicalPath().contains(normalized)
                         || node.description().toLowerCase(Locale.ROOT).contains(normalized))
                 .sorted(java.util.Comparator.comparing(SchemaNode::canonicalPath))
                 .limit(20)
-                .map(node -> node.canonicalPath() + " — " + node.description())
+                .map(node -> MessageReference.of("command.help.schema_entry",
+                        "path", node.canonicalPath(), "type", node.type()))
                 .toList();
     }
 }

@@ -12,6 +12,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -29,6 +30,7 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 
 public final class ManualProgressProvider implements MetricProvider {
+    private static final int MAXIMUM_WRITE_BATCH = 1024;
     private static final MetricValue ZERO_COUNT = MetricValue.count(0);
     private final ProviderId providerId;
     private final String ownerIdentity;
@@ -38,11 +40,13 @@ public final class ManualProgressProvider implements MetricProvider {
     private final Clock clock;
     private final int maximumMetrics;
     private final int maximumEntries;
+    private final AtomicReference<ProviderHealth> health;
     private final Map<MetricId, RegisteredMetric> metrics = new LinkedHashMap<>();
     private final Map<ProgressKey, ManualProgressRecord> values = new LinkedHashMap<>();
     private final Map<ProgressKey, ManualProgressRecord> dirty = new LinkedHashMap<>();
     private long nextGeneration;
     private boolean closing;
+    private CompletableFuture<Integer> flushInFlight;
 
     private ManualProgressProvider(
             ProviderId providerId,
@@ -64,6 +68,8 @@ public final class ManualProgressProvider implements MetricProvider {
         }
         this.maximumMetrics = maximumMetrics;
         this.maximumEntries = maximumEntries;
+        health = new AtomicReference<>(new ProviderHealth(ProviderHealthState.AVAILABLE, "manual.available",
+                "Manual progress persistence is healthy", clock.instant()));
     }
 
     public static ManualProgressBootstrap bootstrap(
@@ -152,21 +158,29 @@ public final class ManualProgressProvider implements MetricProvider {
     }
 
     public CompletionStage<Integer> flushAsync() {
-        Map<ProgressKey, ManualProgressRecord> snapshot;
+        CompletableFuture<Integer> future;
         synchronized (this) {
-            snapshot = Map.copyOf(dirty);
-        }
-        if (snapshot.isEmpty()) {
-            return CompletableFuture.completedFuture(0);
-        }
-        return CompletableFuture.supplyAsync(() -> {
-            repository.writeBatch(snapshot.values());
-            synchronized (this) {
-                snapshot.forEach((key, record) -> dirty.computeIfPresent(key,
-                        (ignored, current) -> current.updateVersion() == record.updateVersion() ? null : current));
+            if (flushInFlight != null) {
+                return flushInFlight;
             }
-            return snapshot.size();
-        }, writerExecutor);
+            if (dirty.isEmpty()) {
+                return CompletableFuture.completedFuture(0);
+            }
+            future = new CompletableFuture<>();
+            flushInFlight = future;
+        }
+        try {
+            writerExecutor.execute(() -> drainDirty(future));
+        } catch (RuntimeException failure) {
+            synchronized (this) {
+                if (flushInFlight == future) {
+                    flushInFlight = null;
+                }
+            }
+            persistenceStalled();
+            future.completeExceptionally(failure);
+        }
+        return future;
     }
 
     public CompletionStage<Integer> closeAsync() {
@@ -174,6 +188,41 @@ public final class ManualProgressProvider implements MetricProvider {
             closing = true;
         }
         return flushAsync();
+    }
+
+    private void drainDirty(CompletableFuture<Integer> future) {
+        int written = 0;
+        try {
+            while (true) {
+                Map<ProgressKey, ManualProgressRecord> snapshot;
+                synchronized (this) {
+                    snapshot = dirty.entrySet().stream().limit(MAXIMUM_WRITE_BATCH).collect(
+                            java.util.stream.Collectors.toUnmodifiableMap(Map.Entry::getKey, Map.Entry::getValue));
+                    if (snapshot.isEmpty()) {
+                        if (flushInFlight == future) {
+                            flushInFlight = null;
+                        }
+                        persistenceRecovered();
+                        future.complete(written);
+                        return;
+                    }
+                }
+                repository.writeBatch(snapshot.values());
+                written = Math.addExact(written, snapshot.size());
+                synchronized (this) {
+                    snapshot.forEach((key, record) -> dirty.computeIfPresent(key,
+                            (ignored, current) -> current.updateVersion() == record.updateVersion() ? null : current));
+                }
+            }
+        } catch (RuntimeException | LinkageError failure) {
+            synchronized (this) {
+                if (flushInFlight == future) {
+                    flushInFlight = null;
+                }
+            }
+            persistenceStalled();
+            future.completeExceptionally(failure);
+        }
     }
 
     @Override
@@ -217,8 +266,21 @@ public final class ManualProgressProvider implements MetricProvider {
 
     @Override
     public ProviderHealth health() {
-        return new ProviderHealth(ProviderHealthState.AVAILABLE, "manual.available",
-                "Bounded manual progress provider is available", Instant.EPOCH);
+        return health.get();
+    }
+
+    private void persistenceStalled() {
+        health.updateAndGet(current -> current.state() == ProviderHealthState.DEGRADED
+                && "manual.persistence_stalled".equals(current.code()) ? current
+                        : new ProviderHealth(ProviderHealthState.DEGRADED, "manual.persistence_stalled",
+                                "Dirty manual progress could not be durably flushed", clock.instant()));
+    }
+
+    private void persistenceRecovered() {
+        health.updateAndGet(current -> current.state() == ProviderHealthState.AVAILABLE
+                && "manual.available".equals(current.code()) ? current
+                        : new ProviderHealth(ProviderHealthState.AVAILABLE, "manual.available",
+                                "Manual progress persistence recovered", clock.instant()));
     }
 
     private synchronized ManualMetricRegistration finishRegistration(
@@ -293,7 +355,8 @@ public final class ManualProgressProvider implements MetricProvider {
                 definition.exactSetAllowed() ? MetricMonotonicity.NON_MONOTONIC : MetricMonotonicity.MONOTONIC,
                 definition.exactSetAllowed() ? MetricResetPolicy.NOT_APPLICABLE
                         : MetricResetPolicy.FAIL_RECONCILIATION,
-                Map.of(), definition.displayName(), definition.description(), "", "owner-authenticated manual input");
+                Map.of(), "manual." + definition.metricId().value() + ".display_name",
+                "manual." + definition.metricId().value() + ".description", "none", "owner_authenticated");
     }
 
     private MetricValue zero(ManualCounterDefinition definition) {

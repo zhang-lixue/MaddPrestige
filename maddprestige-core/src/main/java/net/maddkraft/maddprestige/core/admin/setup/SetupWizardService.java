@@ -4,6 +4,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,6 +21,7 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.rank.RankAdapter;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.PreparedConfigurationAcknowledgement;
@@ -97,7 +99,7 @@ public final class SetupWizardService {
         pruneExpired();
         UUID id = UUID.randomUUID();
         sessions.put(id, new Session(subject, Optional.empty(), List.of(), Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.empty(), SetupPrestige.disabled(), Optional.empty(),
+                Map.of(), Optional.empty(), Optional.empty(), SetupPrestige.disabled(), Optional.empty(),
                 Instant.now(clock).plus(lifetime)));
         return id;
     }
@@ -114,12 +116,13 @@ public final class SetupWizardService {
         stage.externalGroup().ifPresent(value -> rejectControlCharacters(value, "external group"));
         if (session.stages().stream().anyMatch(existing -> existing.id().equals(stage.id()))) {
             throw new AdministrationException("setup.stage.duplicate", "Stage ID already exists: " + stage.id().value(),
-                    "Choose a unique immutable stage ID.");
+                    "Choose a unique immutable stage ID.", "stage", stage.id().value());
         }
         if (session.providerId().isEmpty() && stage.externalGroup().isPresent()) {
             throw new AdministrationException("setup.provider.required",
                     "An external group cannot be selected without a rank provider.",
-                    "Choose the provider first or configure this stage as internal-only.");
+                    "Choose the provider first or configure this stage as internal-only.",
+                    "stage", stage.id().value(), "group", stage.externalGroup().orElseThrow());
         }
         ArrayList<SetupStage> stages = new ArrayList<>(session.stages());
         stages.add(stage);
@@ -136,7 +139,7 @@ public final class SetupWizardService {
         Session session = require(subject, sessionId);
         if (session.stages().stream().noneMatch(stage -> stage.id().equals(baseline))) {
             throw new AdministrationException("setup.baseline.unknown", "Baseline stage is not in the wizard: "
-                    + baseline.value(), "Select one of the configured stage IDs.");
+                    + baseline.value(), "Select one of the configured stage IDs.", "stage", baseline.value());
         }
         discardDraft(subject, session);
         sessions.put(sessionId, session.withBaseline(baseline));
@@ -146,6 +149,33 @@ public final class SetupWizardService {
         Session session = require(subject, sessionId);
         discardDraft(subject, session);
         sessions.put(sessionId, session.withRequirement(Objects.requireNonNull(requirement, "requirement")));
+    }
+
+    public void configureRequirementForStage(
+            PermissionSubject subject,
+            UUID sessionId,
+            net.maddkraft.maddprestige.api.id.StageId stageId,
+            SetupRequirement requirement) {
+        Session session = require(subject, sessionId);
+        requireConfiguredStage(session, stageId, "requirement target");
+        if (session.baseline().filter(stageId::equals).isPresent()) {
+            throw new AdministrationException("setup.requirement.baseline",
+                    "The baseline stage cannot require eligibility progress.",
+                    "Choose a stage after the baseline.", "stage", stageId.value());
+        }
+        SetupRequirement replacement = Objects.requireNonNull(requirement, "requirement");
+        boolean duplicate = session.requirement().filter(value -> value.id().equals(replacement.id())).isPresent()
+                || session.stageRequirements().entrySet().stream()
+                        .anyMatch(entry -> !entry.getKey().equals(stageId)
+                                && entry.getValue().id().equals(replacement.id()));
+        if (duplicate) {
+            throw new AdministrationException("setup.requirement.duplicate",
+                    "Requirement ID is already assigned in this setup session: " + replacement.id().value(),
+                    "Choose one unique immutable requirement ID per stage.",
+                    "requirement", replacement.id().value(), "stage", stageId.value());
+        }
+        discardDraft(subject, session);
+        sessions.put(sessionId, session.withStageRequirement(stageId, replacement));
     }
 
     public void configureCost(PermissionSubject subject, UUID sessionId, SetupCost cost) {
@@ -176,17 +206,26 @@ public final class SetupWizardService {
                     "A simple ladder needs at least two ordered stages and one baseline.",
                     "Add stages in progression order and select the baseline stage.");
         }
-        if (session.providerId().isPresent()
-                && session.stages().stream().skip(1).anyMatch(stage -> stage.externalGroup().isEmpty())) {
+        Optional<SetupStage> missingGroup = session.providerId().isPresent()
+                ? session.stages().stream().skip(1).filter(stage -> stage.externalGroup().isEmpty()).findFirst()
+                : Optional.empty();
+        if (missingGroup.isPresent()) {
             throw new AdministrationException("setup.group.missing",
                     "Every projected stage after the baseline needs an existing external group.",
-                    "Select existing groups; MaddPrestige never creates them.");
+                    "Select existing groups; MaddPrestige never creates them.",
+                    "stage", missingGroup.orElseThrow().id().value(),
+                    "provider", session.providerId().orElseThrow().value());
         }
         discardDraft(subject, session);
         UUID draftId = configuration.beginInitialDraft(subject, documents(session), "setup-wizard");
         sessions.put(sessionId, session.withDraft(draftId));
         return configuration.preview(subject, draftId).thenApply(preview -> new SetupPreview(
                 sessionId, draftId, preview, experience(session)));
+    }
+
+    /** Returns the exact ordered candidate bytes that preview/apply will consume, without publishing them. */
+    public Map<String, String> generatedDocuments(PermissionSubject subject, UUID sessionId) {
+        return documents(require(subject, sessionId));
     }
 
     public CompletionStage<StoredConfigurationRevision> apply(
@@ -281,23 +320,22 @@ public final class SetupWizardService {
         if (session.stages().stream().noneMatch(candidate -> candidate.id().equals(stage))) {
             throw new AdministrationException("setup.prestige.stage_unknown",
                     "Prestige " + purpose + " stage is not in this setup session: " + stage.value(),
-                    "Select one of the configured stage IDs.");
+                    "Select one of the configured stage IDs.", "stage", stage.value(), "purpose", purpose);
         }
     }
 
-    private static Map<String, String> documents(Session session) {
+    private Map<String, String> documents(Session session) {
         LinkedHashMap<String, String> documents = new LinkedHashMap<>();
         documents.put("progression.yml", progression(session));
         documents.put("requirements.yml", requirements(session));
         documents.put("rewards.yml", rewards(session));
         documents.put("lifecycle.yml", lifecycle(session));
         documents.put("integrations.yml", integrations());
-        return Map.copyOf(documents);
+        return Collections.unmodifiableMap(documents);
     }
 
     private static String progression(Session session) {
         StringBuilder yaml = new StringBuilder("""
-                # Created by the MaddPrestige setup wizard; review before apply.
                 schema-version: 3
                 active: true
                 reconciliation-policy: warn-only
@@ -320,7 +358,12 @@ public final class SetupWizardService {
                 yaml.append("    projection: none\n");
             }
             if (index > baselineIndex) {
-                session.requirement().ifPresent(value -> yaml.append("    requirements: setup_eligibility\n"));
+                Optional<SetupRequirement> requirement = Optional.ofNullable(
+                        session.stageRequirements().get(stage.id())).or(() -> session.requirement());
+                requirement.ifPresent(value -> yaml.append("    requirements: ")
+                        .append(session.stageRequirements().containsKey(stage.id())
+                                ? treeId(stage.id()) : "setup_eligibility")
+                        .append('\n'));
                 session.cost().ifPresent(value -> yaml.append("    costs: [")
                         .append(value.id().value()).append("]\n"));
                 session.reward().ifPresent(value -> yaml.append("    rewards: [")
@@ -332,29 +375,25 @@ public final class SetupWizardService {
         return yaml.toString();
     }
 
-    private static String requirements(Session session) {
+    private String requirements(Session session) {
         StringBuilder yaml = new StringBuilder("""
-                # Created by the MaddPrestige setup wizard; review before apply.
                 schema-version: 3
                 maximum-depth: 16
                 """);
-        if (session.requirement().isEmpty()) {
+        LinkedHashMap<net.maddkraft.maddprestige.api.id.RequirementId, SetupRequirement> definitions =
+                new LinkedHashMap<>();
+        session.requirement().ifPresent(value -> definitions.put(value.id(), value));
+        session.stages().stream().map(SetupStage::id).map(session.stageRequirements()::get)
+                .filter(Objects::nonNull).forEach(value -> definitions.put(value.id(), value));
+        if (definitions.isEmpty()) {
             yaml.append("requirements: {}\ntrees: {}\n");
         } else {
-            SetupRequirement value = session.requirement().orElseThrow();
-            yaml.append("requirements:\n  ").append(value.id().value()).append(":\n")
-                    .append("    provider: ").append(value.providerId().value()).append('\n')
-                    .append("    metric: ").append(value.metricId().value()).append('\n')
-                    .append("    operator: ").append(quote(value.operator())).append('\n')
-                    .append("    target: ").append(quote(value.target())).append('\n')
-                    .append("    scope: ").append(quote(value.scope())).append('\n')
-                    .append("    completion: ").append(quote(value.completion())).append('\n')
-                    .append("trees:\n")
-                    .append("  setup_eligibility:\n")
-                    .append("    id: setup_eligibility\n")
-                    .append("    mode: all\n")
-                    .append("    children:\n")
-                    .append("      - requirement: ").append(value.id().value()).append('\n');
+            yaml.append("requirements:\n");
+            definitions.values().forEach(value -> appendRequirement(yaml, value, requirementValueType(value)));
+            yaml.append("trees:\n");
+            session.requirement().ifPresent(value -> appendTree(yaml, "setup_eligibility", value));
+            session.stages().stream().map(SetupStage::id).forEach(stage -> Optional.ofNullable(
+                    session.stageRequirements().get(stage)).ifPresent(value -> appendTree(yaml, treeId(stage), value)));
         }
         if (session.cost().isEmpty()) {
             yaml.append("costs: {}\n");
@@ -370,9 +409,31 @@ public final class SetupWizardService {
         return yaml.toString();
     }
 
+    private static void appendRequirement(StringBuilder yaml, SetupRequirement value, String valueType) {
+        yaml.append("  ").append(value.id().value()).append(":\n")
+                .append("    provider: ").append(value.providerId().value()).append('\n')
+                .append("    metric: ").append(value.metricId().value()).append('\n')
+                .append("    value-type: ").append(valueType).append('\n')
+                .append("    operator: ").append(scalar(value.operator())).append('\n')
+                .append("    target: ").append(scalar(value.target())).append('\n')
+                .append("    scope: ").append(scalar(value.scope())).append('\n')
+                .append("    completion: ").append(scalar(value.completion())).append('\n');
+    }
+
+    private static void appendTree(StringBuilder yaml, String treeId, SetupRequirement value) {
+        yaml.append("  ").append(treeId).append(":\n")
+                .append("    id: ").append(treeId).append('\n')
+                .append("    mode: all\n")
+                .append("    children:\n")
+                .append("      - requirement: ").append(value.id().value()).append('\n');
+    }
+
+    private static String treeId(net.maddkraft.maddprestige.api.id.StageId stageId) {
+        return "setup_eligibility_" + stageId.value();
+    }
+
     private static String rewards(Session session) {
         StringBuilder yaml = new StringBuilder("""
-                # Created by the MaddPrestige setup wizard; command actions stay disabled.
                 schema-version: 3
                 """);
         if (session.reward().isEmpty()) {
@@ -405,7 +466,6 @@ public final class SetupWizardService {
     private static String lifecycle(Session session) {
         SetupPrestige prestige = session.prestige();
         StringBuilder yaml = new StringBuilder("""
-                # Created by the MaddPrestige setup wizard; reset consequences are explicit.
                 schema-version: 4
                 prestige:
                 """);
@@ -423,7 +483,8 @@ public final class SetupWizardService {
                   cooldown: PT0S
                   costs: []
                   rewards: []
-                  external-resets: {enabled: false}
+                  external-resets:
+                    enabled: false
                   reset-policy:
                     progression-stage: RESET
                     active-requirement-progress: RESET
@@ -438,41 +499,75 @@ public final class SetupWizardService {
                 entitlements: {}
                 milestones: {}
                 seasons: {}
-                competition: {enabled: false}
+                competition:
+                  enabled: false
                 """);
         return yaml.toString();
     }
 
     private static String integrations() {
         return """
-                schema-version: 5
-                vault: {enabled: false}
-                mcmmo: {enabled: false}
+                schema-version: 7
+                vault:
+                  enabled: false
+                mcmmo:
+                  enabled: false
                 placeholderapi:
-                  output: {enabled: false}
+                  output:
+                    enabled: false
                   inputs: {}
                 economyshopgui:
                   compatibility-enabled: false
-                  progression-credit: {enabled: false}
+                  progression-credit:
+                    enabled: false
                 quickshop:
                   compatibility-enabled: false
-                  progression-credit: {enabled: false}
+                  progression-credit:
+                    enabled: false
+                griefprevention:
+                  enabled: false
+                worldguard:
+                  enabled: false
+                craftengine:
+                  enabled: false
+                  reward-maximum-quantity: 2304
                 """;
     }
 
-    private static List<String> experience(Session session) {
-        ArrayList<String> lines = new ArrayList<>();
+    private String requirementValueType(SetupRequirement requirement) {
+        return providers.flatMap(registry -> registry.provider(requirement.providerId()))
+                .filter(MetricProvider.class::isInstance).map(MetricProvider.class::cast)
+                .flatMap(provider -> provider.metrics().stream()
+                        .filter(metric -> metric.metricId().equals(requirement.metricId())).findFirst())
+                .map(metric -> metric.valueType().name())
+                .orElseThrow(() -> new AdministrationException("setup.requirement.metric_unknown",
+                        "The selected setup metric has no authoritative value type: "
+                                + requirement.providerId().value() + ":" + requirement.metricId().value(),
+                        "Run setup discover and choose one metric advertised by an active provider.",
+                        "provider", requirement.providerId().value(), "metric", requirement.metricId().value()));
+    }
+
+    private static List<MessageReference> experience(Session session) {
+        ArrayList<MessageReference> lines = new ArrayList<>();
         for (int index = 0; index < session.stages().size() - 1; index++) {
-            lines.add(session.stages().get(index).displayName() + " → "
-                    + session.stages().get(index + 1).displayName());
+            lines.add(MessageReference.of("command.setup.experience_transition",
+                    "current", session.stages().get(index).displayName(),
+                    "target", session.stages().get(index + 1).displayName()));
         }
-        lines.add("Requirement: " + session.requirement().map(value -> value.id().value()).orElse("none"));
-        lines.add("Cost: " + session.cost().map(value -> value.id().value()).orElse("none"));
-        lines.add("Reward: " + session.reward().map(value -> value.id().value()).orElse("none"));
-        lines.add("Prestige: " + (session.prestige().enabled()
-                ? "eligible at " + session.prestige().requiredStage().orElseThrow().value()
-                        + ", resets to " + session.prestige().resetStage().orElseThrow().value()
-                : "disabled"));
+        lines.add(MessageReference.of("command.setup.experience_requirement", "id",
+                session.requirement().map(value -> value.id().value()).orElse("NONE")));
+        session.stageRequirements().forEach((stage, requirement) ->
+                lines.add(MessageReference.of("command.setup.experience_stage_requirement",
+                        "stage", stage.value(), "id", requirement.id().value())));
+        lines.add(MessageReference.of("command.setup.experience_cost", "id",
+                session.cost().map(value -> value.id().value()).orElse("NONE")));
+        lines.add(MessageReference.of("command.setup.experience_reward", "id",
+                session.reward().map(value -> value.id().value()).orElse("NONE")));
+        lines.add(session.prestige().enabled()
+                ? MessageReference.of("command.setup.experience_prestige_enabled", "stage",
+                        session.prestige().requiredStage().orElseThrow().value(), "target",
+                        session.prestige().resetStage().orElseThrow().value())
+                : MessageReference.of("command.setup.experience_prestige_disabled"));
         return List.copyOf(lines);
     }
 
@@ -495,12 +590,17 @@ public final class SetupWizardService {
         return result.append('"').toString();
     }
 
+    private static String scalar(String value) {
+        return value.matches("[A-Za-z0-9_.:-]+") ? value : quote(value);
+    }
+
     private static void rejectControlCharacters(String value, String field) {
         if (value.codePoints().anyMatch(character -> Character.isISOControl(character)
                 && character != '\n' && character != '\r' && character != '\t')) {
             throw new AdministrationException("setup.text.control_character",
                     "The " + field + " contains an unsupported control character.",
-                    "Use printable Unicode text; line breaks and tabs will be escaped safely.");
+                    "Use printable Unicode text; line breaks and tabs will be escaped safely.",
+                    "component", field);
         }
     }
 
@@ -510,6 +610,7 @@ public final class SetupWizardService {
             List<SetupStage> stages,
             Optional<net.maddkraft.maddprestige.api.id.StageId> baseline,
             Optional<SetupRequirement> requirement,
+            Map<net.maddkraft.maddprestige.api.id.StageId, SetupRequirement> stageRequirements,
             Optional<SetupCost> cost,
             Optional<SetupReward> reward,
             SetupPrestige prestige,
@@ -521,6 +622,8 @@ public final class SetupWizardService {
             stages = List.copyOf(Objects.requireNonNull(stages, "stages"));
             baseline = Objects.requireNonNull(baseline, "baseline");
             requirement = Objects.requireNonNull(requirement, "requirement");
+            stageRequirements = Collections.unmodifiableMap(new LinkedHashMap<>(
+                    Objects.requireNonNull(stageRequirements, "stage requirements")));
             cost = Objects.requireNonNull(cost, "cost");
             reward = Objects.requireNonNull(reward, "reward");
             prestige = Objects.requireNonNull(prestige, "prestige");
@@ -529,42 +632,54 @@ public final class SetupWizardService {
         }
 
         private Session withProvider(Optional<ProviderId> replacement) {
-            return replace(replacement, stages, baseline, requirement, cost, reward, prestige, Optional.empty());
+            return replace(replacement, stages, baseline, requirement, stageRequirements, cost, reward, prestige,
+                    Optional.empty());
         }
 
         private Session withStages(
                 List<SetupStage> replacement,
                 Optional<net.maddkraft.maddprestige.api.id.StageId> replacementBaseline) {
-            return replace(providerId, replacement, replacementBaseline, requirement, cost, reward, prestige,
-                    Optional.empty());
+            return replace(providerId, replacement, replacementBaseline, requirement, stageRequirements, cost,
+                    reward, prestige, Optional.empty());
         }
 
         private Session withBaseline(net.maddkraft.maddprestige.api.id.StageId replacement) {
-            return replace(providerId, stages, Optional.of(replacement), requirement, cost, reward, prestige,
-                    Optional.empty());
+            return replace(providerId, stages, Optional.of(replacement), requirement, stageRequirements, cost,
+                    reward, prestige, Optional.empty());
         }
 
         private Session withRequirement(SetupRequirement replacement) {
-            return replace(providerId, stages, baseline, Optional.of(replacement), cost, reward, prestige,
+            return replace(providerId, stages, baseline, Optional.of(replacement), stageRequirements, cost, reward,
+                    prestige, Optional.empty());
+        }
+
+        private Session withStageRequirement(
+                net.maddkraft.maddprestige.api.id.StageId stageId,
+                SetupRequirement replacement) {
+            LinkedHashMap<net.maddkraft.maddprestige.api.id.StageId, SetupRequirement> requirements =
+                    new LinkedHashMap<>(stageRequirements);
+            requirements.put(stageId, replacement);
+            return replace(providerId, stages, baseline, requirement, requirements, cost, reward, prestige,
                     Optional.empty());
         }
 
         private Session withCost(SetupCost replacement) {
-            return replace(providerId, stages, baseline, requirement, Optional.of(replacement), reward, prestige,
-                    Optional.empty());
+            return replace(providerId, stages, baseline, requirement, stageRequirements, Optional.of(replacement),
+                    reward, prestige, Optional.empty());
         }
 
         private Session withReward(SetupReward replacement) {
-            return replace(providerId, stages, baseline, requirement, cost, Optional.of(replacement), prestige,
-                    Optional.empty());
+            return replace(providerId, stages, baseline, requirement, stageRequirements, cost,
+                    Optional.of(replacement), prestige, Optional.empty());
         }
 
         private Session withPrestige(SetupPrestige replacement) {
-            return replace(providerId, stages, baseline, requirement, cost, reward, replacement, Optional.empty());
+            return replace(providerId, stages, baseline, requirement, stageRequirements, cost, reward, replacement,
+                    Optional.empty());
         }
 
         private Session withDraft(UUID replacement) {
-            return replace(providerId, stages, baseline, requirement, cost, reward, prestige,
+            return replace(providerId, stages, baseline, requirement, stageRequirements, cost, reward, prestige,
                     Optional.of(replacement));
         }
 
@@ -573,12 +688,14 @@ public final class SetupWizardService {
                 List<SetupStage> replacementStages,
                 Optional<net.maddkraft.maddprestige.api.id.StageId> replacementBaseline,
                 Optional<SetupRequirement> replacementRequirement,
+                Map<net.maddkraft.maddprestige.api.id.StageId, SetupRequirement> replacementStageRequirements,
                 Optional<SetupCost> replacementCost,
                 Optional<SetupReward> replacementReward,
                 SetupPrestige replacementPrestige,
                 Optional<UUID> replacementDraft) {
             return new Session(subject, replacementProvider, replacementStages, replacementBaseline,
-                    replacementRequirement, replacementCost, replacementReward, replacementPrestige,
+                    replacementRequirement, replacementStageRequirements, replacementCost, replacementReward,
+                    replacementPrestige,
                     replacementDraft, expiresAt);
         }
     }

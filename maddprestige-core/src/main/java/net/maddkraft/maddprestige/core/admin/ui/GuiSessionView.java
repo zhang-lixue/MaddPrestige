@@ -4,11 +4,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 public record GuiSessionView(
         UUID sessionId,
         GuiAudience audience,
-        String title,
+        MessageReference title,
         List<GuiAction> actions,
         Instant expiresAt) {
     public GuiSessionView {

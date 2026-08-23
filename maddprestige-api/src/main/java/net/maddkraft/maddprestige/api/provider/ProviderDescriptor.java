@@ -3,7 +3,9 @@ package net.maddkraft.maddprestige.api.provider;
 import java.util.List;
 import java.util.Objects;
 import net.maddkraft.maddprestige.api.id.ProviderId;
+import net.maddkraft.maddprestige.api.annotation.Experimental;
 
+@Experimental
 public record ProviderDescriptor(
         ProviderId id,
         String ownerIdentity,

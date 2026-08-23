@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
-**Architecture baseline:** Phase 7 correction pass 1, 2026-08-17
-**Runtime status:** the V2 Paper entry is active and composes accepted Phase 5 capabilities with Phase 7 native providers; the full Phase 6 setup/GUI adapter remains not live-bound, so A02 stays Partial
+**Architecture baseline:** Owner-accepted Phase 8D implementation, 2026-08-23
+**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; Phase 8C and Phase 8D are owner-accepted, A76 is deferred to the final frozen Phase 8 release candidate, and Phase 8E has not started
 
 ## Module graph
 
@@ -184,7 +184,59 @@ The SQLite implementation uses a V2-only disposable schema with foreign keys, in
 
 Migration 4 adds player Prestige state/details, exact currency ledger, stage/Prestige history, milestone awards, one-active seasons/player progress/archive, native recovery payloads, and recovery events with player/time/state indexes. Both normal rank-up and Prestige reset append stage history transactionally with their stage CAS; stale CAS writes no orphan row. History and recovery APIs enforce 1–1000 row bounds. Query values are prepared parameters; static column fragments do not contain caller data. No Phase 4 high-volume event path writes SQL per event.
 
-`MySQL` and `MariaDB` are backend contract targets, not supported deployments. CI can provision each separately to exercise exact-decimal and uniqueness primitives. No network/proxy-safe behavior is claimed.
+SQLite is the only officially supported MaddPrestige 2.0 production persistence backend under the owner product-scope
+decision dated 2026-08-17. `MySQL` and `MariaDB` remain historical/future contract targets, not supported 2.0
+deployments. Existing repository, transaction and test boundaries remain backend-neutral where they already are so a
+future external-SQL implementation can be built and qualified properly. Primitive CI probes, interfaces or dormant
+configuration do not constitute a support claim. No external-DB, shared-database or network/proxy-safe behavior is
+claimed.
+
+Phase 8C is **SQLite Persistence, Migration, Backup & Recovery Hardening**. The candidate uses a fair shared/exclusive
+boundary around every production-foundation connection: already admitted/queued MaddPrestige work drains, an exclusive
+holder seals a snapshot with Xerial's native SQLite backup API, and later application connections remain fenced until
+the snapshot completes. The product topology is one Paper process; this is deliberately not a shared-database or
+multi-process coordination claim. The old byte-copy service remains explicitly limited to closed/quiesced fixtures and
+is no longer production migration authority.
+
+Each candidate snapshot is a new UUID partial artifact. An independent read-only connection validates its SQLite
+header, exact `integrity_check`, foreign keys, contiguous APPLIED checksummed/described migration history and valid
+FAILED-attempt ordering. It reconstructs the claimed prefix from canonical migrations and compares every MaddPrestige
+table, column property, correctness UNIQUE/partial-UNIQUE index, foreign key and database-enforced table constraint;
+SQL canonicalization lowercases only unquoted text and collapses only external whitespace, preserving the exact
+content of single-quoted strings, doubled-quote escapes and whitespace inside quoted tokens. Representative populated
+reads remain data evidence rather than structural proof. Exact configuration
+document/canonical hashes and graph links are also checked. A
+format-1 forced manifest records reason/source/schema/active revision/artifact/SHA-256/validation/rehearsal/journal
+mode. Accepted revalidation binds the canonical backup UUID to `<backupId>.sqlite` and re-observes artifact/hash,
+schema, active config, PASS outcomes and journal mode; reason/source/time remain bounded historical metadata. The
+artifact is copied into a unique controlled rehearsal directory, opened through the same `MigrationRunner`
+and validator, required to reach schema 11, closed and removed. Only then are the database and manifest promoted; no
+existing known-good backup is overwritten or retention-pruned.
+
+Migration preflight now rejects every unknown history row, malformed identity/time/result or hash, duplicate APPLIED
+version, APPLIED checksum/description mismatch, version gap, schema-without-history ambiguity and FAILED attempt beyond
+the immediate next pending version. FAILED rows within the APPLIED prefix or at that next version are legitimate retry
+evidence only when their timestamps lie between the prior-version and same-version APPLIED completion boundaries;
+equal timestamps are allowed. Their checksum/description text is diagnostic rather than immutable definition
+authority. The inspection connection closes before the backup fence after sealing one immutable snapshot of the
+complete ordered APPLIED/FAILED attempt ledger and derived APPLIED prefix. After backup, a fresh connection must
+produce the identical full-ledger snapshot before any migration. SQLite statements and APPLIED evidence share one
+transaction. Rollback-confirmed failure may
+record a separate truthful FAILED attempt; commit acknowledgement/rollback uncertainty is not mislabeled. Migration 11
+backfills only missing zeroed Prestige rows for historical stage-only players so accepted atomic player initialization
+survives supported upgrades.
+
+Before service publication, production independently validates the database and compares its latest APPLIED config
+history to the checksum-verified filesystem pointer. It rejects unsupported/future configuration schema, absent pointer
+with authoritative rows, stale pointer, persisted unknown stages, and one-sided stage/Prestige rows. It never repairs or
+recreates authoritative player data automatically. Fatal persistence startup disables MaddPrestige before exposing an
+apparently healthy runtime and does not crash Paper. The complete protocol and evidence are in
+`V2_PHASE8C_IMPLEMENTATION.md` and `V2_PHASE8C_BACKUP_RESTORE_EVIDENCE.md`.
+
+HikariCP integration solely for MySQL/MariaDB, MySQL/MariaDB production repositories, three-backend parity suites,
+external row-lock/deadlock semantics, external-DB outage/failover qualification and multi-process/shared-database
+deployment support are deferred post-2.0. Deferral does not convert A64 into a pass and does not reduce the SQLite
+correctness gate.
 
 ## V1 isolation
 
@@ -310,7 +362,84 @@ Migration 9 preserves a migration-8 row only when its operation journal is nonte
 
 Direct `SqlitePlayerStageRepository` insert/import/update/update-with-history paths and `SqlitePrestigeLifecycleRepository`'s internal commit do not mint durable random-owner leases. Each opens the shared immediate transaction, derives the current source where applicable, checks source plus target against pending remap state, and writes in that same transaction. This serializes import/bootstrap and any direct/manual repository caller against remap without creating crash-orphanable authority. The nested Prestige repository transaction cannot release the outer executor's journal-owned lease.
 
-Rank-up and Prestige ordering is: sealed authorization/config/provider check; duplicate lookup; `PREPARED` journal creation; source-and-target lease acquire/adopt; binding/target recheck; `PREPARED`→`EXECUTING` claim; costs; full binding recheck; external projection; internal CAS/atomic commit; rewards; terminal operation state; terminal-gated lease release. The standalone projection executor follows the same journal→lease→binding→execution pattern and derives its source from the expected authoritative player state. If lease acquisition loses to remap, the still-effect-free prepared journal becomes `FAILED`.
+## Phase 8B public boundary and live composition
+
+The live Paper entry point now places a small public boundary in front of the accepted engines:
+
+```text
+Paper ServicesManager
+  ├─ MaddPrestigeService (published last, removed first)
+  │    ├─ async player/currency/season read ───> SQLite materialized state
+  │    ├─ async rank/Prestige evaluation ──────> canonical side-effect-free simulation
+  │    ├─ async rank/Prestige request ─────────> canonical authorization/journal/executor
+  │    └─ sync stages()/providers() ───────────> immutable runtime caches only
+  └─ ProviderDeclaration (owned by registering plugin)
+       └─ PaperProviderBridge ─────────────> single internal ProviderRegistry
+              owner-attested namespace       internal generation/deadline/health
+```
+
+The service never exposes repositories, operation plans, registry registrations or provider implementation objects. It is registered only after pending recovery and full runtime/admin composition. Caller futures are detached from accepted durable work. Shutdown makes the service undiscoverable before closing its runtime.
+
+Provider metadata and callbacks cross a bounded adapter. The registered service owner and the implementation class's
+actual providing plugin must match; namespace normalization collisions are rejected. This supported public-API check
+prevents accidental/cross-plugin claims while keeping hostile installed plugins inside the trusted-server boundary.
+External metadata supplies only a canonical local ID of at most 31 characters and generation-free metric definitions.
+Every accepted local ID can therefore form the owner-qualified `ProviderId`. Metadata and health are cached
+outside the registry monitor. A bounded 2–8 thread callback executor applies two-second metadata/lifecycle and
+three-second read deadlines plus live cancellation. Duplicate or normalized-ambiguous metadata and result maps with
+extra, missing, null or type-incompatible entries fail closed. Internal generation/provenance is attached only after a
+result crosses back into the bridge. The exact handle cannot unregister a replacement.
+
+Operation event order is now:
+
+```text
+request UUID → readiness → canonical authorization → immediate state/binding check
+        → synchronous Paper PRE (no internal lock)
+        → cancel/exception: zero journal/lease/effect
+        → revalidate virtual-or-durable player/config/provider
+        → atomic unknown-player stage+Prestige initialization
+        → final exact validation/duplicate fence → PREPARED journal → execute
+        → durable terminal operation/state → synchronous Paper POST (same request UUID)
+        → isolate listener failure → complete caller future
+```
+
+Registered operation listeners are invoked directly on the Paper thread so PRE `EventException` is observable at the pre-journal boundary rather than swallowed by general event logging. A per-player dispatch marker rejects same-player recursive mutation at the public service while allowing reads and cross-player scheduling. POST event status represents `NEEDS_RECONCILIATION` rather than claiming clean success.
+
+Unknown players are represented by a virtual baseline stage and zero Prestige state during reads, authorization and
+PRE. Only after PRE succeeds and exact virtual state/config/provider authority revalidates does one SQLite transaction
+initialize stage and Prestige rows; a final exact check still precedes journaling. Consequently cancellation
+or listener failure cannot create player state. The live progress-context factory reads durable current/lifetime
+Prestige and active-season progress, derives scaling and catch-up from those accepted semantics, and supplies
+absolute/lifetime/stage/Prestige/season scope identities rather than placeholder constants.
+
+The production root also binds the accepted Phase 6 plus Phase 5 integration schema, administration, setup, completion,
+doctor/why/player, manual Prestige and GUI services. Its immutable filesystem pointer is now a restart input:
+`activeDocuments()` validates the exact manifest, per-document checksums, aggregate hash and inventory, and startup
+requires matching durable APPLIED history. The exact stored revision is hydrated without a synthetic apply. Seed files
+are templates only. No pointer is dormant only when live/config-dependent authority is absent; migration metadata,
+append-only audit rows and non-APPLIED configuration attempts/documents are the deliberate pointer-independent history.
+APPLIED config, progression/currency/requirement/season, operation/recovery, remap/lease or transition/reservation
+authority without the pointer rejects startup before service publication.
+
+Canonical apply temporarily withdraws operation publication, reconciles configuration-dependent optional integration
+state in deterministic order, hydrates the exact new revision, refreshes schema/completion/runtime snapshots, and only
+then emits `ConfigAppliedEvent`. Provider lifecycle transitions coalesce a Paper-thread recomposition of the same stored
+revision. Missing generations stay visibly fail-closed; late registration recovers without creating a new revision.
+
+Placeholder publication is separated from Placeholder rendering. A bounded one-in-flight-per-player publisher reads
+stage/Prestige asynchronously on join/periodic refresh and stores immutable cache snapshots; render remains cache-only.
+The virtual-thread/database fan-out still requires A62 load/TPS qualification. Internal manual progress similarly uses
+a single shared coalesced drain and bounded repository batches rather than one task per flush request. Failed drains
+retain dirty data, publish `DEGRADED` through existing provider health and rate-limit repeated logs; successful retry
+restores `AVAILABLE`.
+
+Rank-up and Prestige ordering is: sealed authorization/config/provider check; synchronous PRE; exact post-PRE authority
+check; duplicate lookup; atomic unknown-player initialization; final exact check/duplicate fence; `PREPARED` journal;
+source-and-target lease acquire/adopt; binding/target recheck; `PREPARED`→`EXECUTING` claim; costs; full binding recheck;
+external projection; internal CAS/atomic commit; rewards; terminal operation state; terminal-gated lease release. The
+standalone projection executor follows its existing journal→lease→binding→execution pattern and derives its source from
+the expected authoritative player state. If lease acquisition loses to remap, the still-effect-free prepared journal
+becomes `FAILED`.
 
 Draft remaps are accumulated per source. Selecting a mapping merges/replaces only that source and removing a mapping leaves other sources intact. The complete map is recompiled and checked immediately: every source must be absent and every target must exist, be enabled and occur in the candidate order. The source-scoped command and opaque GUI mutations increment draft version and invalidate stale preview/candidate/acknowledgement authority. Preview then seals all matching persisted B and D rows together, and apply migrates the complete set in the existing all-or-nothing remap transaction.
 
@@ -351,3 +480,66 @@ CraftEngine dispositions remain independent. Read-only item requirement: native.
 AdvancedCrates, UltimateMobCoins and DiscordSRV use only the already accepted generic command/typed-Placeholder fallbacks described in the Phase 7 disposition table. AxPlayerWarps remains unavailable; AxSellWands and the MaddKraft custom plugins are coexistence-only. Resource-world lifecycle remains external. A75 proves unconfigured, absent, unhealthy, stale, rebound and removed behavior using only a fake Court metric provider through the unchanged generic boundary; no Court implementation is owned.
 
 `GENERIC INTERFACE EXTENSION REQUIRED: NO`. Existing metric, reward, health, generation, validation, uncertainty, configuration, journal and recovery contracts express every Phase 7 capability without vendor logic in API/core/persistence.
+
+## Phase 8D presentation and public administration boundary
+
+`PaperMessageService` is the only new presentation authority. It owns an immutable snapshot containing the selected
+server-global catalog and complete built-in `en_US` fallback. Both are UTF-8 YAML maps with bounded flat message keys and
+string templates. File/path/size/key-count/value bounds, rejection of every symlink/reparse component, and real-path
+containment beneath the real plugin data directory apply before parsing. Strict MiniMessage
+validation compiles every candidate value before publication. Reload constructs the complete snapshot off to the side
+and performs one reference swap only after validation, so readers see one complete old or new catalog. A rejected
+reload retains the known-good snapshot. Startup may fall back to built-in English; bootstrap failures before message
+service availability remain the narrow English-log exception.
+
+Presentation sites carry a stable semantic message key and immutable named arguments; they never pass a precomposed
+English sentence through a generic line/title/action wrapper. RankUp and Prestige authorization emit immutable typed
+blockers containing stable semantic identity, blocker-specific facts and secondary diagnostic text. The same blockers
+flow through Why, previews, real no-plan simulation failures and operation rejection. Presentation selects the blocker
+catalog key directly from that identity and never classifies English diagnostic prose. All known public administration
+codes use explicit exact mappings rather than diagnostic-code fragment families. A mechanical production-site audit
+accounts for all 111 occurrences and 84 codes: 19 repeated codes have a deliberate compatibility/discriminator register,
+while all 65 single-source codes have a source/identity/trigger/consequence/remediation/fact register. Where repeated
+occurrences have different consequences or remediation,
+`AdministrationException` carries a code-checked immutable `AdministrationSemanticVariant`; five values distinguish
+pre-change/restored/reconciliation apply failures and acknowledgement/apply validation gates. Compatible repeated codes
+retain one shared identity only after deliberate condition/consequence/remediation/fact review. Unknown internal codes
+alone use a safe generic fallback. Doctor and validation code mappings, typed operation-preview stage/Prestige, cost/reward,
+component, currency, projection and uncertainty facts, and schema field descriptions remain catalog-owned.
+Diagnostic summaries/remediations and flattened plan sentences stored inside domain models do not cross as message
+arguments. Arguments are length-bounded,
+control-sanitized and inserted with MiniMessage's unparsed resolver, which gives player, provider, configuration and
+diagnostic values no tag, click, hover or nested-template authority. Stable service error codes/message keys remain
+machine-readable and are not translated in core. A missing selected key uses built-in English. A key missing from both
+catalogs renders bounded `[message:<key>]` and emits a bounded diagnostic instead of returning null.
+
+The 2.0 public setup path remains `SetupWizardService` through the live Phase 6 command adapter. Phase 8D adds only the
+smallest schema-compatible ability to assign the setup session's one requirement to a chosen target stage. Existing
+callers retain the original global form. Ordered session maps and document maps are explicit invariants. For the frozen
+profile the generator's five documents are byte-identical to `examples/member-adventurer-veteran/`, including schema
+versions, value types, complete disabled integration set, field order and line endings. Preview uses the same order.
+Preview, server-issued risk acknowledgement and immutable apply remain the only activation route.
+
+Previously unseen players require a current-Prestige baseline and real managed-rank projection before an authoritative
+progression result can be returned. Production collects configured initial provider samples at pinned generations,
+inserts stage, zero Prestige and every initial requirement baseline in one SQLite transaction, then uses the accepted
+rank-projection planner/executor to persist, execute and verify one idempotent initial projection operation. Completed
+identity is durable; uncertainty or incomplete recovery blocks rather than claiming success. Existing/progressed state
+is not overwritten. Reads, Why, previews, blocked operations and staff manual-Prestige mutation establish this boundary
+before returning/mutating. An eligible
+mutation retains the accepted PRE contract: it authorizes virtually, delivers PRE with zero effects, revalidates, and
+only then establishes and projects Member before its own operation journal/effects. PRE cancellation remains zero-state.
+
+The production Doctor is composed with concrete database, operational, rank-target and configuration-history probes.
+Dormant optional provider findings remain visible but do not make an otherwise applicable profile unhealthy. The
+operational snapshot is bounded and inspects schema, providers, pending/uncertain/reconciliation work, remaps, leases,
+transitions, configuration identity, scheduler/cache/flush state and optional publication. LuckPerms group nodes are
+normalized by LuckPerms; the adapter maps them case-insensitively to exact configured external spelling before enforcing
+managed membership. Neither path creates groups.
+
+The exact A70 runtime is intentionally single-server and SQLite-only. It uses built-in Paper play-time samples and live
+LuckPerms, with no external SDK provider or other optional dependency. A separate harness drives only the public setup
+and service boundaries, records 29 first-boot assertions, restarts the same directory unchanged, and records three
+durability assertions. Harness/runtime data and third-party JARs are disposable and excluded from review artifacts;
+source plus sanitized boot logs are retained. This evidence does not expand A61/A65/A66/A67 or replace the blind-human
+A76 protocol.
