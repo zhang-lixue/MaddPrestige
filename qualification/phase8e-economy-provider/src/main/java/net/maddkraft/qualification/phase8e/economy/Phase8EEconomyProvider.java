@@ -1,5 +1,6 @@
 package net.maddkraft.qualification.phase8e.economy;
 
+import java.lang.reflect.Array;
 import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
@@ -139,15 +140,9 @@ public final class Phase8EEconomyProvider extends JavaPlugin {
     }
 
     private static Object defaultValue(Class<?> type) {
+        if (type == void.class) return null;
         if (!type.isPrimitive()) return null;
-        if (type == boolean.class) return false;
-        if (type == char.class) return '\0';
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == float.class) return 0F;
-        return 0D;
+        return Array.get(Array.newInstance(type, 1), 0);
     }
 
     private enum Mode {

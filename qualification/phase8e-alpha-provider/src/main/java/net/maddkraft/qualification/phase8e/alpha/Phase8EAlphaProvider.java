@@ -5,7 +5,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
@@ -15,25 +14,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.id.MetricId;
-import net.maddkraft.maddprestige.api.metric.MetricMonotonicity;
-import net.maddkraft.maddprestige.api.metric.MetricOperator;
 import net.maddkraft.maddprestige.api.metric.MetricReadMode;
-import net.maddkraft.maddprestige.api.metric.MetricResetPolicy;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
-import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.api.provider.ProviderCallContext;
 import net.maddkraft.maddprestige.api.provider.ProviderDeclaration;
-import net.maddkraft.maddprestige.api.provider.ProviderExecutionExpectation;
 import net.maddkraft.maddprestige.api.provider.ProviderMetadata;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricDefinition;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricRequest;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricResult;
 import net.maddkraft.maddprestige.api.provider.ProviderRegistrationHandle;
-import net.maddkraft.maddprestige.api.provider.RequirementProvider;
-import org.bukkit.Bukkit;
+import net.maddkraft.qualification.phase8e.provider.Phase8EProviderSupport;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Independently owned, mode-controlled Stable provider used only in disposable Phase 8E servers. */
@@ -47,21 +39,20 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
     private final AtomicInteger synchronousCompleted = new AtomicInteger();
     private final AtomicReference<CountDownLatch> synchronousRelease = new AtomicReference<>(new CountDownLatch(0));
     private ScheduledExecutorService observer;
-    private Declaration primary;
-    private Declaration duplicate;
-    private volatile ProviderRegistrationHandle handle;
+    private Phase8EProviderSupport.Registration registration;
 
     @Override
     public void onEnable() {
+        registration = new Phase8EProviderSupport.Registration(this, "PHASE8E-ALPHA", this::declaration);
         observer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
                 Thread.ofPlatform().daemon(true).name("phase8e-alpha-observer").factory());
-        registerPrimary();
+        registration.enable();
         getLogger().info("PHASE8E-ALPHA enabled after MaddPrestige startup");
     }
 
     @Override
     public void onDisable() {
-        getServer().getServicesManager().unregisterAll(this);
+        registration.disable();
         if (observer != null) {
             observer.shutdownNow();
         }
@@ -106,16 +97,14 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
                     mode.set(replacement);
                     getLogger().info("PHASE8E-ALPHA mode=" + replacement);
                 }
-                case "unregister" -> {
-                    ProviderRegistrationHandle current = requireHandle();
-                    current.unregister().whenComplete((ignored, failure) -> getLogger().info(
+                case "unregister" -> registration.requireHandle("Alpha provider handle is absent")
+                        .unregister().whenComplete((ignored, failure) -> getLogger().info(
                             "PHASE8E-ALPHA handle-unregister=" + (failure == null ? "complete" : "failed")));
-                }
-                case "rebind" -> rebind();
-                case "duplicate" -> registerDuplicate();
-                case "clear-duplicate" -> clearDuplicate();
+                case "rebind" -> registration.rebind();
+                case "duplicate" -> registration.registerDuplicate();
+                case "clear-duplicate" -> registration.clearDuplicate();
                 case "status" -> sender.sendMessage("mode=" + mode.get() + " reads=" + reads.get()
-                        + " cancellations=" + cancellations.get() + " handle=" + (handle != null)
+                        + " cancellations=" + cancellations.get() + " handle=" + registration.hasHandle()
                         + " syncActive=" + synchronousActive.get() + " syncHighWater="
                         + synchronousHighWater.get() + " syncCompleted=" + synchronousCompleted.get());
                 case "sync-reset" -> resetSynchronousBlock();
@@ -131,68 +120,25 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
         }
     }
 
-    private void registerPrimary() {
-        primary = new Declaration();
-        getServer().getServicesManager().register(ProviderDeclaration.class, primary, this, ServicePriority.Normal);
+    private ProviderDeclaration declaration() {
+        return Phase8EProviderSupport.declaration(this::metadata, this::read, this::registered, this::unregistered);
     }
 
-    private void rebind() {
-        clearDuplicate();
-        if (primary != null) {
-            getServer().getServicesManager().unregister(ProviderDeclaration.class, primary);
-        }
-        handle = null;
-        registerPrimary();
-        getLogger().info("PHASE8E-ALPHA ServicesManager generation replaced");
+    private ProviderMetadata metadata(ProviderCallContext context) {
+        verifyContext(context, false);
+        return new ProviderMetadata("alpha", "phase8e.provider.alpha", "1.0.0", List.of(
+                definition("points"), definition("bonus")));
     }
 
-    private void registerDuplicate() {
-        if (duplicate == null) {
-            duplicate = new Declaration();
-            getServer().getServicesManager().register(ProviderDeclaration.class, duplicate, this,
-                    ServicePriority.Low);
-            getLogger().info("PHASE8E-ALPHA duplicate declaration submitted");
-        }
+    private void registered(ProviderRegistrationHandle providerHandle) {
+        registration.registered(providerHandle);
+        int generation = registrations.incrementAndGet();
+        getLogger().info("PHASE8E-ALPHA registered id=" + providerHandle.providerId().value()
+                + " qualification-generation=" + generation);
     }
 
-    private void clearDuplicate() {
-        if (duplicate != null) {
-            getServer().getServicesManager().unregister(ProviderDeclaration.class, duplicate);
-            duplicate = null;
-        }
-    }
-
-    private ProviderRegistrationHandle requireHandle() {
-        ProviderRegistrationHandle value = handle;
-        if (value == null) throw new IllegalStateException("Alpha provider handle is absent");
-        return value;
-    }
-
-    private final class Declaration implements ProviderDeclaration {
-        @Override
-        public ProviderMetadata metadata(ProviderCallContext context) {
-            verifyContext(context, false);
-            return new ProviderMetadata("alpha", "phase8e.provider.alpha", "1.0.0", List.of(
-                    definition("points"), definition("bonus")));
-        }
-
-        @Override
-        public RequirementProvider requirements() {
-            return Phase8EAlphaProvider.this::read;
-        }
-
-        @Override
-        public void registered(ProviderRegistrationHandle registration) {
-            handle = registration;
-            int generation = registrations.incrementAndGet();
-            getLogger().info("PHASE8E-ALPHA registered id=" + registration.providerId().value()
-                    + " qualification-generation=" + generation);
-        }
-
-        @Override
-        public void unregistered() {
-            getLogger().info("PHASE8E-ALPHA unregistered callback");
-        }
+    private void unregistered() {
+        getLogger().info("PHASE8E-ALPHA unregistered callback");
     }
 
     private CompletionStage<Map<ProviderMetricRequest, ProviderMetricResult>> read(
@@ -294,22 +240,11 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
     }
 
     private static ProviderMetricDefinition definition(String id) {
-        return new ProviderMetricDefinition(new MetricId(id), MetricValueType.COUNT,
-                Set.of(MetricOperator.GREATER_OR_EQUAL),
-                Set.of(MetricReadMode.CURRENT, MetricReadMode.LIFETIME), false,
-                MetricMonotonicity.MONOTONIC, MetricResetPolicy.NOT_APPLICABLE, Map.of(),
-                "phase8e.metric." + id, "phase8e.metric." + id + ".description", "points", "authoritative");
+        return Phase8EProviderSupport.countMetric(id, "points");
     }
 
     private static void verifyContext(ProviderCallContext context, boolean identified) {
-        if (Bukkit.isPrimaryThread()
-                || context.execution() != ProviderExecutionExpectation.BOUNDED_WORKER
-                || !context.ownerNamespace().equals("phase8e_alpha")
-                || context.providerId().isPresent() != identified
-                || context.cancellationRequested()
-                || context.expired(Instant.now())) {
-            throw new IllegalStateException("Alpha received an invalid callback context");
-        }
+        Phase8EProviderSupport.verifyContext(context, identified, "phase8e_alpha", "Alpha");
     }
 
     private enum Mode {

@@ -1,5 +1,8 @@
 package net.maddkraft.qualification.phase8e;
 
+import java.lang.reflect.Array;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
 import java.lang.reflect.Proxy;
 import java.time.Duration;
 import java.util.Arrays;
@@ -12,7 +15,7 @@ import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
+import java.util.regex.MatchResult;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -20,179 +23,211 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 
-/** Shared qualification mechanics; scenario intent remains in the owning harness. */
+/** Stateful Phase 8E mechanics shared without obscuring the owning scenarios. */
 final class Phase8EQualificationSupport {
     static final String COMMAND_NAME = "maddprestige";
 
     private Phase8EQualificationSupport() {
     }
 
-    static CommandSender commandSender(JavaPlugin plugin, List<String> messages, String identity) {
-        return (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
-                new Class<?>[] {CommandSender.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("sendMessage") && arguments != null) {
-                        captureMessages(messages, arguments);
-                        return null;
-                    }
-                    return switch (method.getName()) {
-                        case "hasPermission", "isPermissionSet", "isOp" -> true;
-                        case "getName" -> identity;
-                        case "getServer" -> plugin.getServer();
-                        case "spigot" -> new CommandSender.Spigot();
-                        case "toString" -> identity + "-CommandSender";
-                        case "hashCode" -> System.identityHashCode(proxy);
-                        case "equals" -> proxy == arguments[0];
-                        default -> defaultValue(method.getReturnType());
-                    };
-                });
-    }
-
-    private static void captureMessages(List<String> messages, Object[] arguments) {
-        for (Object argument : arguments) {
-            if (argument instanceof Component component) {
-                messages.add(PlainTextComponentSerializer.plainText().serialize(component));
-            } else if (argument instanceof String text) {
-                messages.add(text);
-            } else if (argument instanceof String[] lines) {
-                messages.addAll(List.of(lines));
-            }
-        }
-    }
-
     static Object defaultValue(Class<?> type) {
-        if (!type.isPrimitive()) {
-            if (type == List.class) return List.of();
-            if (type == Set.class) return Set.of();
-            if (type == Optional.class) return Optional.empty();
-            return null;
-        }
-        if (type == boolean.class) return false;
-        if (type == char.class) return '\0';
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == float.class) return 0F;
-        return 0D;
-    }
-
-    static Runnable commandStep(
-            Supplier<String> command,
-            String label,
-            BiConsumer<String, Consumer<List<String>>> dispatcher,
-            Consumer<String> pass,
-            Runnable advance) {
-        return () -> dispatcher.accept(command.get(), ignored -> {
-            pass.accept(label);
-            advance.run();
-        });
-    }
-
-    static void dispatchCommand(
-            CommandContext context,
-            String command,
-            Consumer<List<String>> continuation) {
-        JavaPlugin plugin = context.plugin();
-        List<String> messages = context.messages();
-        messages.clear();
-        String[] tokens = command.split(" +");
-        require(tokens.length > 0 && tokens[0].equals(COMMAND_NAME), "unexpected command ingress");
-        var registered = plugin.getServer().getPluginCommand(COMMAND_NAME);
-        require(registered != null && registered.execute(context.sender(), COMMAND_NAME,
-                Arrays.copyOfRange(tokens, 1, tokens.length)), "command rejected: " + command);
-        eventually(plugin, "command response " + command, Duration.ofSeconds(30), () -> !messages.isEmpty(), () -> {
-            List<String> snapshot = List.copyOf(messages);
-            context.transcript().accept(command + " -> " + snapshot);
-            require(snapshot.stream().noneMatch(line -> failureDiagnostic(line, context.includeDiagnosticCode())),
-                    "command failed: " + command + " -> " + snapshot);
-            continuation.accept(snapshot);
-        }, context.fail());
-    }
-
-    record CommandContext(
-            JavaPlugin plugin,
-            CommandSender sender,
-            List<String> messages,
-            boolean includeDiagnosticCode,
-            Consumer<String> transcript,
-            BiConsumer<String, Throwable> fail) {
-    }
-
-    static boolean failureDiagnostic(String line, boolean includeDiagnosticCode) {
-        String normalized = line.toLowerCase(java.util.Locale.ROOT);
-        return normalized.contains("[error]") || normalized.contains("internal failure")
-                || normalized.contains("command failed")
-                || includeDiagnosticCode && normalized.contains("diagnostic code:")
-                || normalized.startsWith("usage:");
-    }
-
-    static <T> void await(
-            JavaPlugin plugin,
-            String label,
-            CompletionStage<T> stage,
-            Consumer<T> continuation,
-            BiConsumer<String, Throwable> fail) {
-        stage.whenComplete((value, failure) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (failure != null) {
-                fail.accept(label, failure);
-                return;
-            }
-            try {
-                continuation.accept(value);
-            } catch (RuntimeException | LinkageError exception) {
-                fail.accept(label, exception);
-            }
-        }));
-    }
-
-    static void eventually(
-            JavaPlugin plugin,
-            String label,
-            Duration timeout,
-            BooleanSupplier condition,
-            Runnable continuation,
-            BiConsumer<String, Throwable> fail) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        BukkitTask[] task = new BukkitTask[1];
-        task[0] = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            try {
-                if (condition.getAsBoolean()) {
-                    task[0].cancel();
-                    continuation.run();
-                } else if (System.nanoTime() >= deadline) {
-                    task[0].cancel();
-                    fail.accept(label, new QualificationFailure("timed out"));
-                }
-            } catch (RuntimeException | LinkageError failure) {
-                task[0].cancel();
-                fail.accept(label, failure);
-            }
-        }, 1L, 1L);
-    }
-
-    static void advance(
-            JavaPlugin plugin,
-            Queue<Runnable> steps,
-            BiConsumer<String, Throwable> fail) {
-        Runnable next = steps.poll();
-        if (next == null) return;
-        plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-            try {
-                next.run();
-            } catch (RuntimeException | LinkageError failure) {
-                fail.accept("qualification step", failure);
-            }
-        }, 1L);
+        if (type == void.class) return null;
+        if (type == List.class) return List.of();
+        if (type == Set.class) return Set.of();
+        if (type == Optional.class) return Optional.empty();
+        if (!type.isPrimitive()) return null;
+        return Array.get(Array.newInstance(type, 1), 0);
     }
 
     static String extract(Pattern pattern, List<String> lines) {
-        Matcher matcher = pattern.matcher(String.join("\n", lines));
-        if (!matcher.find()) throw new QualificationFailure("expected identity absent from " + lines);
-        return matcher.group();
+        return pattern.matcher(String.join("\n", lines)).results().findFirst()
+                .map(MatchResult::group)
+                .orElseThrow(() -> new QualificationFailure("expected identity absent from " + lines));
     }
 
     static void require(boolean condition, String message) {
         if (!condition) throw new QualificationFailure(message);
+    }
+
+    static final class Coordinator {
+        private final JavaPlugin plugin;
+        private final Queue<Runnable> steps;
+        private final List<String> messages;
+        private final boolean includeDiagnosticCode;
+        private final Consumer<String> transcript;
+        private final BiConsumer<String, Throwable> fail;
+        private final CommandSender sender;
+
+        Coordinator(
+                JavaPlugin plugin,
+                Queue<Runnable> steps,
+                List<String> messages,
+                String identity,
+                boolean includeDiagnosticCode,
+                Consumer<String> transcript,
+                BiConsumer<String, Throwable> fail) {
+            this.plugin = java.util.Objects.requireNonNull(plugin, "plugin");
+            this.steps = java.util.Objects.requireNonNull(steps, "steps");
+            this.messages = java.util.Objects.requireNonNull(messages, "messages");
+            this.includeDiagnosticCode = includeDiagnosticCode;
+            this.transcript = java.util.Objects.requireNonNull(transcript, "transcript");
+            this.fail = java.util.Objects.requireNonNull(fail, "fail");
+            InvocationHandler handler = new SenderInvocation(plugin, messages, identity);
+            sender = (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
+                    new Class<?>[] {CommandSender.class}, handler);
+        }
+
+        CommandSender sender() {
+            return sender;
+        }
+
+        Runnable commandStep(Supplier<String> command, String label, Consumer<String> pass) {
+            return () -> command(command.get(), _ -> {
+                pass.accept(label);
+                advance();
+            });
+        }
+
+        void command(String command, Consumer<List<String>> continuation) {
+            messages.clear();
+            List<String> tokens = List.of(command.split(" +"));
+            require(!tokens.isEmpty() && COMMAND_NAME.equals(tokens.getFirst()), "unexpected command ingress");
+            var registered = plugin.getServer().getPluginCommand(COMMAND_NAME);
+            String[] arguments = tokens.subList(1, tokens.size()).toArray(String[]::new);
+            require(registered != null && registered.execute(sender, COMMAND_NAME, arguments),
+                    "command rejected: " + command);
+            eventually("command response " + command, Duration.ofSeconds(30), () -> !messages.isEmpty(), () -> {
+                List<String> snapshot = List.copyOf(messages);
+                transcript.accept(command + " -> " + snapshot);
+                require(snapshot.stream().noneMatch(this::failureDiagnostic),
+                        "command failed: " + command + " -> " + snapshot);
+                continuation.accept(snapshot);
+            });
+        }
+
+        boolean failureDiagnostic(String line) {
+            String normalized = line.toLowerCase(java.util.Locale.ROOT);
+            return normalized.contains("[error]") || normalized.contains("internal failure")
+                    || normalized.contains("command failed")
+                    || includeDiagnosticCode && normalized.contains("diagnostic code:")
+                    || normalized.startsWith("usage:");
+        }
+
+        <T> void await(String label, CompletionStage<T> stage, Consumer<T> continuation) {
+            stage.handle((value, failure) -> {
+                plugin.getServer().getScheduler().runTask(plugin,
+                        () -> complete(label, value, failure, continuation));
+                return null;
+            });
+        }
+
+        private <T> void complete(
+                String label,
+                T value,
+                Throwable failure,
+                Consumer<T> continuation) {
+            if (failure != null) {
+                fail.accept(label, failure);
+            } else {
+                safely(label, () -> continuation.accept(value));
+            }
+        }
+
+        void eventually(String label, BooleanSupplier condition, Runnable continuation) {
+            eventually(label, Duration.ofSeconds(30), condition, continuation);
+        }
+
+        void eventually(
+                String label,
+                Duration timeout,
+                BooleanSupplier condition,
+                Runnable continuation) {
+            new Poll(label, timeout, condition, continuation).start();
+        }
+
+        void advance() {
+            Optional.ofNullable(steps.poll()).ifPresent(next -> plugin.getServer().getScheduler()
+                    .runTaskLater(plugin, () -> safely("qualification step", next), 1L));
+        }
+
+        private void safely(String label, Runnable action) {
+            try {
+                action.run();
+            } catch (RuntimeException | LinkageError failure) {
+                fail.accept(label, failure);
+            }
+        }
+
+        private final class Poll implements Runnable {
+            private final String label;
+            private final long deadline;
+            private final BooleanSupplier condition;
+            private final Runnable continuation;
+            private BukkitTask task;
+
+            private Poll(String label, Duration timeout, BooleanSupplier condition, Runnable continuation) {
+                this.label = label;
+                deadline = System.nanoTime() + timeout.toNanos();
+                this.condition = condition;
+                this.continuation = continuation;
+            }
+
+            private void start() {
+                task = plugin.getServer().getScheduler().runTaskTimer(plugin, this, 1L, 1L);
+            }
+
+            @Override
+            public void run() {
+                try {
+                    if (condition.getAsBoolean()) {
+                        finish(continuation);
+                    } else if (System.nanoTime() >= deadline) {
+                        finish(() -> fail.accept(label, new QualificationFailure("timed out")));
+                    }
+                } catch (RuntimeException | LinkageError failure) {
+                    finish(() -> fail.accept(label, failure));
+                }
+            }
+
+            private void finish(Runnable completion) {
+                task.cancel();
+                completion.run();
+            }
+        }
+    }
+
+    private record SenderInvocation(
+            JavaPlugin plugin,
+            List<String> messages,
+            String identity) implements InvocationHandler {
+        @Override
+        public Object invoke(Object proxy, Method method, Object[] arguments) {
+            String name = method.getName();
+            if ("sendMessage".equals(name) && arguments != null) {
+                Arrays.stream(arguments).forEach(this::capture);
+                return null;
+            }
+            return switch (name) {
+                case "hasPermission", "isPermissionSet", "isOp" -> true;
+                case "getName" -> identity;
+                case "getServer" -> plugin.getServer();
+                case "spigot" -> new CommandSender.Spigot();
+                case "toString" -> identity + "-CommandSender";
+                case "hashCode" -> System.identityHashCode(proxy);
+                case "equals" -> proxy == arguments[0];
+                default -> defaultValue(method.getReturnType());
+            };
+        }
+
+        private void capture(Object argument) {
+            switch (argument) {
+                case Component component -> messages.add(
+                        PlainTextComponentSerializer.plainText().serialize(component));
+                case String text -> messages.add(text);
+                case String[] lines -> messages.addAll(List.of(lines));
+                default -> { /* Other overload payloads do not carry user-visible text. */ }
+            }
+        }
     }
 
     static final class QualificationFailure extends RuntimeException {

@@ -5,50 +5,43 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.id.MetricId;
-import net.maddkraft.maddprestige.api.metric.MetricMonotonicity;
-import net.maddkraft.maddprestige.api.metric.MetricOperator;
 import net.maddkraft.maddprestige.api.metric.MetricReadMode;
-import net.maddkraft.maddprestige.api.metric.MetricResetPolicy;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
-import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.api.provider.ProviderCallContext;
 import net.maddkraft.maddprestige.api.provider.ProviderDeclaration;
-import net.maddkraft.maddprestige.api.provider.ProviderExecutionExpectation;
 import net.maddkraft.maddprestige.api.provider.ProviderMetadata;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricDefinition;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricRequest;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricResult;
 import net.maddkraft.maddprestige.api.provider.ProviderRegistrationHandle;
-import net.maddkraft.maddprestige.api.provider.RequirementProvider;
+import net.maddkraft.qualification.phase8e.provider.Phase8EProviderSupport;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /** Second independently owned Stable provider for Phase 8E isolation qualification. */
 public final class Phase8EBetaProvider extends JavaPlugin {
     private final AtomicReference<Mode> mode = new AtomicReference<>(Mode.HEALTHY);
     private final AtomicInteger reads = new AtomicInteger();
-    private Declaration primary;
-    private volatile ProviderRegistrationHandle handle;
+    private Phase8EProviderSupport.Registration registration;
 
     @Override
     public void onEnable() {
-        registerPrimary();
+        registration = new Phase8EProviderSupport.Registration(this, "PHASE8E-BETA", this::declaration);
+        registration.enable();
         getLogger().info("PHASE8E-BETA enabled after MaddPrestige startup");
     }
 
     @Override
     public void onDisable() {
-        getServer().getServicesManager().unregisterAll(this);
+        registration.disable();
         getLogger().info("PHASE8E-BETA disabled reads=" + reads.get());
     }
 
@@ -63,10 +56,10 @@ public final class Phase8EBetaProvider extends JavaPlugin {
                     mode.set(replacement);
                     getLogger().info("PHASE8E-BETA mode=" + replacement);
                 }
-                case "unregister" -> requireHandle().unregister();
-                case "rebind" -> rebind();
+                case "unregister" -> registration.requireHandle("Beta provider handle is absent").unregister();
+                case "rebind" -> registration.rebind();
                 case "status" -> sender.sendMessage("mode=" + mode.get() + " reads=" + reads.get()
-                        + " handle=" + (handle != null));
+                        + " handle=" + registration.hasHandle());
                 default -> {
                     return false;
                 }
@@ -78,47 +71,23 @@ public final class Phase8EBetaProvider extends JavaPlugin {
         }
     }
 
-    private void registerPrimary() {
-        primary = new Declaration();
-        getServer().getServicesManager().register(ProviderDeclaration.class, primary, this, ServicePriority.Normal);
+    private ProviderDeclaration declaration() {
+        return Phase8EProviderSupport.declaration(this::metadata, this::read, this::registered, this::unregistered);
     }
 
-    private void rebind() {
-        if (primary != null) getServer().getServicesManager().unregister(ProviderDeclaration.class, primary);
-        handle = null;
-        registerPrimary();
-        getLogger().info("PHASE8E-BETA ServicesManager generation replaced");
+    private ProviderMetadata metadata(ProviderCallContext context) {
+        verifyContext(context, false);
+        return new ProviderMetadata("beta", "phase8e.provider.beta", "1.0.0", List.of(
+                definition("tokens"), definition("online_only")));
     }
 
-    private ProviderRegistrationHandle requireHandle() {
-        ProviderRegistrationHandle value = handle;
-        if (value == null) throw new IllegalStateException("Beta provider handle is absent");
-        return value;
+    private void registered(ProviderRegistrationHandle providerHandle) {
+        registration.registered(providerHandle);
+        getLogger().info("PHASE8E-BETA registered id=" + providerHandle.providerId().value());
     }
 
-    private final class Declaration implements ProviderDeclaration {
-        @Override
-        public ProviderMetadata metadata(ProviderCallContext context) {
-            verifyContext(context, false);
-            return new ProviderMetadata("beta", "phase8e.provider.beta", "1.0.0", List.of(
-                    definition("tokens"), definition("online_only")));
-        }
-
-        @Override
-        public RequirementProvider requirements() {
-            return Phase8EBetaProvider.this::read;
-        }
-
-        @Override
-        public void registered(ProviderRegistrationHandle registration) {
-            handle = registration;
-            getLogger().info("PHASE8E-BETA registered id=" + registration.providerId().value());
-        }
-
-        @Override
-        public void unregistered() {
-            getLogger().info("PHASE8E-BETA unregistered callback");
-        }
+    private void unregistered() {
+        getLogger().info("PHASE8E-BETA unregistered callback");
     }
 
     private CompletionStage<Map<ProviderMetricRequest, ProviderMetricResult>> read(
@@ -142,22 +111,11 @@ public final class Phase8EBetaProvider extends JavaPlugin {
     }
 
     private static ProviderMetricDefinition definition(String id) {
-        return new ProviderMetricDefinition(new MetricId(id), MetricValueType.COUNT,
-                Set.of(MetricOperator.GREATER_OR_EQUAL),
-                Set.of(MetricReadMode.CURRENT, MetricReadMode.LIFETIME), false,
-                MetricMonotonicity.MONOTONIC, MetricResetPolicy.NOT_APPLICABLE, Map.of(),
-                "phase8e.metric." + id, "phase8e.metric." + id + ".description", "tokens", "authoritative");
+        return Phase8EProviderSupport.countMetric(id, "tokens");
     }
 
     private static void verifyContext(ProviderCallContext context, boolean identified) {
-        if (Bukkit.isPrimaryThread()
-                || context.execution() != ProviderExecutionExpectation.BOUNDED_WORKER
-                || !context.ownerNamespace().equals("phase8e_beta")
-                || context.providerId().isPresent() != identified
-                || context.cancellationRequested()
-                || context.expired(Instant.now())) {
-            throw new IllegalStateException("Beta received an invalid callback context");
-        }
+        Phase8EProviderSupport.verifyContext(context, identified, "phase8e_beta", "Beta");
     }
 
     private enum Mode {

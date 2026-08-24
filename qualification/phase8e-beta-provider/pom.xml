@@ -21,10 +21,21 @@
     </dependencies>
     <build>
         <finalName>Phase8E-Beta-Provider</finalName>
-        <plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
+        <plugins>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions><execution><id>phase8e-provider-support</id><phase>generate-sources</phase>
+                    <goals><goal>add-source</goal></goals><configuration>
+                    <sources><source>../phase8e-provider-support/src/main/java</source></sources>
+                    </configuration></execution></executions>
+            </plugin>
+            <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-compiler-plugin</artifactId>
             <version>3.14.1</version><configuration><release>${maven.compiler.release}</release>
             <parameters>true</parameters><showWarnings>true</showWarnings>
             <compilerArgs><arg>-Xlint:all</arg><arg>-Xlint:-processing</arg></compilerArgs>
-            </configuration></plugin></plugins>
+            </configuration></plugin>
+        </plugins>
     </build>
 </project>
