@@ -14,11 +14,9 @@ import java.sql.Statement;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -29,10 +27,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.service.MaddPrestigeService;
 import net.maddkraft.maddprestige.api.service.OperationEvaluationStatus;
@@ -51,6 +47,13 @@ import org.bukkit.scheduler.BukkitTask;
 /** Coordinates disposable Phase 8E qualification exclusively through public Paper/Stable boundaries. */
 public final class Phase8EQualificationHarness extends JavaPlugin {
     private static final String ALPHA = "phase8e_alpha:alpha";
+    private static final String COMMAND_NAME = Phase8EQualificationSupport.COMMAND_NAME;
+    private static final String SETUP_STAGE = "maddprestige setup stage ";
+    private static final String SETUP_PROVIDER = "maddprestige setup provider ";
+    private static final String BASE_STAGE_ID = "base";
+    private static final String MCMO_PLUGIN = "mcMMO";
+    private static final String MCMO_PROVIDER = "mcmmo";
+    private static final String PASS_COUNT = " pass-count=";
     private static final String BETA = "phase8e_beta:beta";
     private static final String MANUAL = "phase5_events";
     private static final String MANUAL_METRIC = "mcmmo_adjusted_xp_total";
@@ -126,7 +129,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         releaseWriteReservation();
         closeObserver();
         closeVirtualThreadObservation();
-        getLogger().info("PHASE8E-Q shutdown mode=" + mode() + " pass-count=" + passed
+        getLogger().info("PHASE8E-Q shutdown mode=" + mode() + PASS_COUNT + passed
                 + " accepted-manual=" + acceptedManual.get());
     }
 
@@ -138,7 +141,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
                 buildPerformanceFresh();
             }
             advance();
-        } catch (Throwable failure) {
+        } catch (RuntimeException | LinkageError failure) {
             fail("begin", failure);
         }
     }
@@ -151,7 +154,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         steps.add(() -> eventually("production/provider discovery", () -> {
             service = getServer().getServicesManager().load(MaddPrestigeService.class);
             return service != null && providerVisible(ALPHA) && providerVisible(BETA)
-                    && pluginEnabled("mcMMO") && pluginEnabled("PlaceholderAPI");
+                    && pluginEnabled(MCMO_PLUGIN) && pluginEnabled("PlaceholderAPI");
         }, () -> {
             pass("production service, exact dependencies and two independent late providers discovered");
             advance();
@@ -161,13 +164,13 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
             pass("performance canonical setup session started");
             advance();
         }));
-        steps.add(commandStep(() -> "maddprestige setup provider " + setupSession + " internal",
+        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + " internal",
                 "internal rank authority selected"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " base Base",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " base Base",
                 "base stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " alpha Alpha",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " alpha Alpha",
                 "Alpha-qualified intermediate stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " target Target",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " target Target",
                 "target stage added"));
         steps.add(commandStep(() -> "maddprestige setup baseline " + setupSession + " base",
                 "base stage selected"));
@@ -194,7 +197,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
                 }));
         steps.add(() -> enablePerformanceIntegrations(this::advance));
         steps.add(() -> eventually("active multi-provider and event composition", () ->
-                providerVisible(ALPHA) && providerVisible(BETA) && providerVisible("mcmmo")
+                providerVisible(ALPHA) && providerVisible(BETA) && providerVisible(MCMO_PROVIDER)
                         && providerVisible(MANUAL), () -> await("initial two-provider evaluation",
                 service.evaluateRankUp(servicePlayers.getFirst()), result -> {
                     require(result.successful() && result.value().orElseThrow().status()
@@ -229,7 +232,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         steps.add(() -> eventually("unchanged restart composition", () -> {
             service = getServer().getServicesManager().load(MaddPrestigeService.class);
             return service != null && providerVisible(ALPHA) && providerVisible(BETA)
-                    && providerVisible("mcmmo") && providerVisible(MANUAL);
+                    && providerVisible(MCMO_PROVIDER) && providerVisible(MANUAL);
         }, () -> {
             openObserver();
             ManualSnapshot snapshot = manualSnapshot();
@@ -242,7 +245,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
             pass("unchanged restart recovered exact accepted manual total, rows and healthy provider");
             signalRefresh(refreshPlayers.getFirst());
             eventually("restart Placeholder materialization", () ->
-                    "base".equals(render(refreshPlayers.getFirst().getUniqueId())), () ->
+                    BASE_STAGE_ID.equals(render(refreshPlayers.getFirst().getUniqueId())), () ->
                     await("restart two-provider evaluation", service.evaluateRankUp(servicePlayers.get(1)), result -> {
                         require(result.successful() && result.value().orElseThrow().status()
                                 == OperationEvaluationStatus.ELIGIBLE,
@@ -296,7 +299,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
                     UUID playerId = refreshPlayers.get(index % refreshPlayers.size()).getUniqueId();
                     String value = render(playerId);
                     renderCalls.incrementAndGet();
-                    if (!"base".equals(value)) renderMismatches.incrementAndGet();
+                    if (!BASE_STAGE_ID.equals(value)) renderMismatches.incrementAndGet();
                 });
                 if (currentTick + 1 >= MEASUREMENT_TICKS) {
                     task[0].cancel();
@@ -308,7 +311,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
                     pass("fixed 90-second measurement workload generated exact declared counts");
                     advance();
                 }
-            } catch (Throwable failure) {
+            } catch (RuntimeException | LinkageError failure) {
                 task[0].cancel();
                 stopSampler();
                 fail("measurement load", failure);
@@ -350,7 +353,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
                     && snapshot.rows() == EVENT_PLAYERS
                     && snapshot.sum().compareTo(BigDecimal.valueOf(MEASUREMENT_EVENTS)) == 0
                     && refreshPlayers.stream().allMatch(player ->
-                            "base".equals(render(player.getUniqueId())))
+                            BASE_STAGE_ID.equals(render(player.getUniqueId())))
                     && virtual.converged();
             if (!converged) {
                 consecutive.set(0);
@@ -417,7 +420,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         }
         pass("dirty shutdown state sealed before periodic flush");
         finishServer("PHASE8E-PERF FIRST-BOOT DIRTY-SHUTDOWN accepted-manual=" + acceptedManual.get()
-                + " durable-before=" + before.sum().toPlainString() + " pass-count=" + passed);
+                + " durable-before=" + before.sum().toPlainString() + PASS_COUNT + passed);
     }
 
     private void deliverXp(Player player) {
@@ -454,7 +457,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
                 }
                 serviceTerminal.incrementAndGet();
             });
-        } catch (RuntimeException failure) {
+        } catch (RuntimeException _) {
             observeServiceLatency(System.nanoTime() - started);
             serviceFailed.incrementAndGet();
             serviceTerminal.incrementAndGet();
@@ -485,7 +488,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
             String value = (String) placeholderApi.getMethod("setPlaceholders",
                     org.bukkit.OfflinePlayer.class, String.class)
                     .invoke(null, getServer().getOfflinePlayer(playerId), PLACEHOLDER);
-            if ("base".equals(value)) refreshMaterialized.add(playerId);
+            if (BASE_STAGE_ID.equals(value)) refreshMaterialized.add(playerId);
             return value;
         } catch (ReflectiveOperationException failure) {
             throw new IllegalStateException("Cannot invoke the exact PlaceholderAPI render surface", failure);
@@ -524,7 +527,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
             case "control" -> baselineMspt.add(mspt);
             case "load" -> loadMspt.add(mspt);
             case "recovery" -> recoveryMspt.add(mspt);
-            default -> { }
+
         }
         Set<Thread> platformSnapshot = Thread.getAllStackTraces().keySet();
         long platformThreads = platformSnapshot.stream().filter(Thread::isAlive).count();
@@ -596,7 +599,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         if (observer != null) {
             try {
                 observer.close();
-            } catch (Exception ignored) {
+            } catch (Exception _) {
                 // Disposable read-only observer cleanup cannot affect production state.
             }
             observer = null;
@@ -647,12 +650,12 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         if (writeReservation == null) return;
         try (Statement statement = writeReservation.createStatement()) {
             statement.execute("ROLLBACK");
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // Closing the disposable connection below also releases the transaction reservation.
         }
         try {
             writeReservation.close();
-        } catch (Exception ignored) {
+        } catch (Exception _) {
             // Best-effort close of qualification-owned connection.
         }
         writeReservation = null;
@@ -723,90 +726,29 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
     }
 
     private CommandSender commandSender() {
-        return (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
-                new Class<?>[] {CommandSender.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("sendMessage") && arguments != null) {
-                        for (Object argument : arguments) {
-                            if (argument instanceof Component component) {
-                                messages.add(PlainTextComponentSerializer.plainText().serialize(component));
-                            } else if (argument instanceof String text) {
-                                messages.add(text);
-                            } else if (argument instanceof String[] lines) {
-                                messages.addAll(List.of(lines));
-                            }
-                        }
-                        return null;
-                    }
-                    return switch (method.getName()) {
-                        case "hasPermission", "isPermissionSet", "isOp" -> true;
-                        case "getName" -> "Phase8E-Harness";
-                        case "getServer" -> getServer();
-                        case "spigot" -> new CommandSender.Spigot();
-                        case "toString" -> "Phase8E-Harness-CommandSender";
-                        case "hashCode" -> System.identityHashCode(proxy);
-                        case "equals" -> proxy == arguments[0];
-                        default -> defaultValue(method.getReturnType());
-                    };
-                });
+        return Phase8EQualificationSupport.commandSender(this, messages, "Phase8E-Harness");
     }
 
     private static Object defaultValue(Class<?> type) {
-        if (!type.isPrimitive()) {
-            if (type == List.class) return List.of();
-            if (type == Set.class) return Set.of();
-            if (type == Optional.class) return Optional.empty();
-            return null;
-        }
-        if (type == boolean.class) return false;
-        if (type == char.class) return '\0';
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == float.class) return 0F;
-        return 0D;
+        return Phase8EQualificationSupport.defaultValue(type);
     }
 
     private Runnable commandStep(java.util.function.Supplier<String> command, String label) {
-        return () -> command(command.get(), ignored -> {
-            pass(label);
-            advance();
-        });
+        return Phase8EQualificationSupport.commandStep(command, label, this::command, this::pass, this::advance);
     }
 
     private void command(String command, Consumer<List<String>> continuation) {
-        messages.clear();
-        String[] tokens = command.split(" +");
-        require(tokens.length > 0 && tokens[0].equals("maddprestige"), "unexpected command ingress");
-        var registered = getServer().getPluginCommand("maddprestige");
-        require(registered != null && registered.execute(sender, "maddprestige",
-                Arrays.copyOfRange(tokens, 1, tokens.length)), "command rejected: " + command);
-        eventually("command response " + command, () -> !messages.isEmpty(), () -> {
-            List<String> snapshot = List.copyOf(messages);
-            require(snapshot.stream().noneMatch(Phase8EQualificationHarness::failureDiagnostic),
-                    "command failed: " + command + " -> " + snapshot);
-            continuation.accept(snapshot);
-        });
+        Phase8EQualificationSupport.CommandContext context = new Phase8EQualificationSupport.CommandContext(
+                this, sender, messages, false, _ -> { }, this::fail);
+        Phase8EQualificationSupport.dispatchCommand(context, command, continuation);
     }
 
     private static boolean failureDiagnostic(String line) {
-        String normalized = line.toLowerCase(Locale.ROOT);
-        return normalized.contains("[error]") || normalized.contains("internal failure")
-                || normalized.contains("command failed") || normalized.startsWith("usage:");
+        return Phase8EQualificationSupport.failureDiagnostic(line, false);
     }
 
     private <T> void await(String label, CompletionStage<T> stage, Consumer<T> continuation) {
-        stage.whenComplete((value, failure) -> getServer().getScheduler().runTask(this, () -> {
-            if (failure != null) {
-                fail(label, failure);
-                return;
-            }
-            try {
-                continuation.accept(value);
-            } catch (Throwable exception) {
-                fail(label, exception);
-            }
-        }));
+        Phase8EQualificationSupport.await(this, label, stage, continuation, this::fail);
     }
 
     private void eventually(String label, BooleanSupplier condition, Runnable continuation) {
@@ -814,35 +756,11 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
     }
 
     private void eventually(String label, Duration timeout, BooleanSupplier condition, Runnable continuation) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        final BukkitTask[] task = new BukkitTask[1];
-        task[0] = getServer().getScheduler().runTaskTimer(this, () -> {
-            try {
-                if (condition.getAsBoolean()) {
-                    task[0].cancel();
-                    continuation.run();
-                } else if (System.nanoTime() >= deadline) {
-                    task[0].cancel();
-                    fail(label, new IllegalStateException("timed out"));
-                }
-            } catch (Throwable failure) {
-                task[0].cancel();
-                fail(label, failure);
-            }
-        }, 1L, 1L);
+        Phase8EQualificationSupport.eventually(this, label, timeout, condition, continuation, this::fail);
     }
 
     private void advance() {
-        Runnable next = steps.poll();
-        if (next != null) {
-            getServer().getScheduler().runTaskLater(this, () -> {
-                try {
-                    next.run();
-                } catch (Throwable failure) {
-                    fail("qualification step", failure);
-                }
-            }, 1L);
-        }
+        Phase8EQualificationSupport.advance(this, steps, this::fail);
     }
 
     private void pass(String message) {
@@ -854,7 +772,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
         if (stopping) return;
         stopping = true;
         getLogger().log(java.util.logging.Level.SEVERE, "PHASE8E-Q FAIL " + label, failure);
-        finishServer("PHASE8E-Q FAILED mode=" + mode() + " pass-count=" + passed);
+        finishServer("PHASE8E-Q FAILED mode=" + mode() + PASS_COUNT + passed);
     }
 
     private void finishServer(String message) {
@@ -880,9 +798,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
     }
 
     private static String extract(Pattern pattern, List<String> lines) {
-        Matcher matcher = pattern.matcher(String.join("\n", lines));
-        if (!matcher.find()) throw new IllegalStateException("expected identity absent from " + lines);
-        return matcher.group();
+        return Phase8EQualificationSupport.extract(pattern, lines);
     }
 
     private static void distribute(
@@ -903,7 +819,7 @@ public final class Phase8EQualificationHarness extends JavaPlugin {
     }
 
     private static void require(boolean condition, String message) {
-        if (!condition) throw new IllegalStateException(message);
+        Phase8EQualificationSupport.require(condition, message);
     }
 
     private record ManualSnapshot(int rows, BigDecimal sum) {

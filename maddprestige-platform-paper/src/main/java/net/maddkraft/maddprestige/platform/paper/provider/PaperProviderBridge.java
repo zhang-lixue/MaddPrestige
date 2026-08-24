@@ -486,34 +486,43 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
                     .thenCompose(stage -> Objects.requireNonNull(stage, "provider completion stage"))
                     .toCompletableFuture().orTimeout(READ_DEADLINE.toMillis(), TimeUnit.MILLISECONDS);
             future.whenComplete((ignored, failure) -> cancellation.cancel());
-            return future.thenApply(result -> {
-                Set<ProviderMetricRequest> requestedKeys = Set.copyOf(requests.values());
-                if (result == null || result.size() != requestedKeys.size()
-                        || !result.keySet().equals(requestedKeys)
-                        || result.values().stream().anyMatch(Objects::isNull)) {
-                    throw new IllegalStateException("Provider returned an invalid metric result map");
-                }
-                LinkedHashMap<MetricQuery, MetricSample> adapted = new LinkedHashMap<>();
-                requests.forEach((query, request) -> {
-                    ProviderMetricResult metric = result.get(request);
-                    if (metric.status() == ProviderMetricStatus.AVAILABLE) {
-                        MetricDescriptor definition = metrics.stream()
-                                .filter(value -> value.metricId().equals(query.metricId())).findFirst()
-                                .orElseThrow(() -> new IllegalStateException(
-                                        "Provider returned a result for an undeclared metric"));
-                        if (metric.value().orElseThrow().type() != definition.valueType()) {
-                            throw new IllegalStateException("Provider returned a semantically inconsistent value");
-                        }
-                        adapted.put(query, MetricSample.available(metric.value().orElseThrow(), providerGeneration,
-                                metric.observedAt(), id.value()));
-                    } else {
-                        adapted.put(query, MetricSample.unavailable(providerGeneration, metric.observedAt(),
-                                id.value(), metric.code()));
-                    }
-                });
-                healthy();
-                return Map.copyOf(adapted);
-            }).exceptionallyCompose(this::failed);
+            return future.thenApply(result -> adaptResult(requests, result, providerGeneration))
+                    .exceptionallyCompose(this::failed);
+        }
+
+        private Map<MetricQuery, MetricSample> adaptResult(
+                Map<MetricQuery, ProviderMetricRequest> requests,
+                Map<ProviderMetricRequest, ProviderMetricResult> result,
+                long providerGeneration) {
+            Set<ProviderMetricRequest> requestedKeys = Set.copyOf(requests.values());
+            if (result == null || result.size() != requestedKeys.size()
+                    || !result.keySet().equals(requestedKeys)
+                    || result.values().stream().anyMatch(Objects::isNull)) {
+                throw new IllegalStateException("Provider returned an invalid metric result map");
+            }
+            LinkedHashMap<MetricQuery, MetricSample> adapted = new LinkedHashMap<>();
+            requests.forEach((query, request) -> adapted.put(query,
+                    adaptMetric(query, result.get(request), providerGeneration)));
+            healthy();
+            return Map.copyOf(adapted);
+        }
+
+        private MetricSample adaptMetric(
+                MetricQuery query,
+                ProviderMetricResult metric,
+                long providerGeneration) {
+            if (metric.status() != ProviderMetricStatus.AVAILABLE) {
+                return MetricSample.unavailable(providerGeneration, metric.observedAt(), id.value(), metric.code());
+            }
+            MetricDescriptor definition = metrics.stream()
+                    .filter(value -> value.metricId().equals(query.metricId())).findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Provider returned a result for an undeclared metric"));
+            if (metric.value().orElseThrow().type() != definition.valueType()) {
+                throw new IllegalStateException("Provider returned a semantically inconsistent value");
+            }
+            return MetricSample.available(metric.value().orElseThrow(), providerGeneration,
+                    metric.observedAt(), id.value());
         }
 
         private <T> CompletionStage<T> failed(Throwable failure) {

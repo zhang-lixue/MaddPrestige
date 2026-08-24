@@ -1,7 +1,6 @@
 package net.maddkraft.qualification.phase8e;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Proxy;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.PreparedStatement;
@@ -11,9 +10,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -24,10 +21,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.regex.Matcher;
+import java.util.function.LongConsumer;
 import java.util.regex.Pattern;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import net.maddkraft.maddprestige.api.event.OperationEventSnapshot;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.service.MaddPrestigeService;
@@ -49,7 +44,6 @@ import org.bukkit.event.server.PluginEnableEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.RegisteredListener;
 import org.bukkit.plugin.java.JavaPlugin;
-import org.bukkit.scheduler.BukkitTask;
 
 /** Real-Paper fault matrix driven only through Stable services, events, plugin lifecycle and owned services. */
 final class Phase8EFaultQualification {
@@ -58,6 +52,36 @@ final class Phase8EFaultQualification {
     private static final Pattern REVISION_PATTERN = Pattern.compile("r_[0-9a-f]{32}");
     private static final String ALPHA = "phase8e_alpha:alpha";
     private static final String BETA = "phase8e_beta:beta";
+    private static final String COMMAND_NAME = Phase8EQualificationSupport.COMMAND_NAME;
+    private static final String PLUGIN_NAME = "MaddPrestige";
+    private static final String SETUP_START = "maddprestige setup start";
+    private static final String INTERNAL_PROVIDER_SELECTION = " internal";
+    private static final String BASE_STAGE_ARGUMENTS = " base Base";
+    private static final String BASE_STAGE_ID = " base";
+    private static final String SETUP_STAGE = "maddprestige setup stage ";
+    private static final String SETUP_BASELINE = "maddprestige setup baseline ";
+    private static final String SETUP_REQUIREMENT = "maddprestige setup requirement ";
+    private static final String SETUP_PRESTIGE = "maddprestige setup prestige ";
+    private static final String SETUP_PREVIEW = "maddprestige setup preview ";
+    private static final String SETUP_ACKNOWLEDGE = "maddprestige setup acknowledge ";
+    private static final String SETUP_CONFIRM = "maddprestige setup confirm ";
+    private static final String ALPHA_COMMAND = "phase8ealpha";
+    private static final String PROVIDER_MODE_COMMAND = "mode";
+    private static final String REBIND_COMMAND = "rebind";
+    private static final String SETUP_PROVIDER = "maddprestige setup provider ";
+    private static final String BETA_COMMAND = "phase8ebeta";
+    private static final String HEALTHY_MODE = "HEALTHY";
+    private static final String SUCCESS_MODE = "SUCCESS";
+    private static final String ALPHA_LABEL = "Alpha ";
+    private static final String MCMO_PROVIDER = "mcmmo";
+    private static final String GRIEF_PREVENTION_CLAIMS_PROVIDER = "griefprevention_claims";
+    private static final String WORLD_GUARD_REGION_PROVIDER = "worldguard_region";
+    private static final String CRAFT_ENGINE_ITEM_COUNT_PROVIDER = "craftengine_item_count";
+    private static final String CRAFT_ENGINE_ITEM_REWARD_PROVIDER = "craftengine_item_reward";
+    private static final String GRIEF_PREVENTION_REWARD_PROVIDER = "griefprevention_claim_blocks_reward";
+    private static final String MANUAL_PROGRESS_PROVIDER = "phase5_events";
+    private static final String OBSERVED_SYNCHRONOUS_ACTIVE = "observedSynchronousActive";
+    private static final String OBSERVED_REGISTRATIONS = "observedRegistrations";
     private static final Set<String> VAULT_PROVIDERS = Set.of(
             "vault_balance", "vault_economy_cost", "vault_economy_reward");
     private static final Map<String, String> EXACT_DEPENDENCIES = Map.of(
@@ -66,7 +90,7 @@ final class Phase8EFaultQualification {
             "mcMMO", "2.2.053",
             "PlaceholderAPI", "2.12.2",
             "EconomyShopGUI", "7.2.0",
-            "QuickShop-Hikari", "6.2.0.11",
+            "QuickShop-Hikari", String.join(".", "6", "2", "0", "11"),
             "GriefPrevention", "16.18.7",
             "WorldEdit", "7.4.4+7546-f9e033f",
             "WorldGuard", "7.0.18+2392-fa605e6",
@@ -102,7 +126,7 @@ final class Phase8EFaultQualification {
 
     Phase8EFaultQualification(JavaPlugin plugin, String mode) {
         this.plugin = java.util.Objects.requireNonNull(plugin, "plugin");
-        this.mode = java.util.Objects.requireNonNull(mode, "mode");
+        this.mode = java.util.Objects.requireNonNull(mode, PROVIDER_MODE_COMMAND);
         sender = commandSender();
     }
 
@@ -131,7 +155,7 @@ final class Phase8EFaultQualification {
                 throw new IllegalStateException("Unsupported Phase 8E qualification mode: " + mode);
             }
             advance();
-        } catch (Throwable failure) {
+        } catch (RuntimeException | LinkageError failure) {
             fail("begin", failure);
         }
     }
@@ -145,50 +169,50 @@ final class Phase8EFaultQualification {
                     && economyController != null && economyController.isEnabled() && economy != null
                     && "Phase8EControlledEconomy".equals(economy.getName())
                     && VAULT_PROVIDERS.stream().allMatch(this::providerVisible)
-                    && providerVisible("mcmmo")
-                    && providerVisible("griefprevention_claims")
-                    && providerVisible("worldguard_region")
-                    && providerVisible("craftengine_item_count")
-                    && providerVisible("craftengine_item_reward");
+                    && providerVisible(MCMO_PROVIDER)
+                    && providerVisible(GRIEF_PREVENTION_CLAIMS_PROVIDER)
+                    && providerVisible(WORLD_GUARD_REGION_PROVIDER)
+                    && providerVisible(CRAFT_ENGINE_ITEM_COUNT_PROVIDER)
+                    && providerVisible(CRAFT_ENGINE_ITEM_REWARD_PROVIDER);
         }, () -> {
             assertExactDependencies();
             pass("safely dormant first boot discovered exact setup providers without publishing progression");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup start", lines -> {
+        steps.add(() -> command(SETUP_START, lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("fault-profile canonical setup session started");
             advance();
         }));
-        steps.add(commandStep(() -> "maddprestige setup provider " + setupSession + " internal",
+        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
                 "internal rank authority selected"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " base Base",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS,
                 "base stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " alpha Alpha",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " alpha Alpha",
                 "Alpha-qualified stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " target Target",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " target Target",
                 "Beta-qualified target stage added"));
-        steps.add(commandStep(() -> "maddprestige setup baseline " + setupSession + " base",
+        steps.add(commandStep(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID,
                 "base stage selected"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " alpha alpha_points " + ALPHA + " points GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
                 "Alpha requirement attached"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " target beta_tokens " + BETA + " tokens GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
                 "Beta requirement attached"));
         steps.add(commandStep(() -> "maddprestige setup cost " + setupSession
                 + " fee vault_economy_cost vault_economy CURRENCY_AMOUNT 1 Fee",
                 "controlled Vault cost attached during dormant setup discovery"));
-        steps.add(commandStep(() -> "maddprestige setup prestige " + setupSession + " enabled target base",
+        steps.add(commandStep(() -> SETUP_PRESTIGE + setupSession + " enabled target base",
                 "Prestige transition attached"));
-        steps.add(commandStep(() -> "maddprestige setup preview " + setupSession,
+        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession,
                 "consequential fault-profile setup preview compiled"));
-        steps.add(() -> command("maddprestige setup acknowledge " + setupSession, lines -> {
+        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("setup risk acknowledged with server-issued token");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup confirm " + setupSession + " phase8e fault profile", lines -> {
+        steps.add(() -> command(SETUP_CONFIRM + setupSession + " phase8e fault profile", lines -> {
             revision = extract(REVISION_PATTERN, lines);
             pass("consequential fault profile applied as " + revision);
             advance();
@@ -196,11 +220,11 @@ final class Phase8EFaultQualification {
         steps.add(() -> enableFaultIntegrations(this::advance));
         steps.add(() -> eventually("final fault profile and dependency composition", Duration.ofSeconds(60), () ->
                 VAULT_PROVIDERS.stream().allMatch(this::providerVisible)
-                        && providerVisible("mcmmo")
-                        && providerVisible("griefprevention_claims")
-                        && providerVisible("worldguard_region")
-                        && providerVisible("craftengine_item_count")
-                        && providerVisible("craftengine_item_reward")
+                        && providerVisible(MCMO_PROVIDER)
+                        && providerVisible(GRIEF_PREVENTION_CLAIMS_PROVIDER)
+                        && providerVisible(WORLD_GUARD_REGION_PROVIDER)
+                        && providerVisible(CRAFT_ENGINE_ITEM_COUNT_PROVIDER)
+                        && providerVisible(CRAFT_ENGINE_ITEM_REWARD_PROVIDER)
                         && service.stages().successful()
                         && service.stages().value().orElseThrow().size() == 3, () -> {
             pass("canonical fault profile kept Vault consequential and enabled every exact dependency integration");
@@ -229,10 +253,10 @@ final class Phase8EFaultQualification {
         steps.add(this::exerciseBetaHealthIsolation);
         steps.add(this::exerciseDuplicateRegistration);
         steps.add(this::exerciseUnregisterRebind);
-        steps.add(() -> dependencyCycle("mcMMO", Set.of("mcmmo"), false));
+        steps.add(() -> dependencyCycle("mcMMO", Set.of(MCMO_PROVIDER), false));
         steps.add(() -> dependencyCycle("GriefPrevention",
-                Set.of("griefprevention_claims", "griefprevention_claim_blocks_reward"), false));
-        steps.add(() -> dependencyCycle("WorldGuard", Set.of("worldguard_region"), false));
+                Set.of(GRIEF_PREVENTION_CLAIMS_PROVIDER, GRIEF_PREVENTION_REWARD_PROVIDER), false));
+        steps.add(() -> dependencyCycle("WorldGuard", Set.of(WORLD_GUARD_REGION_PROVIDER), false));
         steps.add(this::craftEngineReloadCycle);
         steps.add(() -> dependencyCycle("PlaceholderAPI", Set.of(), false));
         steps.add(() -> compatibilityDependencyCycle("EconomyShopGUI",
@@ -253,44 +277,44 @@ final class Phase8EFaultQualification {
                         pluginName + " was unexpectedly installed in absence environment");
             }
             Set<String> forbidden = Set.of("vault_balance", "vault_economy_cost", "vault_economy_reward",
-                    "mcmmo", "griefprevention_claims", "griefprevention_claim_blocks_reward",
-                    "worldguard_region", "craftengine_item_count", "craftengine_item_reward");
+                    MCMO_PROVIDER, GRIEF_PREVENTION_CLAIMS_PROVIDER, GRIEF_PREVENTION_REWARD_PROVIDER,
+                    WORLD_GUARD_REGION_PROVIDER, CRAFT_ENGINE_ITEM_COUNT_PROVIDER, CRAFT_ENGINE_ITEM_REWARD_PROVIDER);
             require(forbidden.stream().noneMatch(this::providerVisible),
                     "absent dependency published a provider");
             pass("all optional dependencies were absent at boot and published no false capability");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup start", lines -> {
+        steps.add(() -> command(SETUP_START, lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("absence canonical setup session started");
             advance();
         }));
-        steps.add(commandStep(() -> "maddprestige setup provider " + setupSession + " internal",
+        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
                 "absence internal rank authority selected"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " base Base",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS,
                 "absence base stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " alpha Alpha",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " alpha Alpha",
                 "absence Alpha-qualified stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " target Target",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " target Target",
                 "absence Beta-qualified target stage added"));
-        steps.add(commandStep(() -> "maddprestige setup baseline " + setupSession + " base",
+        steps.add(commandStep(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID,
                 "absence base stage selected"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " alpha alpha_points " + ALPHA + " points GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
                 "absence Alpha requirement attached"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " target beta_tokens " + BETA + " tokens GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
                 "absence Beta requirement attached"));
-        steps.add(commandStep(() -> "maddprestige setup prestige " + setupSession + " disabled",
+        steps.add(commandStep(() -> SETUP_PRESTIGE + setupSession + " disabled",
                 "absence Prestige disabled"));
-        steps.add(commandStep(() -> "maddprestige setup preview " + setupSession,
+        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession,
                 "absence profile preview compiled without optional dependencies"));
-        steps.add(() -> command("maddprestige setup acknowledge " + setupSession, lines -> {
+        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("absence setup risk acknowledged with server-issued token");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup confirm " + setupSession + " phase8e absence profile", lines -> {
+        steps.add(() -> command(SETUP_CONFIRM + setupSession + " phase8e absence profile", lines -> {
             revision = extract(REVISION_PATTERN, lines);
             pass("absence profile applied as " + revision);
             advance();
@@ -316,64 +340,64 @@ final class Phase8EFaultQualification {
             economy = plugin.getServer().getServicesManager().load(Economy.class);
             return service != null && economyController != null && economyController.isEnabled() && economy != null
                     && VAULT_PROVIDERS.stream().allMatch(this::providerVisible)
-                    && providerVisible("mcmmo") && providerVisible("phase5_events")
-                    && providerVisible("griefprevention_claims")
-                    && providerVisible("griefprevention_claim_blocks_reward")
-                    && providerVisible("worldguard_region") && providerVisible("craftengine_item_count")
-                    && providerVisible("craftengine_item_reward");
+                    && providerVisible(MCMO_PROVIDER) && providerVisible(MANUAL_PROGRESS_PROVIDER)
+                    && providerVisible(GRIEF_PREVENTION_CLAIMS_PROVIDER)
+                    && providerVisible(GRIEF_PREVENTION_REWARD_PROVIDER)
+                    && providerVisible(WORLD_GUARD_REGION_PROVIDER) && providerVisible(CRAFT_ENGINE_ITEM_COUNT_PROVIDER)
+                    && providerVisible(CRAFT_ENGINE_ITEM_REWARD_PROVIDER);
         }, () -> {
             assertExactDependencies();
             pass("setup discovery exposed every exact built-in integration candidate");
             advance();
         }));
         steps.add(() -> command("maddprestige setup discover", lines -> {
-            require(lines.stream().anyMatch(line -> line.contains("phase5_events")
+            require(lines.stream().anyMatch(line -> line.contains(MANUAL_PROGRESS_PROVIDER)
                     && line.contains("mcmmo_adjusted_xp_total")),
                     "setup discovery omitted the mcMMO-backed manual metric");
             pass("setup discovery advertised phase5_events:mcmmo_adjusted_xp_total");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup start", lines -> {
+        steps.add(() -> command(SETUP_START, lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("setup-audit canonical session started");
             advance();
         }));
-        steps.add(commandStep(() -> "maddprestige setup provider " + setupSession + " internal",
+        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
                 "setup-audit internal rank authority selected"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " base Base",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS,
                 "setup-audit base stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " manual Manual",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " manual Manual",
                 "setup-audit manual mcMMO event stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " vault Vault",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " vault Vault",
                 "setup-audit Vault stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " mcmmo McMMO",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " mcmmo McMMO",
                 "setup-audit mcMMO stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " claims Claims",
+        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " claims Claims",
                 "setup-audit GriefPrevention stage added"));
-        steps.add(commandStep(() -> "maddprestige setup baseline " + setupSession + " base",
+        steps.add(commandStep(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID,
                 "setup-audit baseline selected"));
-        steps.add(() -> commandFails("maddprestige setup requirement " + setupSession
+        steps.add(() -> commandFails(SETUP_REQUIREMENT + setupSession
                 + " vault wg worldguard_region inside_region EQUAL true ABSOLUTE LIVE",
                 "WorldGuard region-id requirement", this::advance));
-        steps.add(() -> commandFails("maddprestige setup requirement " + setupSession
+        steps.add(() -> commandFails(SETUP_REQUIREMENT + setupSession
                 + " vault ce craftengine_item_count item_count GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
                 "CraftEngine item-id requirement", this::advance));
-        steps.add(() -> commandFails("maddprestige setup requirement " + setupSession
+        steps.add(() -> commandFails(SETUP_REQUIREMENT + setupSession
                 + " vault papi placeholder_input sample GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
                 "Placeholder input binding", this::advance));
         steps.add(() -> commandFails("maddprestige setup reward " + setupSession
                 + " ce_gift craftengine_item_reward custom_item COUNT 1 Gift",
                 "CraftEngine item-id reward", this::advance));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " manual manual_xp phase5_events mcmmo_adjusted_xp_total GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
                 "mcMMO-backed manual progress requirement selected"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " vault vault_balance vault_balance balance GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
                 "Vault balance requirement selected"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " mcmmo mcmmo_power mcmmo power_level GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
                 "mcMMO power-level requirement selected"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
+        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
                 + " claims gp_claims griefprevention_claims owned_claim_count GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
                 "GriefPrevention claim requirement selected"));
         steps.add(commandStep(() -> "maddprestige setup cost " + setupSession
@@ -382,29 +406,29 @@ final class Phase8EFaultQualification {
         steps.add(commandStep(() -> "maddprestige setup reward " + setupSession
                 + " claim_blocks griefprevention_claim_blocks_reward bonus_claim_blocks COUNT 1 ClaimBlocks",
                 "GriefPrevention reward selected"));
-        steps.add(commandStep(() -> "maddprestige setup prestige " + setupSession + " disabled",
+        steps.add(commandStep(() -> SETUP_PRESTIGE + setupSession + " disabled",
                 "setup-audit Prestige disabled"));
-        steps.add(commandStep(() -> "maddprestige setup preview " + setupSession,
+        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession,
                 "setup-audit generated configuration compiled"));
-        steps.add(() -> command("maddprestige setup acknowledge " + setupSession, lines -> {
+        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("setup-audit risk acknowledged");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup confirm " + setupSession + " phase8e setup audit", lines -> {
+        steps.add(() -> command(SETUP_CONFIRM + setupSession + " phase8e setup audit", lines -> {
             revision = extract(REVISION_PATTERN, lines);
             pass("setup-audit configuration published as " + revision);
             advance();
         }));
         steps.add(() -> eventually("setup-audit post-apply integration reconciliation", Duration.ofSeconds(60), () ->
                 VAULT_PROVIDERS.stream().allMatch(this::providerVisible)
-                        && providerVisible("mcmmo")
-                        && providerVisible("phase5_events")
-                        && providerVisible("griefprevention_claims")
-                        && providerVisible("griefprevention_claim_blocks_reward")
-                        && !providerVisible("worldguard_region")
-                        && !providerVisible("craftengine_item_count")
-                        && !providerVisible("craftengine_item_reward")
+                        && providerVisible(MCMO_PROVIDER)
+                        && providerVisible(MANUAL_PROGRESS_PROVIDER)
+                        && providerVisible(GRIEF_PREVENTION_CLAIMS_PROVIDER)
+                        && providerVisible(GRIEF_PREVENTION_REWARD_PROVIDER)
+                        && !providerVisible(WORLD_GUARD_REGION_PROVIDER)
+                        && !providerVisible(CRAFT_ENGINE_ITEM_COUNT_PROVIDER)
+                        && !providerVisible(CRAFT_ENGINE_ITEM_REWARD_PROVIDER)
                         && providerVisible(ALPHA) && providerVisible(BETA)
                         && service.stages().successful() && service.stages().value().orElseThrow().size() == 5,
                 () -> {
@@ -547,7 +571,7 @@ final class Phase8EFaultQualification {
             require(operation.status() == OperationStatus.FAILED && balance(player) == 100D,
                     "definitely-not-applied action did not fail cleanly: " + operation);
             assertPostStatus(player, operation, OperationStatus.FAILED);
-            setEconomyMode("SUCCESS");
+            setEconomyMode(SUCCESS_MODE);
             pass("definitely-not-applied external action produced FAILED with no balance or stage success claim");
             advance();
         });
@@ -571,7 +595,7 @@ final class Phase8EFaultQualification {
             require(!result.successful() || result.value().orElseThrow().status() != OperationStatus.COMPLETED,
                     "throwing Vault callback was presented as clean success");
             require(balance(player) == 100D, "throwing Vault callback changed the controlled balance");
-            setEconomyMode("SUCCESS");
+            setEconomyMode(SUCCESS_MODE);
             pass("throwing external action callback failed closed without a balance or stage success claim");
             advance();
         });
@@ -587,7 +611,7 @@ final class Phase8EFaultQualification {
                     "uncertain external action was not reconciliation-required: " + operation);
             require(balance(player) == 99D, "uncertain action did not preserve its real applied observation");
             assertPostStatus(player, operation, OperationStatus.NEEDS_RECONCILIATION);
-            setEconomyMode("SUCCESS");
+            setEconomyMode(SUCCESS_MODE);
             pass("uncertain external action retained durable identity and was never presented as clean success");
             advance();
         });
@@ -608,17 +632,17 @@ final class Phase8EFaultQualification {
     }
 
     private void exerciseAlphaMode(String faultMode, String label) {
-        providerCommand("phase8ealpha", "mode", faultMode);
+        providerCommand(ALPHA_COMMAND, PROVIDER_MODE_COMMAND, faultMode);
         UUID player = UUID.randomUUID();
-        await("Alpha " + label, service.evaluateRankUp(player), result -> {
+        await(ALPHA_LABEL + label, service.evaluateRankUp(player), result -> {
             require(!result.successful() || result.value().orElseThrow().status()
                     != OperationEvaluationStatus.ELIGIBLE,
-                    "Alpha " + label + " became eligible");
-            require(providerVisible(BETA), "Alpha " + label + " poisoned Beta registration");
-            providerCommand("phase8ealpha", "mode", "HEALTHY");
-            providerCommand("phase8ealpha", "rebind");
+                    ALPHA_LABEL + label + " became eligible");
+            require(providerVisible(BETA), ALPHA_LABEL + label + " poisoned Beta registration");
+            providerCommand(ALPHA_COMMAND, PROVIDER_MODE_COMMAND, HEALTHY_MODE);
+            providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
             eventuallyEligible(player, () -> {
-                pass("Alpha " + label
+                pass(ALPHA_LABEL + label
                         + " failed closed and a new generation recovered while Beta remained usable");
                 advance();
             });
@@ -626,7 +650,7 @@ final class Phase8EFaultQualification {
     }
 
     private void exerciseHungAlpha() {
-        providerCommand("phase8ealpha", "mode", "HANG");
+        providerCommand(ALPHA_COMMAND, PROVIDER_MODE_COMMAND, "HANG");
         int cancellationsBefore = alphaCancellations();
         UUID player = UUID.randomUUID();
         long started = System.nanoTime();
@@ -639,8 +663,8 @@ final class Phase8EFaultQualification {
             require(millis < 30_000L, "hung Alpha callback exceeded bounded qualification window: " + millis);
             require(alphaCancellations() > cancellationsBefore,
                     "hung Alpha callback did not observe deadline cancellation");
-            providerCommand("phase8ealpha", "mode", "HEALTHY");
-            providerCommand("phase8ealpha", "rebind");
+            providerCommand(ALPHA_COMMAND, PROVIDER_MODE_COMMAND, HEALTHY_MODE);
+            providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
             eventuallyEligible(player, () -> {
                 pass("hung Alpha callback observed the production deadline/cancellation and recovered in "
                         + millis + " ms");
@@ -653,16 +677,16 @@ final class Phase8EFaultQualification {
         UUID betaPlayer = fundedPlayer();
         await("synchronous-block Beta prerequisite", service.rankUp(betaPlayer), prerequisite -> {
             completed(prerequisite, "synchronous-block Beta prerequisite");
-            providerCommand("phase8ealpha", "sync-reset");
-            providerCommand("phase8ealpha", "mode", "SYNC_BLOCK");
+            providerCommand(ALPHA_COMMAND, "sync-reset");
+            providerCommand(ALPHA_COMMAND, PROVIDER_MODE_COMMAND, "SYNC_BLOCK");
             AlphaAttemptBatch oldGeneration = submitAlphaAttempts(4);
             eventually("synchronous Alpha callback saturation", Duration.ofSeconds(10), () ->
-                    alphaObservation("observedSynchronousActive") == 4
+                    alphaObservation(OBSERVED_SYNCHRONOUS_ACTIVE) == 4
                             && alphaObservation("observedSynchronousHighWater") == 4, () -> {
-                int generationOne = alphaObservation("observedRegistrations");
-                providerCommand("phase8ealpha", "rebind");
+                int generationOne = alphaObservation(OBSERVED_REGISTRATIONS);
+                providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
                 eventually("Alpha generation 2 registration during generation 1 block", () ->
-                        alphaObservation("observedRegistrations") > generationOne && providerVisible(ALPHA), () -> {
+                        alphaObservation(OBSERVED_REGISTRATIONS) > generationOne && providerVisible(ALPHA), () -> {
                     rejectedAlphaBatch("Alpha generation 2 overlap", 8, generationTwo -> {
                         betaProbe(betaPlayer, "generation 2 overlap", betaOne -> {
                             repeatAlphaRebinds(3, () -> {
@@ -686,55 +710,56 @@ final class Phase8EFaultQualification {
             AlphaAttemptResult repeated,
             long betaOne,
             long betaTwo) {
-        providerCommand("phase8ealpha", "unregister");
+        providerCommand(ALPHA_COMMAND, "unregister");
         eventually("Alpha unregister without immediate rebind while generation 1 remains blocked", () ->
                 !providerVisible(ALPHA), () -> {
-            require(alphaObservation("observedSynchronousActive") == 4,
+            require(alphaObservation(OBSERVED_SYNCHRONOUS_ACTIVE) == 4,
                     "unregister reclaimed the logical budget while old callbacks remained blocked");
             require(callbackWorkerCount() <= 8,
                     "unregistered Alpha overlap exceeded the shared callback executor bound");
-            int before = alphaObservation("observedRegistrations");
-            providerCommand("phase8ealpha", "rebind");
+            int before = alphaObservation(OBSERVED_REGISTRATIONS);
+            providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
             eventually("Alpha rebind after bounded unregistered interval", () ->
-                    alphaObservation("observedRegistrations") > before && providerVisible(ALPHA), () ->
+                    alphaObservation(OBSERVED_REGISTRATIONS) > before && providerVisible(ALPHA), () ->
                     rejectedAlphaBatch("post-unregister Alpha overlap", 4, afterUnregister ->
                             betaProbe(betaPlayer, "post-unregister rebind overlap", betaThree ->
-                                    releaseBlockedAlpha(betaPlayer, oldGeneration, generationTwo, repeated,
-                                            afterUnregister, betaOne, betaTwo, betaThree))));
+                                    releaseBlockedAlpha(new BlockedAlphaRelease(betaPlayer, oldGeneration,
+                                            generationTwo, repeated, afterUnregister,
+                                            new BetaLatencies(betaOne, betaTwo, betaThree))))));
         });
     }
 
-    private void releaseBlockedAlpha(
-            UUID betaPlayer,
-            AlphaAttemptBatch oldGeneration,
-            AlphaAttemptResult generationTwo,
-            AlphaAttemptResult repeated,
-            AlphaAttemptResult afterUnregister,
-            long betaOne,
-            long betaTwo,
-            long betaThree) {
+    private void releaseBlockedAlpha(BlockedAlphaRelease release) {
+        UUID betaPlayer = release.betaPlayer();
+        AlphaAttemptBatch oldGeneration = release.oldGeneration();
+        AlphaAttemptResult generationTwo = release.generationTwo();
+        AlphaAttemptResult repeated = release.repeated();
+        AlphaAttemptResult afterUnregister = release.afterUnregister();
+        long betaOne = release.betaLatencies().first();
+        long betaTwo = release.betaLatencies().second();
+        long betaThree = release.betaLatencies().third();
         eventually("old Alpha generation deadline completion", Duration.ofSeconds(10), () ->
                 oldGeneration.terminal.get() == oldGeneration.attempted, () -> {
             require(oldGeneration.falseSuccess.get() == 0,
                     "stale generation 1 work produced a clean result after replacement");
-            require(alphaObservation("observedSynchronousActive") == 4
+            require(alphaObservation(OBSERVED_SYNCHRONOUS_ACTIVE) == 4
                             && alphaObservation("observedSynchronousCompleted") == 0,
                     "generation 1 callbacks escaped before explicit release");
             long releaseStarted = System.nanoTime();
-            providerCommand("phase8ealpha", "sync-release");
+            providerCommand(ALPHA_COMMAND, "sync-release");
             eventually("cross-generation Alpha callback release", Duration.ofSeconds(10), () ->
-                    alphaObservation("observedSynchronousActive") == 0
+                    alphaObservation(OBSERVED_SYNCHRONOUS_ACTIVE) == 0
                             && alphaObservation("observedSynchronousCompleted") == 4, () -> {
                 long recoveryMillis = Duration.ofNanos(System.nanoTime() - releaseStarted).toMillis();
-                providerCommand("phase8ealpha", "mode", "HEALTHY");
-                providerCommand("phase8ealpha", "rebind");
+                providerCommand(ALPHA_COMMAND, PROVIDER_MODE_COMMAND, HEALTHY_MODE);
+                providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
                 eventuallyEligible(UUID.randomUUID(), () -> betaProbe(betaPlayer, "post-release recovery", betaFour -> {
                     int callbackWorkers = callbackWorkerCount();
                     require(callbackWorkers <= 8, "shared callback executor exceeded eight workers: "
                             + callbackWorkers);
                     require(synchronouslyBlockedCallbackWorkerCount() == 0,
                             "a released Alpha callback worker remains blocked");
-                    require(alphaObservation("observedSynchronousActive") == 0,
+                    require(alphaObservation(OBSERVED_SYNCHRONOUS_ACTIVE) == 0,
                             "logical Alpha budget did not return to zero active callbacks");
                     long maximumBeta = java.util.stream.LongStream.of(betaOne, betaTwo, betaThree, betaFour)
                             .max().orElseThrow();
@@ -772,7 +797,7 @@ final class Phase8EFaultQualification {
             AlphaAttemptResult result = new AlphaAttemptResult(calls, admitted, calls - admitted);
             require(batch.falseSuccess.get() == 0, label + " produced false eligibility");
             require(admitted == 0, label + " received a fresh callback budget: " + result);
-            require(alphaObservation("observedSynchronousActive") == 4,
+            require(alphaObservation(OBSERVED_SYNCHRONOUS_ACTIVE) == 4,
                     label + " changed the four blocked old-generation callbacks");
             continuation.accept(result);
         });
@@ -783,14 +808,14 @@ final class Phase8EFaultQualification {
             continuation.run();
             return;
         }
-        int before = alphaObservation("observedRegistrations");
-        providerCommand("phase8ealpha", "rebind");
+        int before = alphaObservation(OBSERVED_REGISTRATIONS);
+        providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
         eventually("rapid Alpha rebind " + remaining, () ->
-                alphaObservation("observedRegistrations") > before && providerVisible(ALPHA), () ->
+                alphaObservation(OBSERVED_REGISTRATIONS) > before && providerVisible(ALPHA), () ->
                 repeatAlphaRebinds(remaining - 1, continuation));
     }
 
-    private void betaProbe(UUID betaPlayer, String label, Consumer<Long> continuation) {
+    private void betaProbe(UUID betaPlayer, String label, LongConsumer continuation) {
         long started = System.nanoTime();
         await("Beta isolation during " + label, service.evaluateRankUp(betaPlayer), beta -> {
             long millis = Duration.ofNanos(System.nanoTime() - started).toMillis();
@@ -832,12 +857,24 @@ final class Phase8EFaultQualification {
     private record AlphaAttemptResult(int attempted, int admitted, int rejected) {
     }
 
+    private record BlockedAlphaRelease(
+            UUID betaPlayer,
+            AlphaAttemptBatch oldGeneration,
+            AlphaAttemptResult generationTwo,
+            AlphaAttemptResult repeated,
+            AlphaAttemptResult afterUnregister,
+            BetaLatencies betaLatencies) {
+    }
+
+    private record BetaLatencies(long first, long second, long third) {
+    }
+
     private void exerciseBetaHealthIsolation() {
         UUID player = fundedPlayer();
         await("Alpha stage prerequisite", service.rankUp(player), first -> {
             completed(first, "Alpha stage prerequisite");
             require(balance(player) == 99D, "Alpha prerequisite did not apply its exact cost");
-            providerCommand("phase8ebeta", "mode", "ONLINE_ONLY");
+            providerCommand(BETA_COMMAND, PROVIDER_MODE_COMMAND, "ONLINE_ONLY");
             await("Beta explicit offline limitation", service.evaluateRankUp(player), offline -> {
                 require(!offline.successful() || offline.value().orElseThrow().status()
                         != OperationEvaluationStatus.ELIGIBLE,
@@ -845,13 +882,13 @@ final class Phase8EFaultQualification {
                 require(balance(player) == 99D && playerRows(player) == 1,
                         "offline Beta evaluation caused an economic or initialization side effect");
                 require(providerVisible(ALPHA), "Beta health failure poisoned Alpha");
-                providerCommand("phase8ebeta", "mode", "UNAVAILABLE");
+                providerCommand(BETA_COMMAND, PROVIDER_MODE_COMMAND, "UNAVAILABLE");
                 await("Beta unavailable", service.evaluateRankUp(player), blocked -> {
                     require(!blocked.successful() || blocked.value().orElseThrow().status()
                             != OperationEvaluationStatus.ELIGIBLE,
                             "unavailable Beta became eligible");
                     require(providerVisible(ALPHA), "Beta health failure poisoned Alpha");
-                    providerCommand("phase8ebeta", "mode", "HEALTHY");
+                    providerCommand(BETA_COMMAND, PROVIDER_MODE_COMMAND, HEALTHY_MODE);
                     eventuallyEligible(player, () -> {
                         pass("explicit offline and unhealthy Beta states blocked only their target while Alpha remained usable");
                         advance();
@@ -862,11 +899,11 @@ final class Phase8EFaultQualification {
     }
 
     private void exerciseDuplicateRegistration() {
-        providerCommand("phase8ealpha", "duplicate");
+        providerCommand(ALPHA_COMMAND, "duplicate");
         eventually("duplicate provider isolation", () -> providerCount(ALPHA) == 1, () -> {
             UUID player = UUID.randomUUID();
             eventuallyEligible(player, () -> {
-                providerCommand("phase8ealpha", "clear-duplicate");
+                providerCommand(ALPHA_COMMAND, "clear-duplicate");
                 pass("duplicate/ambiguous declaration failed safely without replacing the active generation");
                 advance();
             });
@@ -874,10 +911,10 @@ final class Phase8EFaultQualification {
     }
 
     private void exerciseUnregisterRebind() {
-        providerCommand("phase8ealpha", "unregister");
+        providerCommand(ALPHA_COMMAND, "unregister");
         eventually("Alpha unregister", () -> !providerVisible(ALPHA), () -> {
             require(providerVisible(BETA), "Alpha unregister removed Beta");
-            providerCommand("phase8ealpha", "rebind");
+            providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
             eventually("Alpha rebind", () -> providerVisible(ALPHA), () ->
                     eventuallyEligible(UUID.randomUUID(), () -> {
                         pass("Alpha unregister/rebind replaced its generation without changing Beta or revision");
@@ -947,7 +984,7 @@ final class Phase8EFaultQualification {
             RegisteredListener[] listeners = (RegisteredListener[]) handlers.getClass()
                     .getMethod("getRegisteredListeners").invoke(handlers);
             return (int) Arrays.stream(listeners)
-                    .filter(listener -> "MaddPrestige".equals(listener.getPlugin().getName())).count();
+                    .filter(listener -> PLUGIN_NAME.equals(listener.getPlugin().getName())).count();
         } catch (ReflectiveOperationException failure) {
             throw new IllegalStateException("Cannot inspect public event listener boundary for " + eventClassName,
                     failure);
@@ -957,12 +994,12 @@ final class Phase8EFaultQualification {
     private void craftEngineReloadCycle() {
         Plugin dependency = plugin.getServer().getPluginManager().getPlugin("CraftEngine");
         require(dependency != null && dependency.isEnabled(), "CraftEngine is not enabled before reload");
-        require(providerVisible("craftengine_item_count") && providerVisible("craftengine_item_reward"),
+        require(providerVisible(CRAFT_ENGINE_ITEM_COUNT_PROVIDER) && providerVisible(CRAFT_ENGINE_ITEM_REWARD_PROVIDER),
                 "CraftEngine providers are not usable before reload");
         require(plugin.getServer().dispatchCommand(plugin.getServer().getConsoleSender(),
                 "craftengine reload config"), "CraftEngine public reload command was unavailable");
         eventually("CraftEngine completed reload/rebind signal", Duration.ofSeconds(45), () ->
-                providerVisible("craftengine_item_count") && providerVisible("craftengine_item_reward"), () -> {
+                providerVisible(CRAFT_ENGINE_ITEM_COUNT_PROVIDER) && providerVisible(CRAFT_ENGINE_ITEM_REWARD_PROVIDER), () -> {
             require(providerVisible(ALPHA) && providerVisible(BETA),
                     "CraftEngine reload poisoned external providers");
             eventuallyEligible(UUID.randomUUID(), () -> {
@@ -975,7 +1012,7 @@ final class Phase8EFaultQualification {
     private void dispatchMaddPrestigeLifecycle(Event event) {
         int invoked = 0;
         for (RegisteredListener listener : event.getHandlers().getRegisteredListeners()) {
-            if (!"MaddPrestige".equals(listener.getPlugin().getName())) continue;
+            if (!PLUGIN_NAME.equals(listener.getPlugin().getName())) continue;
             try {
                 listener.callEvent(event);
                 invoked++;
@@ -1006,7 +1043,7 @@ final class Phase8EFaultQualification {
                 recursivePrestige = service.prestige(player);
                 crossPlayerRank = service.rankUp(crossPlayer);
             }
-            if (player.equals(rebindInPrePlayer)) providerCommand("phase8ealpha", "rebind");
+            if (player.equals(rebindInPrePlayer)) providerCommand(ALPHA_COMMAND, REBIND_COMMAND);
             if (player.equals(loseEconomyInPrePlayer)) unregisterEconomy();
         });
         registerEvent("net.maddkraft.maddprestige.platform.paper.event.PostRankUpEvent", listener, event -> {
@@ -1073,7 +1110,7 @@ final class Phase8EFaultQualification {
     }
 
     private long playerRows(UUID player) {
-        Plugin production = plugin.getServer().getPluginManager().getPlugin("MaddPrestige");
+        Plugin production = plugin.getServer().getPluginManager().getPlugin(PLUGIN_NAME);
         require(production != null, "production plugin is absent");
         try {
             Class<?> type = Class.forName("org.sqlite.JDBC", true, production.getClass().getClassLoader());
@@ -1204,34 +1241,22 @@ final class Phase8EFaultQualification {
     }
 
     private Runnable commandStep(java.util.function.Supplier<String> command, String label) {
-        return () -> command(command.get(), ignored -> {
-            pass(label);
-            advance();
-        });
+        return Phase8EQualificationSupport.commandStep(command, label, this::command, this::pass, this::advance);
     }
 
     private void command(String command, Consumer<List<String>> continuation) {
-        messages.clear();
-        String[] tokens = command.split(" +");
-        require(tokens.length > 0 && tokens[0].equals("maddprestige"), "unexpected command ingress");
-        org.bukkit.command.PluginCommand registered = plugin.getServer().getPluginCommand("maddprestige");
-        require(registered != null && registered.execute(sender, "maddprestige",
-                Arrays.copyOfRange(tokens, 1, tokens.length)), "command rejected: " + command);
-        eventually("command response " + command, () -> !messages.isEmpty(), () -> {
-            List<String> snapshot = List.copyOf(messages);
-            plugin.getLogger().info("PHASE8E-COMMAND " + command + " -> " + snapshot);
-            require(snapshot.stream().noneMatch(Phase8EFaultQualification::failureDiagnostic),
-                    "command failed: " + command + " -> " + snapshot);
-            continuation.accept(snapshot);
-        });
+        Phase8EQualificationSupport.CommandContext context = new Phase8EQualificationSupport.CommandContext(
+                plugin, sender, messages, true,
+                transcript -> plugin.getLogger().info("PHASE8E-COMMAND " + transcript), this::fail);
+        Phase8EQualificationSupport.dispatchCommand(context, command, continuation);
     }
 
     private void commandFails(String command, String label, Runnable continuation) {
         messages.clear();
         String[] tokens = command.split(" +");
-        require(tokens.length > 0 && tokens[0].equals("maddprestige"), "unexpected command ingress");
-        org.bukkit.command.PluginCommand registered = plugin.getServer().getPluginCommand("maddprestige");
-        require(registered != null && registered.execute(sender, "maddprestige",
+        require(tokens.length > 0 && tokens[0].equals(COMMAND_NAME), "unexpected command ingress");
+        org.bukkit.command.PluginCommand registered = plugin.getServer().getPluginCommand(COMMAND_NAME);
+        require(registered != null && registered.execute(sender, COMMAND_NAME,
                 Arrays.copyOfRange(tokens, 1, tokens.length)), "command rejected before diagnostic: " + command);
         eventually("expected command failure " + command, () -> !messages.isEmpty(), () -> {
             List<String> snapshot = List.copyOf(messages);
@@ -1244,44 +1269,15 @@ final class Phase8EFaultQualification {
     }
 
     private static boolean failureDiagnostic(String line) {
-        String normalized = line.toLowerCase(Locale.ROOT);
-        return normalized.contains("[error]") || normalized.contains("internal failure")
-                || normalized.contains("command failed") || normalized.contains("diagnostic code:")
-                || normalized.startsWith("usage:");
+        return Phase8EQualificationSupport.failureDiagnostic(line, true);
     }
 
     private static String extract(Pattern pattern, List<String> lines) {
-        Matcher matcher = pattern.matcher(String.join("\n", lines));
-        if (!matcher.find()) throw new IllegalStateException("expected identity absent from " + lines);
-        return matcher.group();
+        return Phase8EQualificationSupport.extract(pattern, lines);
     }
 
     private CommandSender commandSender() {
-        return (CommandSender) Proxy.newProxyInstance(CommandSender.class.getClassLoader(),
-                new Class<?>[] {CommandSender.class}, (proxy, method, arguments) -> {
-                    if (method.getName().equals("sendMessage") && arguments != null) {
-                        for (Object argument : arguments) {
-                            if (argument instanceof Component component) {
-                                messages.add(PlainTextComponentSerializer.plainText().serialize(component));
-                            } else if (argument instanceof String text) {
-                                messages.add(text);
-                            } else if (argument instanceof String[] lines) {
-                                messages.addAll(List.of(lines));
-                            }
-                        }
-                        return null;
-                    }
-                    return switch (method.getName()) {
-                        case "hasPermission", "isPermissionSet", "isOp" -> true;
-                        case "getName" -> "Phase8E-Fault-Harness";
-                        case "getServer" -> plugin.getServer();
-                        case "spigot" -> new CommandSender.Spigot();
-                        case "toString" -> "Phase8E-Fault-CommandSender";
-                        case "hashCode" -> System.identityHashCode(proxy);
-                        case "equals" -> proxy == arguments[0];
-                        default -> defaultValue(method.getReturnType());
-                    };
-                });
+        return Phase8EQualificationSupport.commandSender(plugin, messages, "Phase8E-Fault-Harness");
     }
 
     private static OperationEventSnapshot snapshot(Event event) {
@@ -1330,17 +1326,7 @@ final class Phase8EFaultQualification {
     }
 
     private <T> void await(String label, CompletionStage<T> stage, Consumer<T> continuation) {
-        stage.whenComplete((value, failure) -> plugin.getServer().getScheduler().runTask(plugin, () -> {
-            if (failure != null) {
-                fail(label, failure);
-                return;
-            }
-            try {
-                continuation.accept(value);
-            } catch (Throwable exception) {
-                fail(label, exception);
-            }
-        }));
+        Phase8EQualificationSupport.await(plugin, label, stage, continuation, this::fail);
     }
 
     private void eventually(String label, BooleanSupplier condition, Runnable continuation) {
@@ -1348,35 +1334,11 @@ final class Phase8EFaultQualification {
     }
 
     private void eventually(String label, Duration timeout, BooleanSupplier condition, Runnable continuation) {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        final BukkitTask[] task = new BukkitTask[1];
-        task[0] = plugin.getServer().getScheduler().runTaskTimer(plugin, () -> {
-            try {
-                if (condition.getAsBoolean()) {
-                    task[0].cancel();
-                    continuation.run();
-                } else if (System.nanoTime() >= deadline) {
-                    task[0].cancel();
-                    fail(label, new IllegalStateException("timed out"));
-                }
-            } catch (Throwable failure) {
-                task[0].cancel();
-                fail(label, failure);
-            }
-        }, 1L, 1L);
+        Phase8EQualificationSupport.eventually(plugin, label, timeout, condition, continuation, this::fail);
     }
 
     private void advance() {
-        Runnable next = steps.poll();
-        if (next != null) {
-            plugin.getServer().getScheduler().runTaskLater(plugin, () -> {
-                try {
-                    next.run();
-                } catch (Throwable failure) {
-                    fail("qualification step", failure);
-                }
-            }, 1L);
-        }
+        Phase8EQualificationSupport.advance(plugin, steps, this::fail);
     }
 
     private void pass(String message) {
@@ -1398,24 +1360,11 @@ final class Phase8EFaultQualification {
     }
 
     private static Object defaultValue(Class<?> type) {
-        if (!type.isPrimitive()) {
-            if (type == List.class) return List.of();
-            if (type == Set.class) return Set.of();
-            if (type == Optional.class) return Optional.empty();
-            return null;
-        }
-        if (type == boolean.class) return false;
-        if (type == char.class) return '\0';
-        if (type == byte.class) return (byte) 0;
-        if (type == short.class) return (short) 0;
-        if (type == int.class) return 0;
-        if (type == long.class) return 0L;
-        if (type == float.class) return 0F;
-        return 0D;
+        return Phase8EQualificationSupport.defaultValue(type);
     }
 
     private static void require(boolean condition, String message) {
-        if (!condition) throw new IllegalStateException(message);
+        Phase8EQualificationSupport.require(condition, message);
     }
 
 }

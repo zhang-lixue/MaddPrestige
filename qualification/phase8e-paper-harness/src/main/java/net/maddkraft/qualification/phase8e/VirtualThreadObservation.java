@@ -14,6 +14,7 @@ import jdk.jfr.consumer.RecordingStream;
 final class VirtualThreadObservation implements AutoCloseable {
     private static final String OPERATION_PREFIX = "maddprestige-operation-";
     private static final String PLACEHOLDER_PREFIX = "maddprestige-placeholder-publisher-";
+    private static final String EVENT_THREAD = "eventThread";
 
     private final RecordingStream recording = new RecordingStream();
     private final Map<Long, Family> active = new ConcurrentHashMap<>();
@@ -45,7 +46,7 @@ final class VirtualThreadObservation implements AutoCloseable {
     }
 
     private void started(RecordedEvent event) {
-        RecordedThread thread = event.getThread("eventThread");
+        RecordedThread thread = event.getThread(EVENT_THREAD);
         Family family = family(thread == null ? null : thread.getJavaName());
         if (family == null) return;
         long id = thread.getJavaThreadId();
@@ -53,14 +54,14 @@ final class VirtualThreadObservation implements AutoCloseable {
     }
 
     private void ended(RecordedEvent event) {
-        RecordedThread thread = event.getThread("eventThread");
+        RecordedThread thread = event.getThread(EVENT_THREAD);
         if (thread == null) return;
         Family family = active.remove(thread.getJavaThreadId());
         if (family != null) counters(family).ended();
     }
 
     private void pinned(RecordedEvent event) {
-        RecordedThread thread = event.getThread("eventThread");
+        RecordedThread thread = event.getThread(EVENT_THREAD);
         if (family(thread == null ? null : thread.getJavaName()) != null) pinned.incrementAndGet();
     }
 

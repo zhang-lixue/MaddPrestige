@@ -388,17 +388,9 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         }
     }
 
-    private void rebindReadyCraftEngine() {
-        duringBindingAttempt("CraftEngine", this::rebindReadyCraftEngineWithinAttempt);
-    }
-
     private void rebindReadyCraftEngineWithinAttempt() {
         unbindCraftEngine("CraftEngine registry generation was replaced");
         bindReadyCraftEngineWithinAttempt();
-    }
-
-    private void bindReadyCraftEngine() {
-        duringBindingAttempt("CraftEngine", this::bindReadyCraftEngineWithinAttempt);
     }
 
     private void bindReadyCraftEngineWithinAttempt() {

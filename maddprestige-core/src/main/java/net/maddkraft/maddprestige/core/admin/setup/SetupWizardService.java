@@ -30,23 +30,28 @@ import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 
 public final class SetupWizardService {
     private static final String ANY_METRIC = "*";
+    private static final String VAULT = "vault";
+    private static final String MCMO = "mcmmo";
+    private static final String GRIEF_PREVENTION = "griefprevention";
+    private static final String GRIEF_PREVENTION_CLAIMS = "griefprevention_claims";
+    private static final String CRAFT_ENGINE = "craftengine";
     private static final Map<SetupSelection, BuiltInSetupRule> BUILT_IN_SETUP_RULES = Map.ofEntries(
-            requirement("vault_balance", "balance", "vault"),
-            requirement("mcmmo", "power_level", "mcmmo"),
-            unsupportedRequirement("mcmmo", "skill_level", "mcmmo", "skill filter"),
-            requirement("phase5_events", "mcmmo_adjusted_xp_total", "mcmmo"),
-            requirement("griefprevention_claims", "remaining_claim_blocks", "griefprevention"),
-            requirement("griefprevention_claims", "accrued_claim_blocks", "griefprevention"),
-            requirement("griefprevention_claims", "bonus_claim_blocks", "griefprevention"),
-            requirement("griefprevention_claims", "owned_claim_count", "griefprevention"),
+            requirement("vault_balance", "balance", VAULT),
+            requirement(MCMO, "power_level", MCMO),
+            unsupportedRequirement(MCMO, "skill_level", MCMO, "skill filter"),
+            requirement("phase5_events", "mcmmo_adjusted_xp_total", MCMO),
+            requirement(GRIEF_PREVENTION_CLAIMS, "remaining_claim_blocks", GRIEF_PREVENTION),
+            requirement(GRIEF_PREVENTION_CLAIMS, "accrued_claim_blocks", GRIEF_PREVENTION),
+            requirement(GRIEF_PREVENTION_CLAIMS, "bonus_claim_blocks", GRIEF_PREVENTION),
+            requirement(GRIEF_PREVENTION_CLAIMS, "owned_claim_count", GRIEF_PREVENTION),
             unsupportedRequirement("placeholder_input", ANY_METRIC, "placeholderapi",
                     "placeholder, value type, and maximum age"),
             unsupportedRequirement("worldguard_region", "inside_region", "worldguard", "region-id filter"),
-            unsupportedRequirement("craftengine_item_count", "item_count", "craftengine", "item-id filter"),
-            action(SetupSelectionKind.COST, "vault_economy_cost", "vault"),
-            action(SetupSelectionKind.REWARD, "vault_economy_reward", "vault"),
-            action(SetupSelectionKind.REWARD, "griefprevention_claim_blocks_reward", "griefprevention"),
-            unsupportedAction(SetupSelectionKind.REWARD, "craftengine_item_reward", "craftengine",
+            unsupportedRequirement("craftengine_item_count", "item_count", CRAFT_ENGINE, "item-id filter"),
+            action(SetupSelectionKind.COST, "vault_economy_cost", VAULT),
+            action(SetupSelectionKind.REWARD, "vault_economy_reward", VAULT),
+            action(SetupSelectionKind.REWARD, "griefprevention_claim_blocks_reward", GRIEF_PREVENTION),
+            unsupportedAction(SetupSelectionKind.REWARD, "craftengine_item_reward", CRAFT_ENGINE,
                     "item-id metadata"));
 
     private final ConfigurationAdministrationService configuration;
