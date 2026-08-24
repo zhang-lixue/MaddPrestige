@@ -3,7 +3,6 @@ package net.maddkraft.qualification.phase8e.alpha;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -18,8 +17,6 @@ import net.maddkraft.maddprestige.api.metric.MetricReadMode;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.provider.ProviderCallContext;
 import net.maddkraft.maddprestige.api.provider.ProviderDeclaration;
-import net.maddkraft.maddprestige.api.provider.ProviderMetadata;
-import net.maddkraft.maddprestige.api.provider.ProviderMetricDefinition;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricRequest;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricResult;
 import net.maddkraft.maddprestige.api.provider.ProviderRegistrationHandle;
@@ -30,6 +27,10 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Independently owned, mode-controlled Stable provider used only in disposable Phase 8E servers. */
 public final class Phase8EAlphaProvider extends JavaPlugin {
+    private static final Phase8EProviderSupport.Profile PROFILE = new Phase8EProviderSupport.Profile(
+            "phase8e_alpha", "Alpha", "alpha", "phase8e.provider.alpha", "1.0.0", "points",
+            List.of("points", "bonus"));
+
     private final AtomicReference<Mode> mode = new AtomicReference<>(Mode.HEALTHY);
     private final AtomicInteger reads = new AtomicInteger();
     private final AtomicInteger registrations = new AtomicInteger();
@@ -40,10 +41,13 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
     private final AtomicReference<CountDownLatch> synchronousRelease = new AtomicReference<>(new CountDownLatch(0));
     private ScheduledExecutorService observer;
     private Phase8EProviderSupport.Registration registration;
+    private Phase8EProviderSupport.Commands<Mode> commands;
 
     @Override
     public void onEnable() {
         registration = new Phase8EProviderSupport.Registration(this, "PHASE8E-ALPHA", this::declaration);
+        commands = new Phase8EProviderSupport.Commands<>(this, "phase8ealpha", "PHASE8E-ALPHA",
+                Mode.class, mode, replacement -> getLogger().info("PHASE8E-ALPHA mode=" + replacement));
         observer = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(
                 Thread.ofPlatform().daemon(true).name("phase8e-alpha-observer").factory());
         registration.enable();
@@ -86,48 +90,32 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] arguments) {
-        if (!command.getName().equalsIgnoreCase("phase8ealpha") || arguments.length == 0) {
-            return false;
-        }
-        try {
-            switch (arguments[0].toLowerCase(Locale.ROOT)) {
-                case "mode" -> {
-                    if (arguments.length != 2) return false;
-                    Mode replacement = Mode.valueOf(arguments[1].toUpperCase(Locale.ROOT));
-                    mode.set(replacement);
-                    getLogger().info("PHASE8E-ALPHA mode=" + replacement);
-                }
-                case "unregister" -> registration.requireHandle("Alpha provider handle is absent")
-                        .unregister().whenComplete((ignored, failure) -> getLogger().info(
+        return commands.execute(sender, command, arguments, this::providerCommand);
+    }
+
+    private boolean providerCommand(String action, CommandSender sender) {
+        switch (action) {
+            case "unregister" -> registration.requireHandle("Alpha provider handle is absent")
+                    .unregister().whenComplete((ignored, failure) -> getLogger().info(
                             "PHASE8E-ALPHA handle-unregister=" + (failure == null ? "complete" : "failed")));
-                case "rebind" -> registration.rebind();
-                case "duplicate" -> registration.registerDuplicate();
-                case "clear-duplicate" -> registration.clearDuplicate();
-                case "status" -> sender.sendMessage("mode=" + mode.get() + " reads=" + reads.get()
-                        + " cancellations=" + cancellations.get() + " handle=" + registration.hasHandle()
-                        + " syncActive=" + synchronousActive.get() + " syncHighWater="
-                        + synchronousHighWater.get() + " syncCompleted=" + synchronousCompleted.get());
-                case "sync-reset" -> resetSynchronousBlock();
-                case "sync-release" -> synchronousRelease.get().countDown();
-                default -> {
-                    return false;
-                }
+            case "rebind" -> registration.rebind();
+            case "duplicate" -> registration.registerDuplicate();
+            case "clear-duplicate" -> registration.clearDuplicate();
+            case "status" -> sender.sendMessage("mode=" + mode.get() + " reads=" + reads.get()
+                    + " cancellations=" + cancellations.get() + " handle=" + registration.hasHandle()
+                    + " syncActive=" + synchronousActive.get() + " syncHighWater="
+                    + synchronousHighWater.get() + " syncCompleted=" + synchronousCompleted.get());
+            case "sync-reset" -> resetSynchronousBlock();
+            case "sync-release" -> synchronousRelease.get().countDown();
+            default -> {
+                return false;
             }
-            return true;
-        } catch (RuntimeException failure) {
-            getLogger().log(java.util.logging.Level.SEVERE, "PHASE8E-ALPHA command failed", failure);
-            return false;
         }
+        return true;
     }
 
     private ProviderDeclaration declaration() {
-        return Phase8EProviderSupport.declaration(this::metadata, this::read, this::registered, this::unregistered);
-    }
-
-    private ProviderMetadata metadata(ProviderCallContext context) {
-        verifyContext(context, false);
-        return new ProviderMetadata("alpha", "phase8e.provider.alpha", "1.0.0", List.of(
-                definition("points"), definition("bonus")));
+        return Phase8EProviderSupport.declaration(PROFILE, this::read, this::registered, this::unregistered);
     }
 
     private void registered(ProviderRegistrationHandle providerHandle) {
@@ -145,7 +133,7 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
             ProviderCallContext context,
             UUID playerId,
             List<ProviderMetricRequest> queries) {
-        verifyContext(context, true);
+        PROFILE.verifyReadContext(context);
         reads.incrementAndGet();
         return switch (mode.get()) {
             case HEALTHY -> CompletableFuture.completedFuture(results(queries, MetricValue.count(10)));
@@ -237,14 +225,6 @@ public final class Phase8EAlphaProvider extends JavaPlugin {
                 results(queries, MetricValue.count(10)));
         if (!queries.isEmpty()) result.put(queries.getFirst(), null);
         return result;
-    }
-
-    private static ProviderMetricDefinition definition(String id) {
-        return Phase8EProviderSupport.countMetric(id, "points");
-    }
-
-    private static void verifyContext(ProviderCallContext context, boolean identified) {
-        Phase8EProviderSupport.verifyContext(context, identified, "phase8e_alpha", "Alpha");
     }
 
     private enum Mode {

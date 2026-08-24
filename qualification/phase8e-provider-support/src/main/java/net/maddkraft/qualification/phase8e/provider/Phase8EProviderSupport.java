@@ -1,8 +1,12 @@
 package net.maddkraft.qualification.phase8e.provider;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -20,6 +24,8 @@ import net.maddkraft.maddprestige.api.provider.ProviderMetricDefinition;
 import net.maddkraft.maddprestige.api.provider.ProviderRegistrationHandle;
 import net.maddkraft.maddprestige.api.provider.RequirementProvider;
 import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -76,6 +82,89 @@ public final class Phase8EProviderSupport {
                 unregistered.run();
             }
         };
+    }
+
+    public static ProviderDeclaration declaration(
+            Profile profile,
+            RequirementProvider requirements,
+            Consumer<ProviderRegistrationHandle> registered,
+            Runnable unregistered) {
+        return declaration(profile::metadata, requirements, registered, unregistered);
+    }
+
+    public record Profile(
+            String ownerNamespace,
+            String providerName,
+            String id,
+            String displayName,
+            String version,
+            String unit,
+            List<String> metrics) {
+        public Profile {
+            java.util.Objects.requireNonNull(ownerNamespace, "owner namespace");
+            java.util.Objects.requireNonNull(providerName, "provider name");
+            java.util.Objects.requireNonNull(id, "id");
+            java.util.Objects.requireNonNull(displayName, "display name");
+            java.util.Objects.requireNonNull(version, "version");
+            java.util.Objects.requireNonNull(unit, "unit");
+            metrics = List.copyOf(metrics);
+        }
+
+        public ProviderMetadata metadata(ProviderCallContext context) {
+            verifyContext(context, false, ownerNamespace, providerName);
+            return new ProviderMetadata(id, displayName, version,
+                    metrics.stream().map(metric -> countMetric(metric, unit)).toList());
+        }
+
+        public void verifyReadContext(ProviderCallContext context) {
+            verifyContext(context, true, ownerNamespace, providerName);
+        }
+    }
+
+    public static final class Commands<M extends Enum<M>> {
+        private final JavaPlugin plugin;
+        private final String commandName;
+        private final String logName;
+        private final Class<M> modeType;
+        private final AtomicReference<M> mode;
+        private final Consumer<M> modeChanged;
+
+        public Commands(
+                JavaPlugin plugin,
+                String commandName,
+                String logName,
+                Class<M> modeType,
+                AtomicReference<M> mode,
+                Consumer<M> modeChanged) {
+            this.plugin = java.util.Objects.requireNonNull(plugin, "plugin");
+            this.commandName = java.util.Objects.requireNonNull(commandName, "command name");
+            this.logName = java.util.Objects.requireNonNull(logName, "log name");
+            this.modeType = java.util.Objects.requireNonNull(modeType, "mode type");
+            this.mode = java.util.Objects.requireNonNull(mode, "mode");
+            this.modeChanged = java.util.Objects.requireNonNull(modeChanged, "mode changed");
+        }
+
+        public boolean execute(
+                CommandSender sender,
+                Command command,
+                String[] arguments,
+                BiFunction<String, CommandSender, Boolean> extension) {
+            if (!command.getName().equalsIgnoreCase(commandName) || arguments.length == 0) return false;
+            try {
+                String action = arguments[0].toLowerCase(Locale.ROOT);
+                if ("mode".equals(action)) {
+                    if (arguments.length != 2) return false;
+                    M replacement = Enum.valueOf(modeType, arguments[1].toUpperCase(Locale.ROOT));
+                    mode.set(replacement);
+                    modeChanged.accept(replacement);
+                    return true;
+                }
+                return extension.apply(action, sender);
+            } catch (RuntimeException failure) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE, logName + " command failed", failure);
+                return false;
+            }
+        }
     }
 
     public static final class Registration {

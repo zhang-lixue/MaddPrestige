@@ -3,7 +3,6 @@ package net.maddkraft.qualification.phase8e.beta;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -15,8 +14,6 @@ import net.maddkraft.maddprestige.api.metric.MetricReadMode;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.provider.ProviderCallContext;
 import net.maddkraft.maddprestige.api.provider.ProviderDeclaration;
-import net.maddkraft.maddprestige.api.provider.ProviderMetadata;
-import net.maddkraft.maddprestige.api.provider.ProviderMetricDefinition;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricRequest;
 import net.maddkraft.maddprestige.api.provider.ProviderMetricResult;
 import net.maddkraft.maddprestige.api.provider.ProviderRegistrationHandle;
@@ -28,13 +25,20 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 /** Second independently owned Stable provider for Phase 8E isolation qualification. */
 public final class Phase8EBetaProvider extends JavaPlugin {
+    private static final Phase8EProviderSupport.Profile PROFILE = new Phase8EProviderSupport.Profile(
+            "phase8e_beta", "Beta", "beta", "phase8e.provider.beta", "1.0.0", "tokens",
+            List.of("tokens", "online_only"));
+
     private final AtomicReference<Mode> mode = new AtomicReference<>(Mode.HEALTHY);
     private final AtomicInteger reads = new AtomicInteger();
     private Phase8EProviderSupport.Registration registration;
+    private Phase8EProviderSupport.Commands<Mode> commands;
 
     @Override
     public void onEnable() {
         registration = new Phase8EProviderSupport.Registration(this, "PHASE8E-BETA", this::declaration);
+        commands = new Phase8EProviderSupport.Commands<>(this, "phase8ebeta", "PHASE8E-BETA",
+                Mode.class, mode, replacement -> getLogger().info("PHASE8E-BETA mode=" + replacement));
         registration.enable();
         getLogger().info("PHASE8E-BETA enabled after MaddPrestige startup");
     }
@@ -47,38 +51,24 @@ public final class Phase8EBetaProvider extends JavaPlugin {
 
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] arguments) {
-        if (!command.getName().equalsIgnoreCase("phase8ebeta") || arguments.length == 0) return false;
-        try {
-            switch (arguments[0].toLowerCase(Locale.ROOT)) {
-                case "mode" -> {
-                    if (arguments.length != 2) return false;
-                    Mode replacement = Mode.valueOf(arguments[1].toUpperCase(Locale.ROOT));
-                    mode.set(replacement);
-                    getLogger().info("PHASE8E-BETA mode=" + replacement);
-                }
-                case "unregister" -> registration.requireHandle("Beta provider handle is absent").unregister();
-                case "rebind" -> registration.rebind();
-                case "status" -> sender.sendMessage("mode=" + mode.get() + " reads=" + reads.get()
-                        + " handle=" + registration.hasHandle());
-                default -> {
-                    return false;
-                }
+        return commands.execute(sender, command, arguments, this::providerCommand);
+    }
+
+    private boolean providerCommand(String action, CommandSender sender) {
+        switch (action) {
+            case "unregister" -> registration.requireHandle("Beta provider handle is absent").unregister();
+            case "rebind" -> registration.rebind();
+            case "status" -> sender.sendMessage("mode=" + mode.get() + " reads=" + reads.get()
+                    + " handle=" + registration.hasHandle());
+            default -> {
+                return false;
             }
-            return true;
-        } catch (RuntimeException failure) {
-            getLogger().log(java.util.logging.Level.SEVERE, "PHASE8E-BETA command failed", failure);
-            return false;
         }
+        return true;
     }
 
     private ProviderDeclaration declaration() {
-        return Phase8EProviderSupport.declaration(this::metadata, this::read, this::registered, this::unregistered);
-    }
-
-    private ProviderMetadata metadata(ProviderCallContext context) {
-        verifyContext(context, false);
-        return new ProviderMetadata("beta", "phase8e.provider.beta", "1.0.0", List.of(
-                definition("tokens"), definition("online_only")));
+        return Phase8EProviderSupport.declaration(PROFILE, this::read, this::registered, this::unregistered);
     }
 
     private void registered(ProviderRegistrationHandle providerHandle) {
@@ -94,7 +84,7 @@ public final class Phase8EBetaProvider extends JavaPlugin {
             ProviderCallContext context,
             UUID playerId,
             List<ProviderMetricRequest> queries) {
-        verifyContext(context, true);
+        PROFILE.verifyReadContext(context);
         reads.incrementAndGet();
         Mode current = mode.get();
         if (current == Mode.THROW) throw new IllegalStateException("controlled Beta runtime failure");
@@ -108,14 +98,6 @@ public final class Phase8EBetaProvider extends JavaPlugin {
                     : ProviderMetricResult.available(MetricValue.count(10), Instant.now()));
         }
         return CompletableFuture.completedFuture(result);
-    }
-
-    private static ProviderMetricDefinition definition(String id) {
-        return Phase8EProviderSupport.countMetric(id, "tokens");
-    }
-
-    private static void verifyContext(ProviderCallContext context, boolean identified) {
-        Phase8EProviderSupport.verifyContext(context, identified, "phase8e_beta", "Beta");
     }
 
     private enum Mode {

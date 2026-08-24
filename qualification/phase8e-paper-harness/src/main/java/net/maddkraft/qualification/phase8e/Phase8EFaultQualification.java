@@ -182,44 +182,28 @@ final class Phase8EFaultQualification {
             pass("safely dormant first boot discovered exact setup providers without publishing progression");
             coordinator.advance();
         }));
-        steps.add(() -> command(SETUP_START, lines -> {
-            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
-            pass("fault-profile canonical setup session started");
-            coordinator.advance();
-        }));
-        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
-                "internal rank authority selected"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS,
-                "base stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " alpha Alpha",
-                "Alpha-qualified stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " target Target",
-                "Beta-qualified target stage added"));
-        steps.add(commandStep(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID,
-                "base stage selected"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " alpha alpha_points " + ALPHA + " points GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
-                "Alpha requirement attached"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " target beta_tokens " + BETA + " tokens GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
-                "Beta requirement attached"));
-        steps.add(commandStep(() -> "maddprestige setup cost " + setupSession
-                + " fee vault_economy_cost vault_economy CURRENCY_AMOUNT 1 Fee",
-                "controlled Vault cost attached during dormant setup discovery"));
-        steps.add(commandStep(() -> SETUP_PRESTIGE + setupSession + " enabled target base",
-                "Prestige transition attached"));
-        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession,
-                "consequential fault-profile setup preview compiled"));
-        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
-            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
-            pass("setup risk acknowledged with server-issued token");
-            coordinator.advance();
-        }));
-        steps.add(() -> command(SETUP_CONFIRM + setupSession + " phase8e fault profile", lines -> {
-            revision = extract(REVISION_PATTERN, lines);
-            pass("consequential fault profile applied as " + revision);
-            coordinator.advance();
-        }));
+        addSetupStart("fault-profile canonical setup session started");
+        addSetupActions(
+                setupAction(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
+                        "internal rank authority selected"),
+                setupAction(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS, "base stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " alpha Alpha", "Alpha-qualified stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " target Target", "Beta-qualified target stage added"),
+                setupAction(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID, "base stage selected"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " alpha alpha_points " + ALPHA + " points GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
+                        "Alpha requirement attached"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " target beta_tokens " + BETA + " tokens GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
+                        "Beta requirement attached"),
+                setupAction(() -> "maddprestige setup cost " + setupSession
+                        + " fee vault_economy_cost vault_economy CURRENCY_AMOUNT 1 Fee",
+                        "controlled Vault cost attached during dormant setup discovery"),
+                setupAction(() -> SETUP_PRESTIGE + setupSession + " enabled target base",
+                        "Prestige transition attached"));
+        addSetupPublication("consequential fault-profile setup preview compiled",
+                "setup risk acknowledged with server-issued token", "phase8e fault profile",
+                "consequential fault profile applied as ");
         steps.add(() -> enableFaultIntegrations(coordinator::advance));
         steps.add(() -> coordinator.eventually("final fault profile and dependency composition", Duration.ofSeconds(60), () ->
                 VAULT_PROVIDERS.stream().allMatch(this::providerVisible)
@@ -287,41 +271,25 @@ final class Phase8EFaultQualification {
             pass("all optional dependencies were absent at boot and published no false capability");
             coordinator.advance();
         }));
-        steps.add(() -> command(SETUP_START, lines -> {
-            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
-            pass("absence canonical setup session started");
-            coordinator.advance();
-        }));
-        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
-                "absence internal rank authority selected"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS,
-                "absence base stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " alpha Alpha",
-                "absence Alpha-qualified stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " target Target",
-                "absence Beta-qualified target stage added"));
-        steps.add(commandStep(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID,
-                "absence base stage selected"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " alpha alpha_points " + ALPHA + " points GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
-                "absence Alpha requirement attached"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " target beta_tokens " + BETA + " tokens GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
-                "absence Beta requirement attached"));
-        steps.add(commandStep(() -> SETUP_PRESTIGE + setupSession + " disabled",
-                "absence Prestige disabled"));
-        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession,
-                "absence profile preview compiled without optional dependencies"));
-        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
-            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
-            pass("absence setup risk acknowledged with server-issued token");
-            coordinator.advance();
-        }));
-        steps.add(() -> command(SETUP_CONFIRM + setupSession + " phase8e absence profile", lines -> {
-            revision = extract(REVISION_PATTERN, lines);
-            pass("absence profile applied as " + revision);
-            coordinator.advance();
-        }));
+        addSetupStart("absence canonical setup session started");
+        addSetupActions(
+                setupAction(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
+                        "absence internal rank authority selected"),
+                setupAction(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS, "absence base stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " alpha Alpha", "absence Alpha-qualified stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " target Target",
+                        "absence Beta-qualified target stage added"),
+                setupAction(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID, "absence base stage selected"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " alpha alpha_points " + ALPHA + " points GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
+                        "absence Alpha requirement attached"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " target beta_tokens " + BETA + " tokens GREATER_OR_EQUAL 1 ABSOLUTE LIVE",
+                        "absence Beta requirement attached"),
+                setupAction(() -> SETUP_PRESTIGE + setupSession + " disabled", "absence Prestige disabled"));
+        addSetupPublication("absence profile preview compiled without optional dependencies",
+                "absence setup risk acknowledged with server-issued token", "phase8e absence profile",
+                "absence profile applied as ");
         steps.add(() -> coordinator.eventually("absence active composition", () -> service.stages().successful()
                 && service.stages().value().orElseThrow().size() == 3, () -> {
             pass("absence environment published the configured external-provider profile");
@@ -360,25 +328,18 @@ final class Phase8EFaultQualification {
             pass("setup discovery advertised phase5_events:mcmmo_adjusted_xp_total");
             coordinator.advance();
         }));
-        steps.add(() -> command(SETUP_START, lines -> {
-            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
-            pass("setup-audit canonical session started");
-            coordinator.advance();
-        }));
-        steps.add(commandStep(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
-                "setup-audit internal rank authority selected"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS,
-                "setup-audit base stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " manual Manual",
-                "setup-audit manual mcMMO event stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " vault Vault",
-                "setup-audit Vault stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " mcmmo McMMO",
-                "setup-audit mcMMO stage added"));
-        steps.add(commandStep(() -> SETUP_STAGE + setupSession + " claims Claims",
-                "setup-audit GriefPrevention stage added"));
-        steps.add(commandStep(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID,
-                "setup-audit baseline selected"));
+        addSetupStart("setup-audit canonical session started");
+        addSetupActions(
+                setupAction(() -> SETUP_PROVIDER + setupSession + INTERNAL_PROVIDER_SELECTION,
+                        "setup-audit internal rank authority selected"),
+                setupAction(() -> SETUP_STAGE + setupSession + BASE_STAGE_ARGUMENTS, "setup-audit base stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " manual Manual",
+                        "setup-audit manual mcMMO event stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " vault Vault", "setup-audit Vault stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " mcmmo McMMO", "setup-audit mcMMO stage added"),
+                setupAction(() -> SETUP_STAGE + setupSession + " claims Claims",
+                        "setup-audit GriefPrevention stage added"),
+                setupAction(() -> SETUP_BASELINE + setupSession + BASE_STAGE_ID, "setup-audit baseline selected"));
         steps.add(() -> commandFails(SETUP_REQUIREMENT + setupSession
                 + " vault wg worldguard_region inside_region EQUAL true ABSOLUTE LIVE",
                 "WorldGuard region-id requirement", coordinator::advance));
@@ -391,38 +352,27 @@ final class Phase8EFaultQualification {
         steps.add(() -> commandFails("maddprestige setup reward " + setupSession
                 + " ce_gift craftengine_item_reward custom_item COUNT 1 Gift",
                 "CraftEngine item-id reward", coordinator::advance));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " manual manual_xp phase5_events mcmmo_adjusted_xp_total GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
-                "mcMMO-backed manual progress requirement selected"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " vault vault_balance vault_balance balance GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
-                "Vault balance requirement selected"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " mcmmo mcmmo_power mcmmo power_level GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
-                "mcMMO power-level requirement selected"));
-        steps.add(commandStep(() -> SETUP_REQUIREMENT + setupSession
-                + " claims gp_claims griefprevention_claims owned_claim_count GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
-                "GriefPrevention claim requirement selected"));
-        steps.add(commandStep(() -> "maddprestige setup cost " + setupSession
-                + " fee vault_economy_cost vault_economy CURRENCY_AMOUNT 1 Fee",
-                "Vault cost selected"));
-        steps.add(commandStep(() -> "maddprestige setup reward " + setupSession
-                + " claim_blocks griefprevention_claim_blocks_reward bonus_claim_blocks COUNT 1 ClaimBlocks",
-                "GriefPrevention reward selected"));
-        steps.add(commandStep(() -> SETUP_PRESTIGE + setupSession + " disabled",
-                "setup-audit Prestige disabled"));
-        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession,
-                "setup-audit generated configuration compiled"));
-        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
-            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
-            pass("setup-audit risk acknowledged");
-            coordinator.advance();
-        }));
-        steps.add(() -> command(SETUP_CONFIRM + setupSession + " phase8e setup audit", lines -> {
-            revision = extract(REVISION_PATTERN, lines);
-            pass("setup-audit configuration published as " + revision);
-            coordinator.advance();
-        }));
+        addSetupActions(
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " manual manual_xp phase5_events mcmmo_adjusted_xp_total GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
+                        "mcMMO-backed manual progress requirement selected"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " vault vault_balance vault_balance balance GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
+                        "Vault balance requirement selected"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " mcmmo mcmmo_power mcmmo power_level GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
+                        "mcMMO power-level requirement selected"),
+                setupAction(() -> SETUP_REQUIREMENT + setupSession
+                        + " claims gp_claims griefprevention_claims owned_claim_count GREATER_OR_EQUAL 0 ABSOLUTE LIVE",
+                        "GriefPrevention claim requirement selected"),
+                setupAction(() -> "maddprestige setup cost " + setupSession
+                        + " fee vault_economy_cost vault_economy CURRENCY_AMOUNT 1 Fee", "Vault cost selected"),
+                setupAction(() -> "maddprestige setup reward " + setupSession
+                        + " claim_blocks griefprevention_claim_blocks_reward bonus_claim_blocks COUNT 1 ClaimBlocks",
+                        "GriefPrevention reward selected"),
+                setupAction(() -> SETUP_PRESTIGE + setupSession + " disabled", "setup-audit Prestige disabled"));
+        addSetupPublication("setup-audit generated configuration compiled", "setup-audit risk acknowledged",
+                "phase8e setup audit", "setup-audit configuration published as ");
         steps.add(() -> coordinator.eventually("setup-audit post-apply integration reconciliation", Duration.ofSeconds(60), () ->
                 VAULT_PROVIDERS.stream().allMatch(this::providerVisible)
                         && providerVisible(MCMO_PROVIDER)
@@ -857,6 +807,9 @@ final class Phase8EFaultQualification {
         }
     }
 
+    private record SetupAction(java.util.function.Supplier<String> command, String passMessage) {
+    }
+
     private record AlphaAttemptResult(int attempted, int admitted, int rejected) {
     }
 
@@ -1209,6 +1162,42 @@ final class Phase8EFaultQualification {
         } catch (ReflectiveOperationException failure) {
             throw new IllegalStateException("Cannot inspect controlled Alpha observation " + method, failure);
         }
+    }
+
+    private void addSetupStart(String passMessage) {
+        steps.add(() -> command(SETUP_START, lines -> {
+            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
+            pass(passMessage);
+            coordinator.advance();
+        }));
+    }
+
+    private void addSetupActions(SetupAction... actions) {
+        for (SetupAction action : actions) {
+            steps.add(commandStep(action.command(), action.passMessage()));
+        }
+    }
+
+    private void addSetupPublication(
+            String previewMessage,
+            String acknowledgedMessage,
+            String confirmationNote,
+            String confirmedPrefix) {
+        steps.add(commandStep(() -> SETUP_PREVIEW + setupSession, previewMessage));
+        steps.add(() -> command(SETUP_ACKNOWLEDGE + setupSession, lines -> {
+            setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
+            pass(acknowledgedMessage);
+            coordinator.advance();
+        }));
+        steps.add(() -> command(SETUP_CONFIRM + setupSession + " " + confirmationNote, lines -> {
+            revision = extract(REVISION_PATTERN, lines);
+            pass(confirmedPrefix + revision);
+            coordinator.advance();
+        }));
+    }
+
+    private static SetupAction setupAction(java.util.function.Supplier<String> command, String passMessage) {
+        return new SetupAction(command, passMessage);
     }
 
     private void enableFaultIntegrations(Runnable success) {
