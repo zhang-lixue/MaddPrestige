@@ -1,0 +1,15 @@
+name: Phase8E-Beta
+version: '1.0.0'
+main: net.maddkraft.qualification.phase8e.beta.Phase8EBetaProvider
+description: Independently owned Stable Beta provider for disposable Phase 8E qualification.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend: [MaddPrestige]
+commands:
+  phase8ebeta:
+    description: Controls the disposable Phase 8E Beta provider.
+    permission: phase8e.qualification.beta
+permissions:
+  phase8e.qualification.beta:
+    default: op

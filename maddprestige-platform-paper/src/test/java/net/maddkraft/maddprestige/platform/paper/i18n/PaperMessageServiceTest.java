@@ -318,6 +318,7 @@ class PaperMessageServiceTest {
                 "gui.session.expired", "gui.target.missing", "operation.preview.blocked", "permission.denied",
                 "setup.acknowledgement.unknown", "setup.already_active", "setup.baseline.unknown",
                 "setup.draft.invalid", "setup.group.missing", "setup.incomplete",
+                "setup.integration.unconfigurable",
                 "setup.prestige.stage_unknown", "setup.preview.required", "setup.provider.required",
                 "setup.requirement.baseline", "setup.requirement.duplicate",
                 "setup.requirement.metric_unknown", "setup.session.owner_mismatch", "setup.session.unknown",
@@ -339,8 +340,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(84, identities.size());
-        assertEquals(84, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(85, identities.size());
+        assertEquals(85, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -350,6 +351,7 @@ class PaperMessageServiceTest {
         assertEquals("config_acknowledgement_not_required",
                 identities.get("config.acknowledgement.not_required"));
         assertEquals("setup_group_missing", identities.get("setup.group.missing"));
+        assertEquals("setup_integration_unconfigurable", identities.get("setup.integration.unconfigurable"));
         assertEquals("setup_requirement_duplicate", identities.get("setup.requirement.duplicate"));
         assertEquals("setup_prestige_stage_unknown", identities.get("setup.prestige.stage_unknown"));
         assertEquals("setup_requirement_metric_unknown", identities.get("setup.requirement.metric_unknown"));
@@ -470,7 +472,7 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(65, singleSource.size());
+        assertEquals(66, singleSource.size());
         assertEquals(19, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
@@ -873,6 +875,26 @@ class PaperMessageServiceTest {
                 net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation.administration(
                         net.maddkraft.maddprestige.core.admin.AdministrationException
                                 .authorizationRejected("Prestige", List.of(maximum)))));
+    }
+
+    @Test
+    void setupIntegrationDiagnosticRendersEveryStructuredFactUnderBundledAndAlternateCatalogs() throws Exception {
+        Object[] facts = {"provider", "placeholder_input", "component", "placeholderapi",
+                "requirement", "placeholder, value type, and maximum age"};
+        List<String> bundled = administrationLines("setup.integration.unconfigurable", facts);
+        assertTrue(bundled.getFirst().contains("placeholder_input"));
+        assertTrue(bundled.getFirst().contains("placeholderapi"));
+        assertTrue(bundled.getFirst().contains("placeholder, value type, and maximum age"));
+        assertFalse(bundled.stream().anyMatch(line -> line.contains("<provider>") || line.contains("<component>")
+                || line.contains("<requirement>") || line.contains("INTERNAL")));
+
+        select("zz_ZZ", """
+                command.error.administration.setup_integration_unconfigurable.summary: "ALT <provider>|<component>|<requirement>"
+                command.error.administration.setup_integration_unconfigurable.remediation: "ALT REMEDY"
+                """);
+        assertTrue(messages.reload().successful());
+        assertEquals(List.of("ALT placeholder_input|placeholderapi|placeholder, value type, and maximum age",
+                "ALT REMEDY"), administrationLines("setup.integration.unconfigurable", facts));
     }
 
     @Test

@@ -338,6 +338,175 @@ class PhaseSixConfigurationAdministrationTest {
     }
 
     @Test
+    void setupPersistsEveryDirectlyConfigurableBuiltInIntegrationSelectedByRequirementsCostsOrRewards() {
+        assertSetupRequirementEnables("vault_balance", "balance", "vault");
+        assertSetupCostEnables("vault_economy_cost", "vault");
+        assertSetupRewardEnables("vault_economy_reward", "vault");
+        assertSetupRequirementEnables("mcmmo", "power_level", "mcmmo");
+        assertSetupRequirementEnables("phase5_events", "mcmmo_adjusted_xp_total", "mcmmo");
+        assertSetupRequirementEnables("griefprevention_claims", "owned_claim_count", "griefprevention");
+        assertSetupRewardEnables("griefprevention_claim_blocks_reward", "griefprevention");
+    }
+
+    @Test
+    void setupRejectsBuiltInSelectionsWhoseRequiredParametersItCannotGenerate() {
+        assertSetupRequirementRejected("placeholder_input", "sample");
+        assertSetupRequirementRejected("mcmmo", "skill_level");
+        assertSetupRequirementRejected("worldguard_region", "inside_region");
+        assertSetupRequirementRejected("craftengine_item_count", "item_count");
+        assertSetupRewardRejected("craftengine_item_reward");
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void defensiveIntegrationGenerationUsesTheSameCompleteStructuredDiagnostic() throws Exception {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new SetupProvider("placeholder_input", "sample")));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = twoStageWizard(fixture, providers);
+        UUID session = wizard.start(OWNER);
+        addTwoStages(wizard, session);
+        SetupRequirement injected = new SetupRequirement(new RequirementId("input"),
+                new ProviderId("placeholder_input"), new MetricId("sample"), "GREATER_OR_EQUAL", "1",
+                "ABSOLUTE", "LIVE");
+        var sessionsField = SetupWizardService.class.getDeclaredField("sessions");
+        sessionsField.setAccessible(true);
+        Map<UUID, Object> sessions = (Map<UUID, Object>) sessionsField.get(wizard);
+        Object current = sessions.get(session);
+        var withRequirement = current.getClass().getDeclaredMethod("withRequirement", SetupRequirement.class);
+        withRequirement.setAccessible(true);
+        sessions.put(session, withRequirement.invoke(current, injected));
+
+        AdministrationException failure = assertThrows(AdministrationException.class,
+                () -> wizard.generatedDocuments(OWNER, session));
+
+        assertEquals("setup.integration.unconfigurable", failure.code());
+        assertEquals(Map.of("provider", "placeholder_input", "component", "placeholderapi",
+                "requirement", "placeholder, value type, and maximum age"), failure.facts());
+    }
+
+    private static void assertSetupRequirementRejected(String providerId, String metricId) {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new SetupProvider(providerId, metricId)));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = twoStageWizard(fixture, providers);
+        UUID session = wizard.start(OWNER);
+        addTwoStages(wizard, session);
+
+        AdministrationException failure = assertThrows(AdministrationException.class,
+                () -> wizard.configureRequirement(OWNER, session, new SetupRequirement(new RequirementId("input"),
+                        new ProviderId(providerId), new MetricId(metricId), "GREATER_OR_EQUAL", "1",
+                        "ABSOLUTE", "LIVE")));
+
+        assertEquals("setup.integration.unconfigurable", failure.code());
+        assertEquals(expectedUnconfigurableFacts(providerId), failure.facts());
+        assertTrue(fixture.canonical.active().isEmpty(), "unconfigurable requirement must not publish a revision");
+    }
+
+    private static void assertSetupRewardRejected(String providerId) {
+        Fixture fixture = new Fixture();
+        SetupWizardService wizard = twoStageWizard(fixture, new ProviderRegistry());
+        UUID session = wizard.start(OWNER);
+        addTwoStages(wizard, session);
+
+        AdministrationException failure = assertThrows(AdministrationException.class,
+                () -> wizard.configureReward(OWNER, session, new SetupReward(new RewardId("gift"),
+                        new ProviderId(providerId), "custom_item", "COUNT", "1", "Gift")));
+
+        assertEquals("setup.integration.unconfigurable", failure.code());
+        assertEquals(Map.of("provider", "craftengine_item_reward", "component", "craftengine",
+                "requirement", "item-id metadata"), failure.facts());
+        assertTrue(fixture.canonical.active().isEmpty(), "unconfigurable reward must not publish a revision");
+    }
+
+    private static Map<String, String> expectedUnconfigurableFacts(String providerId) {
+        return switch (providerId) {
+            case "placeholder_input" -> Map.of("provider", providerId, "component", "placeholderapi",
+                    "requirement", "placeholder, value type, and maximum age");
+            case "mcmmo" -> Map.of("provider", providerId, "component", "mcmmo",
+                    "requirement", "skill filter");
+            case "worldguard_region" -> Map.of("provider", providerId, "component", "worldguard",
+                    "requirement", "region-id filter");
+            case "craftengine_item_count" -> Map.of("provider", providerId, "component", "craftengine",
+                    "requirement", "item-id filter");
+            default -> throw new AssertionError("Unexpected unconfigurable provider " + providerId);
+        };
+    }
+
+    private static void assertSetupRequirementEnables(String providerId, String metricId, String integration) {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new SetupProvider(providerId, metricId)));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = twoStageWizard(fixture, providers);
+        UUID session = wizard.start(OWNER);
+        addTwoStages(wizard, session);
+        wizard.configureRequirement(OWNER, session, new SetupRequirement(new RequirementId("requirement"),
+                new ProviderId(providerId), new MetricId(metricId), "GREATER_OR_EQUAL", "1", "ABSOLUTE", "LIVE"));
+
+        applyAndAssertIntegration(wizard, session, fixture, integration);
+        assertEquals(net.maddkraft.maddprestige.api.provider.ActivationState.ACTIVE,
+                providers.find(new ProviderId(providerId)).orElseThrow().activation());
+    }
+
+    private static void assertSetupCostEnables(String providerId, String integration) {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new SetupCostProvider(providerId)));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = twoStageWizard(fixture, providers);
+        UUID session = wizard.start(OWNER);
+        addTwoStages(wizard, session);
+        wizard.configureCost(OWNER, session, new SetupCost(new net.maddkraft.maddprestige.api.id.CostId("fee"),
+                new ProviderId(providerId), "fixture", "COUNT", "1", "Fee"));
+
+        applyAndAssertIntegration(wizard, session, fixture, integration);
+        assertEquals(net.maddkraft.maddprestige.api.provider.ActivationState.ACTIVE,
+                providers.find(new ProviderId(providerId)).orElseThrow().activation());
+    }
+
+    private static void assertSetupRewardEnables(String providerId, String integration) {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new SetupRewardProvider(providerId)));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = twoStageWizard(fixture, providers);
+        UUID session = wizard.start(OWNER);
+        addTwoStages(wizard, session);
+        wizard.configureReward(OWNER, session, new SetupReward(new net.maddkraft.maddprestige.api.id.RewardId("gift"),
+                new ProviderId(providerId), "fixture", "COUNT", "1", "Gift"));
+
+        applyAndAssertIntegration(wizard, session, fixture, integration);
+        assertEquals(net.maddkraft.maddprestige.api.provider.ActivationState.ACTIVE,
+                providers.find(new ProviderId(providerId)).orElseThrow().activation());
+    }
+
+    private static void applyAndAssertIntegration(
+            SetupWizardService wizard, UUID session, Fixture fixture, String integration) {
+        assertIntegrationEnabledAlone(wizard.generatedDocuments(OWNER, session).get("integrations.yml"), integration);
+        var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
+        assertFalse(preview.configuration().validation().hasErrors(), preview.configuration().validation().toString());
+        var acknowledgement = wizard.prepareAcknowledgement(OWNER, session);
+        wizard.confirmAcknowledgement(OWNER, acknowledgement.acknowledgementId(), "Integration setup audit")
+                .toCompletableFuture().join();
+        assertIntegrationEnabledAlone(fixture.canonical.active().orElseThrow().compiled().documents()
+                .get("integrations.yml"), integration);
+    }
+
+    private static SetupWizardService twoStageWizard(Fixture fixture, ProviderRegistry providers) {
+        return new SetupWizardService(fixture.service, providers);
+    }
+
+    private static void addTwoStages(SetupWizardService wizard, UUID session) {
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("base"), "Base", Optional.empty()));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("target"), "Target", Optional.empty()));
+    }
+
+    private static void assertIntegrationEnabledAlone(String integrations, String enabled) {
+        for (String integration : List.of("vault", "mcmmo", "griefprevention", "worldguard", "craftengine")) {
+            assertTrue(integrations.contains(integration + ":\n  enabled: " + integration.equals(enabled) + "\n"),
+                    integrations);
+        }
+    }
+
+    @Test
     @DisplayName("[A02] Setup resumes server state, cancels completely, and rejects provider loss after preview")
     void setupResumeCancelAndProviderLossFailClosed() {
         ProviderRegistry providers = new ProviderRegistry();
@@ -1153,9 +1322,21 @@ class PhaseSixConfigurationAdministrationTest {
     }
 
     private static final class SetupProvider implements net.maddkraft.maddprestige.api.metric.MetricProvider {
+        private final ProviderId providerId;
+        private final MetricId metricId;
+
+        private SetupProvider() {
+            this("setup_metric", "play_time");
+        }
+
+        private SetupProvider(String providerId, String metricId) {
+            this.providerId = new ProviderId(providerId);
+            this.metricId = new MetricId(metricId);
+        }
+
         @Override
         public ProviderDescriptor descriptor() {
-            return new ProviderDescriptor(new ProviderId("setup_metric"), "test", "1", "1", List.of(), List.of(
+            return new ProviderDescriptor(providerId, "test", "1", "1", List.of(), List.of(
                     new CapabilityDescriptor("metric", "metric", "test", Map.of())));
         }
 
@@ -1166,8 +1347,8 @@ class PhaseSixConfigurationAdministrationTest {
 
         @Override
         public Set<net.maddkraft.maddprestige.api.metric.MetricDescriptor> metrics() {
-            return Set.of(new net.maddkraft.maddprestige.api.metric.MetricDescriptor(new ProviderId("setup_metric"),
-                    new MetricId("play_time"), net.maddkraft.maddprestige.api.metric.MetricValueType.COUNT,
+            return Set.of(new net.maddkraft.maddprestige.api.metric.MetricDescriptor(providerId,
+                    metricId, net.maddkraft.maddprestige.api.metric.MetricValueType.COUNT,
                     Set.of(net.maddkraft.maddprestige.api.metric.MetricOperator.GREATER_OR_EQUAL),
                     Set.of(net.maddkraft.maddprestige.api.metric.MetricReadMode.CURRENT), true,
                     net.maddkraft.maddprestige.api.metric.MetricMonotonicity.MONOTONIC,
@@ -1249,9 +1430,19 @@ class PhaseSixConfigurationAdministrationTest {
     }
 
     private static final class SetupCostProvider implements net.maddkraft.maddprestige.api.cost.CostProvider {
+        private final String providerId;
+
+        private SetupCostProvider() {
+            this("setup_cost");
+        }
+
+        private SetupCostProvider(String providerId) {
+            this.providerId = providerId;
+        }
+
         @Override
         public ProviderDescriptor descriptor() {
-            return setupDescriptor("setup_cost", "cost");
+            return setupDescriptor(providerId, "cost");
         }
 
         @Override
@@ -1286,9 +1477,19 @@ class PhaseSixConfigurationAdministrationTest {
     }
 
     private static final class SetupRewardProvider implements net.maddkraft.maddprestige.api.reward.RewardProvider {
+        private final String providerId;
+
+        private SetupRewardProvider() {
+            this("setup_reward");
+        }
+
+        private SetupRewardProvider(String providerId) {
+            this.providerId = providerId;
+        }
+
         @Override
         public ProviderDescriptor descriptor() {
-            return setupDescriptor("setup_reward", "reward");
+            return setupDescriptor(providerId, "reward");
         }
 
         @Override

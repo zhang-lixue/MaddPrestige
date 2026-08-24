@@ -125,12 +125,15 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
                         return null;
                     }));
             registerBuiltInProviders();
-            registerLuckPerms();
+            registerLuckPermsIfPresent();
             PhaseFiveIntegrationConfiguration initialIntegrations = startup.map(value ->
                     integrationConfiguration(value.compiled().documents()).configuration())
                     .orElseGet(PhaseFiveIntegrationConfiguration::disabled);
+            boolean firstBootSetupDiscovery = startup.isEmpty();
+            org.bukkit.plugin.Plugin mcMmo = getServer().getPluginManager().getPlugin("mcMMO");
             ManualMetricHandle mcMmoAdjustedXp = registerManualProgress(foundation,
-                    initialIntegrations.mcMmoEnabled());
+                    initialManualProgressActive(initialIntegrations.mcMmoEnabled(), firstBootSetupDiscovery,
+                            mcMmo != null && mcMmo.isEnabled()));
 
             IntegrationTaskScheduler integrationScheduler = new IntegrationTaskScheduler() {
                 @Override
@@ -141,7 +144,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             optionalIntegrations = new PhaseSevenOptionalIntegrationManager(
                     this, registry, integrationScheduler, mcMmoAdjustedXp,
                     new MaddPrestigePlaceholderCache(10_000), clock);
-            optionalIntegrations.start(initialIntegrations);
+            optionalIntegrations.start(initialIntegrations, firstBootSetupDiscovery);
             providerBridge = new PaperProviderBridge(this, registry, clock);
             providerBridge.start().toCompletableFuture().orTimeout(5, TimeUnit.SECONDS).join();
             int recovered = new PendingOperationRecoveryService(new SqliteOperationRepository(foundation),
@@ -183,7 +186,12 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         registerActive(statistics);
     }
 
-    private void registerLuckPerms() {
+    private void registerLuckPermsIfPresent() {
+        org.bukkit.plugin.Plugin dependency = getServer().getPluginManager().getPlugin("LuckPerms");
+        if (dependency == null || !dependency.isEnabled()) {
+            getLogger().info("LuckPerms plugin is absent; rank projection remains fail-closed when configured.");
+            return;
+        }
         var service = getServer().getServicesManager().getRegistration(LuckPerms.class);
         if (service == null || !service.getPlugin().isEnabled()) {
             getLogger().info("LuckPerms service is absent; rank projection remains fail-closed when configured.");
@@ -224,6 +232,13 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
 
     private void registerActive(net.maddkraft.maddprestige.api.provider.Provider provider) {
         registerOwned(provider, true);
+    }
+
+    static boolean initialManualProgressActive(
+            boolean configured,
+            boolean firstBootSetupDiscovery,
+            boolean mcMmoAvailable) {
+        return configured || firstBootSetupDiscovery && mcMmoAvailable;
     }
 
     private ProviderRegistration registerOwned(

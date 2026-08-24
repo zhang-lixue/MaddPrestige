@@ -11,6 +11,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayDeque;
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletionException;
@@ -167,6 +168,7 @@ class ManualProgressProviderTest {
         }
         assertEquals(2_100, bootstrap.provider().flushAsync().toCompletableFuture().join());
         assertEquals(3, repository.writeBatches);
+        assertEquals(List.of(1_024, 1_024, 52), repository.batchSizes);
         assertEquals(2_100, repository.records.size());
     }
 
@@ -205,6 +207,7 @@ class ManualProgressProviderTest {
 
     private static class CountingRepository implements ManualProgressRepository {
         private final Map<UUID, ManualProgressRecord> records = new LinkedHashMap<>();
+        private final List<Integer> batchSizes = new java.util.ArrayList<>();
         private int writeBatches;
         private int writtenRecords;
 
@@ -216,6 +219,7 @@ class ManualProgressProviderTest {
         @Override
         public void writeBatch(Collection<ManualProgressRecord> records) {
             writeBatches++;
+            batchSizes.add(records.size());
             writtenRecords += records.size();
             records.forEach(record -> this.records.put(record.playerId(), record));
         }

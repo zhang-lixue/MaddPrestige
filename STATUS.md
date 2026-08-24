@@ -1,16 +1,48 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 8D owner-accepted after Independent Owner Review 7 and in publication; Phase 8E not started
+**Current phase:** Phase 8E owner-accepted; publication authorized
 
 **Last updated:** 2026-08-23
 
-**Branch:** `v2/phase-8`
+**Branch:** `v2/phase-8e`
 
 **Frozen pre-Phase-8 HEAD:** `7fc5c3532f0614634933ff66ee0e03bf55b8e5cf`
 
-**Candidate scope:** i18n, exact generic example, public documentation and command-driven admin UX; accepted Phase 1-8C behavior retained
+**Candidate scope:** performance, offline/provider/event/fault/dependency qualification and the focused corrections
+exposed by those matrices; accepted Phase 1-8D behavior retained
 
 ## Outcome
+
+Independent Owner Review 3 accepted the exact 59-path Phase 8E candidate and its exact final-artifact qualification.
+OR8E-01 through OR8E-06 and P8B-F014/P8B-F015 are closed. Publication does not begin Phase 8F, freeze the final
+compatibility baseline, execute A76 or change the 62 Satisfied / 13 Partial / 1 Later ledger.
+
+Phase 8E executes the predeclared Paper load plan and the complete offline, multi-provider, public-event and optional
+dependency fault matrices. The final exact-artifact performance boot passed 23/23 assertions under 102,400 real mcMMO
+adjusted-XP events, 5,760 public evaluations, 11,520 Placeholder refresh requests and 180,000 cache renders. Controlled
+SQLite contention produced the expected public `DEGRADED` state without a Paper stall; release/retry restored
+`AVAILABLE` and converged exactly. After 2,048 contention increments and 512 dirty-shutdown increments, an unchanged
+restart passed 3/3 and recovered all 104,960 accepted increments without loss or duplicate. Qualification-only JFR
+measured the actual Java 25 operation and Placeholder virtual-thread families: high-water 128/12, exact 6,034/6,034
+and 11,648/11,648 start/end convergence, active zero, no pin and no submission failure. The corrected fault environment
+passed 48/48 assertions across two independently owned Stable providers. Four synchronously blocked old-generation
+Alpha callbacks retained one stable logical budget across replacement and repeated rebinds: generation 2 admitted
+0/8, repeated generations admitted 0/4, Beta remained usable within 100 ms, and release recovered in 48 ms with final
+active count zero. A separate final-artifact boot with all ten optional dependency artifacts absent passed 15/15.
+
+Owner Review Correction Pass 2 closes the remaining setup, callback-lifecycle and diagnostic-fact defects. One
+authoritative built-in selection map covers all 15 integration-backed setup identities, including
+`phase5_events:mcmmo_adjusted_xp_total` -> `integrations.mcmmo.enabled`; the final setup run passed 26/26 and proved
+the selected manual metric remained usable after apply/reconciliation without enabling WorldGuard or CraftEngine.
+Every `setup.integration.unconfigurable` path now calls one helper supplying exact
+`provider`/`component`/`requirement` facts. Callback permits are owned by stable owner-qualified provider identity,
+survive transient generations while work is active, and are reclaimed only after the final generation and callback
+release. Focused tests and fresh exact-JAR Paper reruns qualify every correction. No Stable SDK/Paper event surface or
+accepted semantic behavior changed.
+
+A61/A62/A65/A66/A67 are owner-accepted as `Satisfied`. P8B-F014/P8B-F015 are closed; P8B-F016/P8B-F017 are
+resolved at the Phase 8E boundary. The mechanical ledger is 62 Satisfied / 13 Partial / 1 Later. A63 remains `Partial`,
+A64 remains `Later`, and A76 remains `Partial / Deferred` and has not run.
 
 Phase 8D supplies one server-global UTF-8 locale selected by `locale.yml`, with built-in `en_US` as the complete
 fallback catalog. Player/admin-facing command, setup, Why, GUI and Phase 7 presentation carries stable semantic message
@@ -165,9 +197,8 @@ JARs remain outside the review bundle; sanitized evidence is `PHASE8B_PAPER_QUAL
 
 - Phase 8C: SQLite Persistence, Migration, Backup & Recovery Hardening — owner-accepted at checkpoint
   `d481a9db7cd67108ff77f97e2d64d737e9096276`.
-- Phase 8D: i18n, a generic example, public documentation and admin UX — implementation/qualification candidate
-  complete, awaiting owner review.
-- Phase 8E: performance plus fault/dependency qualification.
+- Phase 8D: i18n, a generic example, public documentation and admin UX — owner-accepted and merged.
+- Phase 8E: performance plus fault/dependency qualification — owner-accepted; publication authorized.
 - Phase 8F: packaging and release hardening, including final compatibility-baseline responsibility.
 
 The owner decision dated 2026-08-17 makes SQLite the only officially supported MaddPrestige 2.0 production persistence
@@ -189,51 +220,45 @@ deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not
 | A45 | Satisfied | Doctor command rendering now carries catalog-owned consequence/explanation plus affected path/code and safe actionable remediation for every diagnostic family; command and Paper rendering tests prove the public boundary |
 | A46 | Satisfied | Rank-target and other actionable Doctor findings render stable semantic remediation identities without exposing arbitrary stored exception/diagnostic prose |
 | A47 | Satisfied | RankUp/Prestige authorization emits exhaustive typed blocker identities and facts; the real command/service Why path distinguishes inactive state, illegal target, missing cost, maximum, cooldown, provider, cost-preflight, projection, requirements and boundaries without parsing diagnostic prose |
-| A61 | Partial | Durable internal/offline paths and live async LuckPerms composition exist; complete provider-by-provider live offline qualification remains |
-| A62 | Partial | Manual backpressure/health and cache-only rendering are corrected; per-player virtual-thread/SQLite fan-out still needs real Paper load/TPS qualification in Phase 8E |
+| A61 | Satisfied | The exhaustive offline matrix proves UUID-capable internal/LuckPerms/Vault/manual/SDK paths and explicitly fail-closed online/cache-limited Paper/mcMMO/Placeholder/WorldGuard/CraftEngine paths without fabricated zero or mutation |
+| A62 | Satisfied | The exact final-artifact real-Paper load retained 19.999-20.005 TPS, bounded platform threads/backlogs and cache-only rendering while JFR proved operation/Placeholder high-water 128/12 with exact 6,034/6,034 and 11,648/11,648 convergence; all 104,960 accepted manual increments converged exactly through SQLite contention, shutdown and unchanged restart; deterministic batches were exactly 1,024/1,024/52 |
 | A63 | Partial | Populated fresh/prefix migration, native backup, restore rehearsal, corruption/history failures and real Paper restart are qualified; Phase 9 retains actual MaddKraft clone/deployment migration qualification |
 | A64 | Later | MySQL/MariaDB production support and semantic parity are explicitly deferred post-2.0; no support or acceptance claim is made |
-| A65 | Partial | A separate live harness proves owner-attested SDK registration, admin-configured metric evaluation, unregister and rebind; the broader independent provider qualification matrix remains |
-| A66 | Partial | Live Paper proves correlation, distinct request/durable IDs, zero-effect cancellation and stale successful PRE, plus durable rank/Prestige POST; the complete uncertainty/listener-fault/reentrancy matrix remains |
-| A67 | Partial | Callback/linkage failure is isolated and unrelated registry state survives; broader dependency service/reload/operation matrix remains Phase 8E |
-| A68 | Satisfied | Stable semantic references preserve 51 typed blocker identities and occurrence-correct administration semantics across 111 sites/84 codes: 19 multi-source and all 65 single-source codes; five typed variants distinguish overloaded apply/validation states, applicable facts remain data, no English or diagnostic-fragment classifier remains, and real-branch plus alternate-catalog tests pass |
+| A65 | Satisfied | Two independently owned Stable provider plugins simultaneously compose multiple metrics and prove late registration, exact metadata/maps, offline limitation, duplicate rejection, timeout/cancellation, failure isolation, unregister, generation replacement and recovery |
+| A66 | Satisfied | The real-Paper matrix proves normal RankUp/Prestige PRE/POST durability, unknown-player cancellation, listener failure, same-player conflict, cross-player completion, rebind-after-PRE, service loss, definitely-not-applied, throw, verified apply and uncertain reconciliation semantics |
+| A67 | Satisfied | Ten-dependency absence, exact lifecycle including EconomyShopGUI/QuickShop-Hikari, CraftEngine reload, provider failure/async timeout/malformed output and deterministic old/new Alpha overlap prove the four-call budget survives provider generations, Beta remains usable, and state recovers/reclaims without worker leakage |
+| A68 | Satisfied | Stable semantic references preserve 51 typed blocker identities and occurrence-correct administration semantics across 112 sites/85 codes: 19 multi-source and all 66 single-source codes; the Phase 8E setup diagnostic has one structured helper supplying exact provider/component/requirement facts, five typed variants distinguish overloaded apply/validation states, and no English or diagnostic-fragment classifier returns |
 | A70 | Satisfied | The exact unbranded Member -> Adventurer -> Veteran -> Prestige profile passed 29 first-boot and three unchanged-restart assertions, including a real journaled LuckPerms Member projection before Adventurer and idempotent read/Why/preview/operation lifecycle ingress |
 | A76 | Partial / Deferred | By owner decision, the independent blind-administrator protocol will run against the final frozen Phase 8 release candidate, not the intermediate Phase 8D snapshot |
 
-The mechanically audited ledger is **57 Satisfied, 18 Partial and 1 Later**. A63 remains `Partial` because Phase 9
-retains the live MaddKraft clone/deployment gate; A64 remains `Later`. A61/A62/A65/A66/A67 retain their broader Phase 8E
-qualification gates, and A76 retains its independent blind-admin gate deferred to the final frozen Phase 8 release
-candidate.
+The mechanically audited candidate ledger is **62 Satisfied, 13 Partial and 1 Later**. A63 remains `Partial` because
+Phase 9 retains the live MaddKraft clone/deployment gate; A64 remains `Later`. A76 retains its independent blind-admin
+gate deferred to the final frozen Phase 8 release candidate and has not run.
 
 ## Verification
 
-The owner-accepted Phase 8D implementation is sealed by focused i18n, documentation, SDK-consumer and regression checks, the exact
-two-boot Paper qualification, and two consecutive eight-module `clean verify` runs with no source or documentation
-edits between them. Exact totals and reproducible artifact hashes are recorded in
-`PHASE8D_OWNER_REVIEW_SUMMARY.txt` and the owner-review bundle.
+The Phase 8E candidate is sealed by focused correction tests, four isolated qualification-plugin builds, the exact
+two-boot real-Paper performance qualification, the real-Paper 48-assertion fault matrix, the clean optional-absence
+boot and an authoritative eight-module `clean verify`. Exact totals and reproducible artifact hashes are recorded in
+  the Phase 8E Owner Review 3 summary and bundle.
 
 ## Owner handoff
 
-- `docs/V2_PHASE8D_IMPLEMENTATION.md`
-- `docs/V2_PHASE8D_A70_QUALIFICATION.md`
-- `docs/V2_PHASE8D_A76_PROTOCOL.md`
-- `docs/V2_PHASE8D_I18N_EVIDENCE.md`
-- `docs/V2_PHASE8D_ADMINISTRATION_SEMANTIC_AUDIT.md`
-- `docs/V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`
-- `docs/V2_PHASE8D_ADMINISTRATION_SINGLE_SOURCE_AUDIT.md`
-- `docs/V2_PHASE8D_FILE_MANIFEST.md`
+- `docs/V2_PHASE8E_IMPLEMENTATION.md`
+- `docs/V2_PHASE8E_LOAD_PLAN.md`
+- `docs/V2_PHASE8E_PERFORMANCE_EVIDENCE.md`
+- `docs/V2_PHASE8E_OFFLINE_PROVIDER_MATRIX.md`
+- `docs/V2_PHASE8E_MULTI_PROVIDER_MATRIX.md`
+- `docs/V2_PHASE8E_EVENT_FAULT_MATRIX.md`
+- `docs/V2_PHASE8E_DEPENDENCY_FAULT_MATRIX.md`
+- `docs/V2_PHASE8E_FILE_MANIFEST.md`
 - `docs/V2_PHASE8_FAILURE_REGISTER.md`
-- `docs/V2_PHASE8B_STATIC_AUDIT.md`
-- `docs/V2_ARCHITECTURE.md`
 - `docs/V2_TRACEABILITY.md`
 - `DECISIONS.md`
-- `PHASE8D_OWNER_REVIEW_SUMMARY.txt`
-- `PHASE8D_PAPER_BOOT_1.log`
-- `PHASE8D_PAPER_BOOT_2.log`
-- `PHASE8D_VERIFY_1.log`
-- `PHASE8D_VERIFY_2.log`
-- `target/MaddPrestige_Phase8D_Owner_Review.zip`
+- `docs/evidence/phase8e/`
+- `PHASE8E_OWNER_REVIEW_SUMMARY.txt`
+- `target/MaddPrestige_Phase8E_Owner_Review_3.zip`
 
-Phase 8B, Phase 8C and Phase 8D are owner-accepted. Independent Owner Review 7 closed OR8D-01 through OR8D-11 with no
-remaining Phase 8D acceptance blocker. A76 remains Partial by explicit owner deferral to the final frozen Phase 8
-release candidate. Phase 8E has not started.
+Phase 8B through Phase 8E are owner-accepted at their respective boundaries. Phase 8E publication is authorized, but
+merge and post-merge verification remain separate gates. A76 remains Partial by explicit owner deferral to the final
+frozen Phase 8 release candidate and was not run. Phase 8F and Phase 9 have not started.

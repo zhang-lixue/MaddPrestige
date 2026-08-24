@@ -1,0 +1,9 @@
+name: Phase8E-Economy
+version: '1.0.0'
+main: net.maddkraft.qualification.phase8e.economy.Phase8EEconomyProvider
+description: Disposable controlled Vault Economy service for Phase 8E fault qualification.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend: [Vault]
+loadbefore: [MaddPrestige]

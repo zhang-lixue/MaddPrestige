@@ -29,6 +29,26 @@ import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 
 public final class SetupWizardService {
+    private static final String ANY_METRIC = "*";
+    private static final Map<SetupSelection, BuiltInSetupRule> BUILT_IN_SETUP_RULES = Map.ofEntries(
+            requirement("vault_balance", "balance", "vault"),
+            requirement("mcmmo", "power_level", "mcmmo"),
+            unsupportedRequirement("mcmmo", "skill_level", "mcmmo", "skill filter"),
+            requirement("phase5_events", "mcmmo_adjusted_xp_total", "mcmmo"),
+            requirement("griefprevention_claims", "remaining_claim_blocks", "griefprevention"),
+            requirement("griefprevention_claims", "accrued_claim_blocks", "griefprevention"),
+            requirement("griefprevention_claims", "bonus_claim_blocks", "griefprevention"),
+            requirement("griefprevention_claims", "owned_claim_count", "griefprevention"),
+            unsupportedRequirement("placeholder_input", ANY_METRIC, "placeholderapi",
+                    "placeholder, value type, and maximum age"),
+            unsupportedRequirement("worldguard_region", "inside_region", "worldguard", "region-id filter"),
+            unsupportedRequirement("craftengine_item_count", "item_count", "craftengine", "item-id filter"),
+            action(SetupSelectionKind.COST, "vault_economy_cost", "vault"),
+            action(SetupSelectionKind.REWARD, "vault_economy_reward", "vault"),
+            action(SetupSelectionKind.REWARD, "griefprevention_claim_blocks_reward", "griefprevention"),
+            unsupportedAction(SetupSelectionKind.REWARD, "craftengine_item_reward", "craftengine",
+                    "item-id metadata"));
+
     private final ConfigurationAdministrationService configuration;
     private final Optional<ProviderRegistry> providers;
     private final Clock clock;
@@ -147,8 +167,9 @@ public final class SetupWizardService {
 
     public void configureRequirement(PermissionSubject subject, UUID sessionId, SetupRequirement requirement) {
         Session session = require(subject, sessionId);
+        rejectUnconfigurableRequirement(Objects.requireNonNull(requirement, "requirement"));
         discardDraft(subject, session);
-        sessions.put(sessionId, session.withRequirement(Objects.requireNonNull(requirement, "requirement")));
+        sessions.put(sessionId, session.withRequirement(requirement));
     }
 
     public void configureRequirementForStage(
@@ -164,6 +185,7 @@ public final class SetupWizardService {
                     "Choose a stage after the baseline.", "stage", stageId.value());
         }
         SetupRequirement replacement = Objects.requireNonNull(requirement, "requirement");
+        rejectUnconfigurableRequirement(replacement);
         boolean duplicate = session.requirement().filter(value -> value.id().equals(replacement.id())).isPresent()
                 || session.stageRequirements().entrySet().stream()
                         .anyMatch(entry -> !entry.getKey().equals(stageId)
@@ -186,8 +208,9 @@ public final class SetupWizardService {
 
     public void configureReward(PermissionSubject subject, UUID sessionId, SetupReward reward) {
         Session session = require(subject, sessionId);
+        rejectUnconfigurableReward(Objects.requireNonNull(reward, "reward"));
         discardDraft(subject, session);
-        sessions.put(sessionId, session.withReward(Objects.requireNonNull(reward, "reward")));
+        sessions.put(sessionId, session.withReward(reward));
     }
 
     public void configurePrestige(PermissionSubject subject, UUID sessionId, SetupPrestige prestige) {
@@ -330,7 +353,7 @@ public final class SetupWizardService {
         documents.put("requirements.yml", requirements(session));
         documents.put("rewards.yml", rewards(session));
         documents.put("lifecycle.yml", lifecycle(session));
-        documents.put("integrations.yml", integrations());
+        documents.put("integrations.yml", integrations(session));
         return Collections.unmodifiableMap(documents);
     }
 
@@ -505,13 +528,19 @@ public final class SetupWizardService {
         return yaml.toString();
     }
 
-    private static String integrations() {
+    private static String integrations(Session session) {
+        Set<String> selected = selectedIntegrationComponents(session);
+        boolean vault = selected.contains("vault");
+        boolean mcMmo = selected.contains("mcmmo");
+        boolean griefPrevention = selected.contains("griefprevention");
+        boolean worldGuard = selected.contains("worldguard");
+        boolean craftEngine = selected.contains("craftengine");
         return """
                 schema-version: 7
                 vault:
-                  enabled: false
+                  enabled: %s
                 mcmmo:
-                  enabled: false
+                  enabled: %s
                 placeholderapi:
                   output:
                     enabled: false
@@ -525,13 +554,124 @@ public final class SetupWizardService {
                   progression-credit:
                     enabled: false
                 griefprevention:
-                  enabled: false
+                  enabled: %s
                 worldguard:
-                  enabled: false
+                  enabled: %s
                 craftengine:
-                  enabled: false
+                  enabled: %s
                   reward-maximum-quantity: 2304
-                """;
+                """.formatted(vault, mcMmo, griefPrevention, worldGuard, craftEngine);
+    }
+
+    private static Set<String> selectedIntegrationComponents(Session session) {
+        java.util.HashSet<String> result = new java.util.HashSet<>();
+        session.requirement().ifPresent(requirement -> addIntegration(result, rule(requirement),
+                requirement.providerId().value()));
+        session.stageRequirements().values().forEach(requirement ->
+                addIntegration(result, rule(requirement), requirement.providerId().value()));
+        session.cost().ifPresent(cost -> addIntegration(result,
+                rule(new SetupSelection(SetupSelectionKind.COST, cost.providerId().value(), "")),
+                cost.providerId().value()));
+        session.reward().ifPresent(reward -> addIntegration(result, rule(reward), reward.providerId().value()));
+        return Set.copyOf(result);
+    }
+
+    private static void rejectUnconfigurableRequirement(SetupRequirement requirement) {
+        validateRule(rule(requirement), requirement.providerId().value());
+    }
+
+    private static void rejectUnconfigurableReward(SetupReward reward) {
+        validateRule(rule(reward), reward.providerId().value());
+    }
+
+    private static Optional<BuiltInSetupRule> rule(SetupRequirement requirement) {
+        String provider = requirement.providerId().value();
+        BuiltInSetupRule exact = BUILT_IN_SETUP_RULES.get(new SetupSelection(SetupSelectionKind.REQUIREMENT,
+                provider, requirement.metricId().value()));
+        return Optional.ofNullable(exact == null ? BUILT_IN_SETUP_RULES.get(
+                new SetupSelection(SetupSelectionKind.REQUIREMENT, provider, ANY_METRIC)) : exact);
+    }
+
+    private static Optional<BuiltInSetupRule> rule(SetupReward reward) {
+        return rule(new SetupSelection(SetupSelectionKind.REWARD, reward.providerId().value(), ""));
+    }
+
+    private static Optional<BuiltInSetupRule> rule(SetupSelection selection) {
+        return Optional.ofNullable(BUILT_IN_SETUP_RULES.get(selection));
+    }
+
+    private static void addIntegration(
+            Set<String> integrations,
+            Optional<BuiltInSetupRule> candidate,
+            String provider) {
+        validateRule(candidate, provider);
+        candidate.map(BuiltInSetupRule::integration).ifPresent(integrations::add);
+    }
+
+    private static void validateRule(Optional<BuiltInSetupRule> candidate, String provider) {
+        candidate.flatMap(BuiltInSetupRule::requiredParameters).ifPresent(required -> {
+            BuiltInSetupRule rule = candidate.orElseThrow();
+            throw unconfigurable(provider, rule.integration(), required);
+        });
+    }
+
+    static Map<String, String> builtInSetupSelectionAudit() {
+        return BUILT_IN_SETUP_RULES.entrySet().stream().collect(java.util.stream.Collectors.toUnmodifiableMap(
+                entry -> entry.getKey().auditIdentity(),
+                entry -> entry.getValue().auditIdentity()));
+    }
+
+    private static Map.Entry<SetupSelection, BuiltInSetupRule> requirement(
+            String provider, String metric, String integration) {
+        return Map.entry(new SetupSelection(SetupSelectionKind.REQUIREMENT, provider, metric),
+                new BuiltInSetupRule(integration, Optional.empty()));
+    }
+
+    private static Map.Entry<SetupSelection, BuiltInSetupRule> unsupportedRequirement(
+            String provider, String metric, String integration, String requiredParameters) {
+        return Map.entry(new SetupSelection(SetupSelectionKind.REQUIREMENT, provider, metric),
+                new BuiltInSetupRule(integration, Optional.of(requiredParameters)));
+    }
+
+    private static Map.Entry<SetupSelection, BuiltInSetupRule> action(
+            SetupSelectionKind kind, String provider, String integration) {
+        return Map.entry(new SetupSelection(kind, provider, ""),
+                new BuiltInSetupRule(integration, Optional.empty()));
+    }
+
+    private static Map.Entry<SetupSelection, BuiltInSetupRule> unsupportedAction(
+            SetupSelectionKind kind, String provider, String integration, String requiredParameters) {
+        return Map.entry(new SetupSelection(kind, provider, ""),
+                new BuiltInSetupRule(integration, Optional.of(requiredParameters)));
+    }
+
+    private enum SetupSelectionKind {
+        REQUIREMENT,
+        COST,
+        REWARD
+    }
+
+    private record SetupSelection(SetupSelectionKind kind, String provider, String metric) {
+        private String auditIdentity() {
+            return kind.name().toLowerCase(java.util.Locale.ROOT) + ":" + provider
+                    + (metric.isEmpty() ? "" : ":" + metric);
+        }
+    }
+
+    private record BuiltInSetupRule(String integration, Optional<String> requiredParameters) {
+        private String auditIdentity() {
+            return requiredParameters.map(required -> "reject:" + integration + ":" + required)
+                    .orElse("enable:" + integration);
+        }
+    }
+
+    private static AdministrationException unconfigurable(
+            String provider, String integration, String requiredParameters) {
+        return new AdministrationException("setup.integration.unconfigurable",
+                "The generic setup wizard cannot define the " + requiredParameters + " required by " + provider
+                        + ".",
+                "Create and validate a canonical configuration draft with those exact parameters instead.",
+                "provider", provider, "component", integration, "requirement", requiredParameters);
     }
 
     private String requirementValueType(SetupRequirement requirement) {

@@ -3,13 +3,15 @@
 **Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7  
 **Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`  
 **Date:** 2026-08-22  
-**Scope:** 111 literal production `AdministrationException` construction sites, 84 public codes
+**Original Phase 8D scope:** 111 literal production `AdministrationException` construction sites, 84 public codes
+**Phase 8E Correction Pass 2 addendum:** 112 sites, 85 public codes; the setup diagnostic now has one shared
+construction helper used by both the selection-time and generated-document defenses
 
 ## Mechanical inventory
 
 `PaperMessageServiceTest.administrationMultiThrowInventoryMatchesReviewedCompatibilityRegistry` walks every
 `src/main/java` tree, excludes generated `target` trees, extracts literal `AdministrationException` codes and compares
-the complete 84-code set with `SemanticPresentation.knownAdministrationCodes()`. It then compares every code occurring
+the complete 85-code set with `SemanticPresentation.knownAdministrationCodes()`. It then compares every code occurring
 at least twice with the reviewed registry below. The current result is 19 multi-source codes: 17 compatible shared
 contracts and two codes requiring typed occurrence discrimination. A future added, removed, renamed or newly repeated
 literal code fails the inventory test until this register and the public presentation contract are deliberately
@@ -39,7 +41,7 @@ Source locations below are relative to `maddprestige-core/src/main/java/net/madd
 | `config.preview.stale` — `admin/config/CAS.java:687,691` | Candidate hash or draft version differs from the last preview. | The draft-side stale candidate cannot apply; generate and review a fresh preview. Active-revision drift remains isolated to `config.revision.stale`. | None. | **Compatible shared contract.** |
 | `config.revision.stale` — `admin/config/CAS.java:492,750` | Active revision changed before acknowledgement issuance or before apply. | Stale authority is rejected; reopen current state and obtain a fresh preview/token. | None. | **Compatible shared contract.** |
 | `config.validation.blocked` — `admin/config/CAS.java:479,756` | Site 479: validation errors prevent acknowledgement preparation; high-risk findings are inputs, not the blocker. Site 756: apply is blocked by errors and/or unacknowledged high-risk findings. | Acknowledgement context: correct errors, preview, then request authority. Apply context: correct errors and complete server-issued acknowledgement for remaining high-risk findings. | `errors`, `findings`; typed variant is also passed as catalog data. | **Not compatible without discrimination.** `CONFIG_VALIDATION_ACKNOWLEDGEMENT_PREPARATION`, `CONFIG_VALIDATION_APPLY`. |
-| `setup.preview.required` — `admin/setup/SetupWizardService.java:238,252` | Setup apply or setup acknowledgement is requested without the exact setup preview. | No setup authority/apply occurs; preview and review the candidate. | None. | **Compatible shared contract.** |
+| `setup.preview.required` — `admin/setup/SetupWizardService.java:261,275` | Setup apply or setup acknowledgement is requested without the exact setup preview. | No setup authority/apply occurs; preview and review the candidate. | None. | **Compatible shared contract.** |
 | `stage.change.remap_invalid` — `admin/config/CAS.java:313,352` | Stage removal or explicit remap selection maps the missing source stage to itself. | No invalid migration plan is accepted; choose a distinct enabled ordered target. | `source`, `target`. | **Compatible shared contract.** |
 
 ## Owner Review 5 single-source correction
@@ -52,7 +54,11 @@ candidate configuration changed.
 
 ## Presentation and compatibility result
 
-The 84 stable diagnostic codes remain unchanged. `AdministrationSemanticVariant` is an immutable enumerated occurrence
+The accepted 84 Phase 8D diagnostic codes remain unchanged. Phase 8E adds only
+`setup.integration.unconfigurable`, with its own exact identity and catalog pair, because the new setup safety boundary
+must be actionable without reusing semantically incorrect prose. Correction Pass 2 consolidates its two literal
+construction sites into one helper and therefore moves it to the complete single-source register without changing the
+two enforcing call paths or public contract. `AdministrationSemanticVariant` is an immutable enumerated occurrence
 discriminator whose constructor verifies that its diagnostic code matches the exception code. `SemanticPresentation`
 selects five dedicated variant identities before the existing exact-code mapping, forwards only immutable facts plus
 the enum name, and never reads exception message/remediation English. Built-in and alternate-catalog tests cover all
@@ -61,8 +67,8 @@ reconciliation.
 
 Owner Review Correction Pass 6 deliberately rechecked this accepted register while auditing all remaining single-source
 codes. OR8D-11 corrected the public `config.preview.stale` catalog prose to name only draft hash/version drift; it no
-longer conflates the separate `config.revision.stale` condition. Multi-source counts, compatibility verdicts and typed
-discriminators are otherwise unchanged.
+longer conflates the separate `config.revision.stale` condition. Prior compatibility verdicts and typed discriminators
+are otherwise unchanged.
 
 The inventory, real-branch core tests, alternate-catalog tests and source-architecture guards establish occurrence-level
-coverage. This supersedes any earlier statement that 84 code/message pairs alone proved every production occurrence.
+coverage. This supersedes any earlier statement that code/message pairs alone proved every production occurrence.
