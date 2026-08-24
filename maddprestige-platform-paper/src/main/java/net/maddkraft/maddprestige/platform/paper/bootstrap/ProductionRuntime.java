@@ -510,7 +510,11 @@ public final class ProductionRuntime implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> authorizeRankOperation(new RankUpIntent(
                 player(playerId), playerId, requestId, Optional.empty(), "api-rankup-" + requestId)), worker)
                 .thenCompose(value -> executeRank(requestId, value))
-                .whenComplete((ignored, failure) -> placeholders.refresh(playerId));
+                .whenComplete((result, failure) -> {
+                    if (OperationPlaceholderRefreshPolicy.shouldRefresh(result, failure)) {
+                        placeholders.refresh(playerId);
+                    }
+                });
     }
 
     private CompletionStage<OperationResult> prestige(UUID playerId, UUID requestId) {
@@ -520,7 +524,11 @@ public final class ProductionRuntime implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> authorizePrestigeOperation(new PrestigeIntent(
                 player(playerId), playerId, requestId, "api-prestige-" + requestId)), worker)
                 .thenApply(value -> executePrestige(requestId, value))
-                .whenComplete((ignored, failure) -> placeholders.refresh(playerId));
+                .whenComplete((result, failure) -> {
+                    if (OperationPlaceholderRefreshPolicy.shouldRefresh(result, failure)) {
+                        placeholders.refresh(playerId);
+                    }
+                });
     }
 
     private RankUpAuthorizationResult authorizeRank(RankUpIntent intent) {

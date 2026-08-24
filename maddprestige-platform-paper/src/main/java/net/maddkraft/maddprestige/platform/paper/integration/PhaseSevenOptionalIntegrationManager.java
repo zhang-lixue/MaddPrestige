@@ -51,9 +51,11 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
     private final MaddPrestigePlaceholderCache placeholderOutput;
     private final Clock clock;
     private final Map<String, RuntimeBinding> bindings = new LinkedHashMap<>();
+    private final BindingAttemptGuard bindingAttempts = new BindingAttemptGuard();
     private final CraftEngineRegistryLifecycle craftEngine = new CraftEngineRegistryLifecycle();
     private PhaseFiveIntegrationConfiguration configuration = PhaseFiveIntegrationConfiguration.disabled();
     private Set<ProviderId> desired = Set.of();
+    private boolean setupDiscovery;
     private Listener craftEngineReloadListener;
     private BukkitTask craftEngineProbeTask;
 
@@ -69,8 +71,14 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
     }
 
     public void start(PhaseFiveIntegrationConfiguration initial) {
+        start(initial, false);
+    }
+
+    /** Starts exact optional discovery; a dormant first boot may expose active providers only to setup validation. */
+    public void start(PhaseFiveIntegrationConfiguration initial, boolean firstBootSetupDiscovery) {
         configuration = java.util.Objects.requireNonNull(initial, "integration configuration");
         desired = composition(configuration).reachableProviders();
+        setupDiscovery = firstBootSetupDiscovery;
         owner.getServer().getPluginManager().registerEvents(this, owner);
         RECONCILIATION_ORDER.stream().filter(name -> !"CraftEngine".equals(name)).forEach(this::bindIfAvailable);
         observeCraftEngineAtStartup();
@@ -85,34 +93,37 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         PhaseFiveIntegrationConfiguration prior = configuration;
         configuration = java.util.Objects.requireNonNull(replacement, "integration configuration");
         desired = composition(configuration).reachableProviders();
+        setupDiscovery = false;
         for (String name : RECONCILIATION_ORDER) {
-            if (!relevant(name)) {
-                if ("CraftEngine".equals(name)) {
-                    unbindCraftEngine("Canonical integration configuration disabled CraftEngine");
-                } else {
-                    unbind(name, "Canonical integration configuration disabled the integration");
-                }
-                continue;
-            }
+            duringBindingAttempt(name, () -> reconcileWithinAttempt(name, prior));
+        }
+    }
+
+    private void reconcileWithinAttempt(String name, PhaseFiveIntegrationConfiguration prior) {
+        if (!relevant(name) && !setupDiscovery) {
             if ("CraftEngine".equals(name)) {
-                if (craftEngine.state() == CraftEngineRegistryLifecycle.State.AVAILABLE
-                        && prior.craftEngineRewardMaximumQuantity()
-                                != configuration.craftEngineRewardMaximumQuantity()) {
-                    rebindReadyCraftEngine();
-                } else if (craftEngine.state() == CraftEngineRegistryLifecycle.State.AVAILABLE
-                        && !bindings.containsKey(name)) {
-                    rebindReadyCraftEngine();
-                } else {
-                    reconcileBinding(name);
-                }
-            } else if (structuralChange(name, prior, configuration)) {
-                unbind(name, "Canonical integration configuration changed");
-                bindIfAvailable(name);
+                unbindCraftEngine("Canonical integration configuration disabled CraftEngine");
+            } else {
+                unbind(name, "Canonical integration configuration disabled the integration");
+            }
+            return;
+        }
+        if ("CraftEngine".equals(name)) {
+            if (craftEngine.state() == CraftEngineRegistryLifecycle.State.AVAILABLE
+                    && (prior.craftEngineRewardMaximumQuantity()
+                            != configuration.craftEngineRewardMaximumQuantity()
+                            || !bindings.containsKey(name))) {
+                rebindReadyCraftEngineWithinAttempt();
             } else {
                 reconcileBinding(name);
-                if (!bindings.containsKey(name) && relevant(name)) {
-                    bindIfAvailable(name);
-                }
+            }
+        } else if (structuralChange(name, prior, configuration)) {
+            unbind(name, "Canonical integration configuration changed");
+            bindIfAvailableWithinAttempt(name);
+        } else {
+            reconcileBinding(name);
+            if (!bindings.containsKey(name)) {
+                bindIfAvailableWithinAttempt(name);
             }
         }
     }
@@ -159,29 +170,37 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         if ("CraftEngine".equals(name)) {
             disableCraftEngine("CraftEngine dependency was disabled");
         } else {
-            unbind(name, "Dependency was disabled");
+            duringBindingAttempt(name, () -> unbind(name, "Dependency was disabled"));
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onServiceRegister(ServiceRegisterEvent event) {
         if (VAULT_ECONOMY_SERVICE.equals(event.getProvider().getService().getName())) {
-            unbind("Vault", "Vault Economy service generation changed");
-            bindIfAvailable("Vault");
+            duringBindingAttempt("Vault", () -> {
+                unbind("Vault", "Vault Economy service generation changed");
+                bindIfAvailableWithinAttempt("Vault");
+            });
         }
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
     public void onServiceUnregister(ServiceUnregisterEvent event) {
         if (VAULT_ECONOMY_SERVICE.equals(event.getProvider().getService().getName())) {
-            unbind("Vault", "Vault Economy service was unregistered");
-            bindIfAvailable("Vault");
+            duringBindingAttempt("Vault", () -> {
+                unbind("Vault", "Vault Economy service was unregistered");
+                bindIfAvailableWithinAttempt("Vault");
+            });
         }
     }
 
     private void bindIfAvailable(String name) {
+        duringBindingAttempt(name, () -> bindIfAvailableWithinAttempt(name));
+    }
+
+    private void bindIfAvailableWithinAttempt(String name) {
         if (!SUPPORTED.containsKey(name) || "CraftEngine".equals(name) || bindings.containsKey(name)
-                || !relevant(name)) {
+                || (!relevant(name) && !setupDiscovery)) {
             return;
         }
         Plugin dependency = owner.getServer().getPluginManager().getPlugin(name);
@@ -201,6 +220,17 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         } catch (LinkageError | RuntimeException exception) {
             owner.getLogger().log(Level.SEVERE,
                     "Optional " + name + " binding failed closed; its capabilities remain unavailable", exception);
+        }
+    }
+
+    private void duringBindingAttempt(String name, Runnable action) {
+        if (!bindingAttempts.begin(name)) {
+            return;
+        }
+        try {
+            action.run();
+        } finally {
+            bindingAttempts.end(name);
         }
     }
 
@@ -251,7 +281,8 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         try {
             if (lifecycle != null) {
                 lifecycle.discover(providers);
-                lifecycle.reconcileActiveProviders(desired);
+                lifecycle.reconcileActiveProviders(setupDiscovery
+                        ? lifecycle.registrations().keySet() : desired);
             }
             listeners.forEach(listener -> owner.getServer().getPluginManager().registerEvents(listener, owner));
             activation.run();
@@ -338,15 +369,7 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
 
     private void handleCraftEngineTransition(CraftEngineRegistryLifecycle.Transition transition) {
         try {
-            switch (transition) {
-                case BIND -> bindings.put("CraftEngine", createBinding("CraftEngine",
-                        compatibleCraftEngine(), SUPPORTED.get("CraftEngine")));
-                case REBIND -> rebindReadyCraftEngine();
-                case UNBIND -> unbindCraftEngine("CraftEngine registry became unavailable");
-                case NONE -> {
-                    // Waiting and absent states intentionally expose no provider registration.
-                }
-            }
+            duringBindingAttempt("CraftEngine", () -> handleCraftEngineTransitionWithinAttempt(transition));
         } catch (LinkageError | RuntimeException exception) {
             unbindCraftEngine("CraftEngine binding failed");
             craftEngine.bindingFailed();
@@ -354,8 +377,23 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
         }
     }
 
-    private void rebindReadyCraftEngine() {
+    private void handleCraftEngineTransitionWithinAttempt(CraftEngineRegistryLifecycle.Transition transition) {
+        switch (transition) {
+            case BIND -> bindReadyCraftEngineWithinAttempt();
+            case REBIND -> rebindReadyCraftEngineWithinAttempt();
+            case UNBIND -> unbindCraftEngine("CraftEngine registry became unavailable");
+            case NONE -> {
+                // Waiting and absent states intentionally expose no provider registration.
+            }
+        }
+    }
+
+    private void rebindReadyCraftEngineWithinAttempt() {
         unbindCraftEngine("CraftEngine registry generation was replaced");
+        bindReadyCraftEngineWithinAttempt();
+    }
+
+    private void bindReadyCraftEngineWithinAttempt() {
         Plugin dependency = compatibleCraftEngine();
         if (dependency == null) {
             craftEngine.bindingFailed();

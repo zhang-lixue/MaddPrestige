@@ -340,6 +340,7 @@ public final class SemanticPresentation {
         register(result, "setup_draft_invalid", "setup.draft.invalid");
         register(result, "setup_group_missing", "setup.group.missing");
         register(result, "setup_incomplete", "setup.incomplete");
+        register(result, "setup_integration_unconfigurable", "setup.integration.unconfigurable");
         register(result, "setup_prestige_stage_unknown", "setup.prestige.stage_unknown");
         register(result, "setup_preview_required", "setup.preview.required");
         register(result, "setup_provider_required", "setup.provider.required");

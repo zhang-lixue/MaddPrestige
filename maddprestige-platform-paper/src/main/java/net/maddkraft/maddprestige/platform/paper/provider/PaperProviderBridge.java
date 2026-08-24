@@ -67,6 +67,7 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
     private final Function<Class<?>, Plugin> implementationOwners;
     private final ExecutorService callbacks;
     private final ExecutorService lifecycle;
+    private final ProviderCallbackBulkhead callbackBulkheads = new ProviderCallbackBulkhead();
     private final Map<ProviderDeclaration, Binding> bindings = new IdentityHashMap<>();
     private final Map<String, Plugin> namespaceOwners = new LinkedHashMap<>();
     private boolean closing;
@@ -189,12 +190,13 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
             return;
         }
         ExternalMetricProvider provider = new ExternalMetricProvider(providerId, namespace, metadata, metrics,
-                declaration, registry, clock, callbacks);
+                declaration, registry, clock, callbacks, callbackBulkheads.acquire(providerId));
         ProviderRegistration registration;
         try {
             registration = registry.registerAttested(namespace, provider.descriptor(), provider, provider.health());
             registry.activate(registration);
         } catch (RuntimeException failure) {
+            provider.close();
             logFailure(owner, "registration", failure);
             return;
         }
@@ -202,10 +204,11 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
         synchronized (this) {
             if (closing || bindings.containsKey(declaration)) {
                 safeUnregister(registration);
+                provider.close();
                 return;
             }
             namespaceOwners.put(namespace, owner);
-            bindings.put(declaration, new Binding(owner, namespace, registration, handle));
+            bindings.put(declaration, new Binding(owner, namespace, registration, handle, provider));
         }
         provider.bind(registration);
         invokeIsolated(owner, "registered callback", () -> declaration.registered(handle));
@@ -233,6 +236,7 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
         }
         binding.handle.invalidate();
         safeUnregister(binding.registration);
+        binding.provider.close();
         if (notify) {
             invokeIsolated(binding.owner, "unregistered callback", declaration::unregistered);
         }
@@ -388,10 +392,11 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
             Plugin owner,
             String namespace,
             ProviderRegistration registration,
-            Handle handle) {
+            Handle handle,
+            ExternalMetricProvider provider) {
     }
 
-    private static final class ExternalMetricProvider implements MetricProvider {
+    private static final class ExternalMetricProvider implements MetricProvider, AutoCloseable {
         private final ProviderId id;
         private final ProviderDescriptor descriptor;
         private final List<MetricDescriptor> metrics;
@@ -399,6 +404,7 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
         private final ProviderRegistry registry;
         private final Clock clock;
         private final ExecutorService callbacks;
+        private final ProviderCallbackBulkhead.Generation bulkhead;
         private final AtomicReference<ProviderHealth> health;
         private volatile ProviderRegistration registration;
 
@@ -410,13 +416,15 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
                 ProviderDeclaration declaration,
                 ProviderRegistry registry,
                 Clock clock,
-                ExecutorService callbacks) {
+                ExecutorService callbacks,
+                ProviderCallbackBulkhead.Generation bulkhead) {
             this.id = id;
             this.metrics = List.copyOf(metrics);
             this.declaration = declaration;
             this.registry = registry;
             this.clock = clock;
             this.callbacks = callbacks;
+            this.bulkhead = Objects.requireNonNull(bulkhead, "callback bulkhead generation");
             descriptor = new ProviderDescriptor(id, owner, "2-stable", metadata.implementationVersion(), List.of(),
                     metrics.stream().map(metric -> new CapabilityDescriptor(metric.metricId().value(),
                             "requirement-metric", metric.description(), Map.of())).toList());
@@ -451,51 +459,70 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
                     Instant.now(clock).plus(READ_DEADLINE), "requirements.read",
                     ProviderExecutionExpectation.BOUNDED_WORKER, descriptor.ownerIdentity(), Optional.of(id),
                     cancellation);
-            CompletableFuture<Map<ProviderMetricRequest, ProviderMetricResult>> future;
+            if (!bulkhead.tryEnter()) {
+                cancellation.cancel();
+                return failed(new RejectedExecutionException(
+                        "Provider exceeded its bounded concurrent callback allowance"));
+            }
+            CompletableFuture<CompletionStage<Map<ProviderMetricRequest, ProviderMetricResult>>> invocation;
             try {
-                future = CompletableFuture.supplyAsync(() -> {
+                invocation = CompletableFuture.supplyAsync(() -> {
                     try {
                         return Objects.requireNonNull(declaration.requirements(), "requirement provider")
                                 .read(context, playerId, List.copyOf(requests.values()));
                     } catch (RuntimeException | LinkageError failure) {
                         throw new java.util.concurrent.CompletionException(failure);
+                    } finally {
+                        bulkhead.exit();
                     }
-                }, callbacks).orTimeout(READ_DEADLINE.toMillis(), TimeUnit.MILLISECONDS)
-                        .thenCompose(stage -> Objects.requireNonNull(stage, "provider completion stage"))
-                        .toCompletableFuture().orTimeout(READ_DEADLINE.toMillis(), TimeUnit.MILLISECONDS);
-                future.whenComplete((ignored, failure) -> cancellation.cancel());
+                }, callbacks);
             } catch (RuntimeException | LinkageError failure) {
+                bulkhead.exit();
                 cancellation.cancel();
                 return failed(failure);
             }
-            return future.thenApply(result -> {
-                Set<ProviderMetricRequest> requestedKeys = Set.copyOf(requests.values());
-                if (result == null || result.size() != requestedKeys.size()
-                        || !result.keySet().equals(requestedKeys)
-                        || result.values().stream().anyMatch(Objects::isNull)) {
-                    throw new IllegalStateException("Provider returned an invalid metric result map");
-                }
-                LinkedHashMap<MetricQuery, MetricSample> adapted = new LinkedHashMap<>();
-                requests.forEach((query, request) -> {
-                    ProviderMetricResult metric = result.get(request);
-                    if (metric.status() == ProviderMetricStatus.AVAILABLE) {
-                        MetricDescriptor definition = metrics.stream()
-                                .filter(value -> value.metricId().equals(query.metricId())).findFirst()
-                                .orElseThrow(() -> new IllegalStateException(
-                                        "Provider returned a result for an undeclared metric"));
-                        if (metric.value().orElseThrow().type() != definition.valueType()) {
-                            throw new IllegalStateException("Provider returned a semantically inconsistent value");
-                        }
-                        adapted.put(query, MetricSample.available(metric.value().orElseThrow(), providerGeneration,
-                                metric.observedAt(), id.value()));
-                    } else {
-                        adapted.put(query, MetricSample.unavailable(providerGeneration, metric.observedAt(),
-                                id.value(), metric.code()));
-                    }
-                });
-                healthy();
-                return Map.copyOf(adapted);
-            }).exceptionallyCompose(this::failed);
+            CompletableFuture<Map<ProviderMetricRequest, ProviderMetricResult>> future = invocation
+                    .orTimeout(READ_DEADLINE.toMillis(), TimeUnit.MILLISECONDS)
+                    .thenCompose(stage -> Objects.requireNonNull(stage, "provider completion stage"))
+                    .toCompletableFuture().orTimeout(READ_DEADLINE.toMillis(), TimeUnit.MILLISECONDS);
+            future.whenComplete((ignored, failure) -> cancellation.cancel());
+            return future.thenApply(result -> adaptResult(requests, result, providerGeneration))
+                    .exceptionallyCompose(this::failed);
+        }
+
+        private Map<MetricQuery, MetricSample> adaptResult(
+                Map<MetricQuery, ProviderMetricRequest> requests,
+                Map<ProviderMetricRequest, ProviderMetricResult> result,
+                long providerGeneration) {
+            Set<ProviderMetricRequest> requestedKeys = Set.copyOf(requests.values());
+            if (result == null || result.size() != requestedKeys.size()
+                    || !result.keySet().equals(requestedKeys)
+                    || result.values().stream().anyMatch(Objects::isNull)) {
+                throw new IllegalStateException("Provider returned an invalid metric result map");
+            }
+            LinkedHashMap<MetricQuery, MetricSample> adapted = new LinkedHashMap<>();
+            requests.forEach((query, request) -> adapted.put(query,
+                    adaptMetric(query, result.get(request), providerGeneration)));
+            healthy();
+            return Map.copyOf(adapted);
+        }
+
+        private MetricSample adaptMetric(
+                MetricQuery query,
+                ProviderMetricResult metric,
+                long providerGeneration) {
+            if (metric.status() != ProviderMetricStatus.AVAILABLE) {
+                return MetricSample.unavailable(providerGeneration, metric.observedAt(), id.value(), metric.code());
+            }
+            MetricDescriptor definition = metrics.stream()
+                    .filter(value -> value.metricId().equals(query.metricId())).findFirst()
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Provider returned a result for an undeclared metric"));
+            if (metric.value().orElseThrow().type() != definition.valueType()) {
+                throw new IllegalStateException("Provider returned a semantically inconsistent value");
+            }
+            return MetricSample.available(metric.value().orElseThrow(), providerGeneration,
+                    metric.observedAt(), id.value());
         }
 
         private <T> CompletionStage<T> failed(Throwable failure) {
@@ -524,6 +551,11 @@ public final class PaperProviderBridge implements Listener, AutoCloseable {
         @Override
         public ProviderHealth health() {
             return health.get();
+        }
+
+        @Override
+        public void close() {
+            bulkhead.close();
         }
     }
 

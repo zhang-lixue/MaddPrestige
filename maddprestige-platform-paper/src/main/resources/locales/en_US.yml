@@ -139,6 +139,8 @@ command.error.administration.setup_group_missing.summary: "<red>Projected stage 
 command.error.administration.setup_group_missing.remediation: "Next: select an existing valid group, or create it through the external provider first; MaddPrestige never creates external groups."
 command.error.administration.setup_incomplete.summary: "<red>The setup ladder needs at least two ordered stages and one baseline.</red> Diagnostic code: <code>."
 command.error.administration.setup_incomplete.remediation: "Next: add stages in progression order and select the baseline stage."
+command.error.administration.setup_integration_unconfigurable.summary: "<red>Provider <provider> requires <component> configuration that simple setup cannot generate: <requirement>.</red> Diagnostic code: <code>."
+command.error.administration.setup_integration_unconfigurable.remediation: "Next: choose a provider supported by simple setup, or use the canonical configuration workflow to supply the required integration metadata."
 command.error.administration.setup_prestige_stage_unknown.summary: "<red>Prestige <purpose> stage <stage> is not in this setup session.</red> Diagnostic code: <code>."
 command.error.administration.setup_prestige_stage_unknown.remediation: "Next: select one of the stage IDs already configured in this setup session."
 command.error.administration.setup_preview_required.summary: "<red>Setup must be previewed before this action.</red> Diagnostic code: <code>."

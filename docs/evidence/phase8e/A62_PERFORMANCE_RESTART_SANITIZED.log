@@ -1,0 +1,43 @@
+[16:12:25] [ServerMain/INFO]: [bootstrap] Running Java 25 (OpenJDK 64-Bit Server VM 25.0.3+9-LTS; Eclipse Adoptium Temurin-25.0.3+9) on Windows 11 10.0 (amd64)
+[16:12:25] [ServerMain/INFO]: [bootstrap] Loading Paper 26.1.2-74-ver/26.1.2@e4e17fc (2026-07-06T16:51:09Z) for Minecraft 26.1.2
+[16:12:25] [ServerMain/INFO]: [PluginInitializerManager] Initializing plugins...
+[16:12:25] [ServerMain/INFO]: [PluginInitializerManager] Initialized 7 plugins
+[16:12:25] [ServerMain/INFO]: [PluginInitializerManager] Bukkit plugins (7):
+ - LuckPerms (5.5.71), MaddPrestige (2.0.0-SNAPSHOT), Phase8E-Alpha (1.0.0), Phase8E-Beta (1.0.0), Phase8E-Harness (1.0.0), PlaceholderAPI (2.12.2), mcMMO (2.2.053)
+[16:12:29] [Server thread/INFO]: [MaddPrestige] Loading server plugin MaddPrestige v2.0.0-SNAPSHOT
+[16:12:29] [Server thread/INFO]: [Phase8E-Beta] Loading server plugin Phase8E-Beta v1.0.0
+[16:12:29] [Server thread/INFO]: [Phase8E-Alpha] Loading server plugin Phase8E-Alpha v1.0.0
+[16:12:29] [Server thread/INFO]: [Phase8E-Harness] Loading server plugin Phase8E-Harness v1.0.0
+[16:12:29] [Server thread/INFO]: Preparing level "compat-world"
+[16:12:29] [Server thread/INFO]: Done preparing level "compat-world" (0.202s)
+[16:12:30] [Server thread/INFO]: [MaddPrestige] Enabling MaddPrestige v2.0.0-SNAPSHOT
+[16:12:31] [Server thread/WARN]: [MaddPrestige] Canonical configuration remains fail-closed for revision <REVISION> while a required provider generation is unavailable
+[16:12:31] [Server thread/INFO]: [MaddPrestige] MaddPrestige V2 Phase 8D candidate ready; configuration is fail-closed pending compatible composition at <REVISION>; startup recovery inspected 0 operation(s).
+[16:12:31] [Server thread/INFO]: [Phase8E-Beta] Enabling Phase8E-Beta v1.0.0
+[16:12:31] [Server thread/INFO]: [Phase8E-Beta] PHASE8E-BETA enabled after MaddPrestige startup
+[16:12:31] [Server thread/INFO]: [Phase8E-Alpha] Enabling Phase8E-Alpha v1.0.0
+[16:12:31] [Server thread/INFO]: [Phase8E-Alpha] PHASE8E-ALPHA enabled after MaddPrestige startup
+[16:12:31] [Server thread/INFO]: [Phase8E-Harness] Enabling Phase8E-Harness v1.0.0
+[16:12:31] [maddprestige-provider-callback-1/INFO]: [Phase8E-Beta] PHASE8E-BETA registered id=phase8e_beta:beta
+[16:12:31] [maddprestige-provider-callback-1/INFO]: [Phase8E-Alpha] PHASE8E-ALPHA registered id=phase8e_alpha:alpha qualification-generation=1
+[16:12:31] [Server thread/INFO]: Saving chunks for level 'ServerLevel[compat-world]'/minecraft:overworld
+[16:12:31] [Server thread/INFO]: Saving chunks for level 'ServerLevel[compat-world]'/minecraft:the_nether
+[16:12:31] [Server thread/INFO]: Saving chunks for level 'ServerLevel[compat-world]'/minecraft:the_end
+[16:12:31] [Server thread/INFO]: Done (6.638s)! For help, type "help"
+[16:12:34] [Server thread/INFO]: [Phase8E-Harness] PHASE8E-Q PASS 1 unchanged restart recovered exact accepted manual total, rows and healthy provider
+[16:12:34] [Server thread/INFO]: [Phase8E-Harness] PHASE8E-Q PASS 2 restart preserved cache publication and two-provider public evaluation
+[16:12:34] [Server thread/INFO]: [Phase8E-Harness] PHASE8E-Q PASS 3 performance qualification completed with bounded normal second shutdown
+[16:12:34] [Server thread/INFO]: [Phase8E-Harness] PHASE8E-PERF COMPLETE two-boot pass-count=3 samples=0 accepted-manual=104960
+[16:12:35] [Server thread/INFO]: Stopping server
+[16:12:35] [Server thread/INFO]: [Phase8E-Harness] Disabling Phase8E-Harness v1.0.0
+[16:12:35] [Server thread/INFO]: [Phase8E-Harness] PHASE8E-Q shutdown mode=performance pass-count=3 accepted-manual=104960
+[16:12:35] [Server thread/INFO]: [Phase8E-Alpha] Disabling Phase8E-Alpha v1.0.0
+[16:12:35] [Server thread/INFO]: [Phase8E-Alpha] PHASE8E-ALPHA disabled reads=0 cancellations=0
+[16:12:35] [maddprestige-provider-callback-1/INFO]: [Phase8E-Alpha] PHASE8E-ALPHA unregistered callback
+[16:12:35] [Server thread/INFO]: [Phase8E-Beta] Disabling Phase8E-Beta v1.0.0
+[16:12:35] [maddprestige-provider-callback-1/INFO]: [Phase8E-Beta] PHASE8E-BETA unregistered callback
+[16:12:35] [Server thread/INFO]: [Phase8E-Beta] PHASE8E-BETA disabled reads=1
+[16:12:35] [Server thread/INFO]: [MaddPrestige] Disabling MaddPrestige v2.0.0-SNAPSHOT
+[16:12:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[compat-world]'/minecraft:overworld
+[16:12:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[compat-world]'/minecraft:the_nether
+[16:12:35] [Server thread/INFO]: Saving chunks for level 'ServerLevel[compat-world]'/minecraft:the_end
