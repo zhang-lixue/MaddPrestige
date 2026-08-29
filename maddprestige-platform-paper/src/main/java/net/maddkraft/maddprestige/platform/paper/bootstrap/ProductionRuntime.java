@@ -228,7 +228,7 @@ public final class ProductionRuntime implements AutoCloseable {
                 () -> configuration.active().map(value -> value.priorPhases().stages()), transitions,
                 worker, clock);
         placeholders = new PlaceholderSnapshotPublisher(plugin, placeholderCache, stages, prestiges,
-                this::initializePlayerLifecycle);
+                this::initializePlayerLifecycleOutcome);
         service = new ProductionMaddPrestigeService(this::progress, this::stageCatalog, this::evaluateRankUp,
                 this::evaluatePrestige, this::currencyBalances, this::activeSeason, this::rankUp, this::prestige,
                 providers, lifecycleEvents);
@@ -271,10 +271,11 @@ public final class ProductionRuntime implements AutoCloseable {
         CanonicalGuiActionExecutor guiActions = new CanonicalGuiActionExecutor(playerViews, previews, confirmations,
                 doctor, administration, mutations);
         gui = new GuiSessionService(this::activeRevision, guiActions, mutations, Duration.ofMinutes(5), clock);
+        SetupWizardService setupWizard = new SetupWizardService(administration, providers);
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
-                doctor, why, previews, confirmations, playerViews, new SetupWizardService(administration, providers),
+                doctor, why, previews, confirmations, playerViews, setupWizard,
                 manualPrestige, gui, this::activeRevision, worker);
-        completion = new CommandCompletionService();
+        completion = new CommandCompletionService(setupWizard);
 
         providerLifecycle = providers.addLifecycleListener(ignored -> recomposeForProviderLifecycle());
         startup.ifPresent(this::publishStartup);
@@ -578,29 +579,36 @@ public final class ProductionRuntime implements AutoCloseable {
     }
 
     private Optional<String> initializePlayerLifecycle(UUID playerId) {
+        PlaceholderSnapshotPublisher.InitializationResult result = initializePlayerLifecycleOutcome(playerId);
+        return result.dormant()
+                ? Optional.of("No canonical configuration is active for player initialization")
+                : result.failure();
+    }
+
+    private PlaceholderSnapshotPublisher.InitializationResult initializePlayerLifecycleOutcome(UUID playerId) {
         ReentrantLock lock = playerInitializationLocks[Math.floorMod(playerId.hashCode(),
                 playerInitializationLocks.length)];
         lock.lock();
         try {
             ActivePhaseFourConfiguration active = configuration.active().orElse(null);
             if (active == null) {
-                return Optional.of("No canonical configuration is active for player initialization");
+                return PlaceholderSnapshotPublisher.InitializationResult.dormantResult();
             }
             var stageConfiguration = active.priorPhases().stages();
             var initialStage = initialStage(stageConfiguration.configuration());
             if (initialStage.isEmpty()) {
-                return Optional.of("The canonical stage ladder has no initial stage for player initialization");
+                return initializationFailed("The canonical stage ladder has no initial stage for player initialization");
             }
             Optional<PlayerStageState> existingStage = stages.find(playerId);
             Optional<PlayerPrestigeState> existingPrestige = prestiges.find(playerId);
             if (existingStage.isPresent() != existingPrestige.isPresent()) {
-                return Optional.of("Player lifecycle state is incomplete and requires operator recovery");
+                return initializationFailed("Player lifecycle state is incomplete and requires operator recovery");
             }
             if (existingStage.isEmpty()) {
                 Optional<String> initializationFailure = initializePlayerState(playerId, active,
                         initialStage.orElseThrow());
                 if (initializationFailure.isPresent()) {
-                    return initializationFailure;
+                    return initializationFailed(initializationFailure.orElseThrow());
                 }
                 existingStage = stages.find(playerId);
                 existingPrestige = prestiges.find(playerId);
@@ -611,20 +619,20 @@ public final class ProductionRuntime implements AutoCloseable {
                     "player-initial-rank-projection:" + playerId);
             if (priorProjection.isPresent()) {
                 return priorProjection.orElseThrow().state() == OperationState.COMPLETED
-                        ? Optional.empty()
-                        : Optional.of("Player initial rank projection requires recovery: "
+                        ? PlaceholderSnapshotPublisher.InitializationResult.ready()
+                        : initializationFailed("Player initial rank projection requires recovery: "
                                 + priorProjection.orElseThrow().state().name());
             }
             if (!initialProjectionPending(stage, prestige, initialStage.orElseThrow())) {
-                return Optional.empty();
+                return PlaceholderSnapshotPublisher.InitializationResult.ready();
             }
             var target = stageConfiguration.configuration().stages().get(initialStage.orElseThrow());
             if (target == null) {
-                return Optional.of("The canonical initial stage definition is unavailable");
+                return initializationFailed("The canonical initial stage definition is unavailable");
             }
             if (target.projection().policy()
                     == net.maddkraft.maddprestige.core.rank.ProjectionPolicy.NONE) {
-                return Optional.empty();
+                return PlaceholderSnapshotPublisher.InitializationResult.ready();
             }
             ProviderId providerId = target.projection().providerId().orElseThrow();
             Long generation = active.phaseFour().providerGenerations().get(providerId);
@@ -636,7 +644,8 @@ public final class ProductionRuntime implements AutoCloseable {
                     || snapshot.orElseThrow().generation() != generation
                     || snapshot.orElseThrow().activation() != ActivationState.ACTIVE
                     || !healthy(snapshot.orElseThrow().health().state())) {
-                return Optional.of("Player initialization rank provider is unavailable: " + providerId.value());
+                return initializationFailed("Player initialization rank provider is unavailable: "
+                        + providerId.value());
             }
             var operation = initialRankProjectionPlanner.plan("player-initial-rank-projection",
                     new Actor("SYSTEM", Optional.empty(), "Initial managed-rank projection"), stage,
@@ -645,15 +654,19 @@ public final class ProductionRuntime implements AutoCloseable {
             var execution = initialRankProjectionExecutor.execute(operation, adapter.orElseThrow())
                     .toCompletableFuture().join();
             if (execution.status() != RankOperationExecutionStatus.COMPLETED) {
-                return Optional.of("Player initial rank projection did not complete safely: "
+                return initializationFailed("Player initial rank projection did not complete safely: "
                         + execution.status().name() + ": " + execution.detail());
             }
-            return Optional.empty();
+            return PlaceholderSnapshotPublisher.InitializationResult.ready();
         } catch (RuntimeException exception) {
-            return Optional.of("Player lifecycle initialization failed: " + rootMessage(exception));
+            return initializationFailed("Player lifecycle initialization failed: " + rootMessage(exception));
         } finally {
             lock.unlock();
         }
+    }
+
+    private static PlaceholderSnapshotPublisher.InitializationResult initializationFailed(String failure) {
+        return PlaceholderSnapshotPublisher.InitializationResult.failed(failure);
     }
 
     private Optional<String> initializePlayerState(

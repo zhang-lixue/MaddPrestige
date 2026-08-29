@@ -1,5 +1,7 @@
 # Developer API
 
+> **Historical V1 document.** This is retained as accepted 1.x evidence, not current V2 installation, API, compatibility, or operator guidance. Start with [the V2 README](../README.md).
+
 MaddPrestige exposes `MaddPrestigeApi` through Bukkit's service manager. Calls must be made on the server thread.
 
 ```java

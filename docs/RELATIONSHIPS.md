@@ -1,5 +1,7 @@
 # Configurable plugin relationships
 
+> **Historical V1 document.** This is retained as accepted 1.x evidence, not current V2 installation, API, compatibility, or operator guidance. Start with [the V2 README](../README.md).
+
 MaddPrestige 1.2 adds a general relationship layer for optional plugins. It covers the three common integration directions without linking MaddPrestige to a provider's implementation classes:
 
 1. **Outbound actions:** run provider commands after a MaddPrestige lifecycle transaction saves.

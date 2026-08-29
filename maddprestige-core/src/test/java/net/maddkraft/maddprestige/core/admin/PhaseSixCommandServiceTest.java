@@ -124,6 +124,115 @@ class PhaseSixCommandServiceTest {
     }
 
     @Test
+    @DisplayName("[A02][A70][A76] Public setup accepts typed PT1M and current-session guided commands")
+    void publicSetupCommandTypesDurationAndAvoidsRepeatedSessionIds() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new DurationMetricProvider()));
+        Fixture fixture = new Fixture(providers);
+        PermissionSubject owner = subject(PhaseSixPermissions.all().toArray(String[]::new));
+
+        var overview = fixture.commands.execute(new CommandInvocation(owner, List.of("help")))
+                .toCompletableFuture().join();
+        var start = fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "start")))
+                .toCompletableFuture().join();
+        UUID session = UUID.fromString(start.messages().getFirst().argument("id").orElseThrow());
+        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "member", "Member"))).toCompletableFuture().join().successful());
+        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "adventurer", "Adventurer"))).toCompletableFuture().join().successful());
+        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "veteran", "Veteran"))).toCompletableFuture().join().successful());
+        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "baseline", "member"))).toCompletableFuture().join().successful());
+
+        var advanced = fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "requirement",
+                session.toString(), "adventurer", "playtime_60_seconds", "paper_statistics", "play_one_minute",
+                "GREATER_OR_EQUAL", "PT1M", "SINCE_PRESTIGE_START", "LIVE"))).toCompletableFuture().join();
+        var guided = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "playtime", "veteran", "PT3M"))).toCompletableFuture().join();
+        var prestige = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "prestige", "enabled", "veteran", "member"))).toCompletableFuture().join();
+
+        assertEquals("command.help.overview.title", overview.messages().getFirst().key());
+        assertTrue(advanced.successful(), advanced.lines().toString());
+        assertTrue(guided.successful(), guided.lines().toString());
+        assertTrue(prestige.successful(), prestige.lines().toString());
+    }
+
+    @Test
+    @DisplayName("[A76][OR8F-A76-01] Public setup reports exact typed requirement input failures")
+    void publicSetupCommandReportsExactTypedRequirementFailures() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new DurationMetricProvider()));
+        Fixture fixture = new Fixture(providers);
+        PermissionSubject owner = subject(PhaseSixPermissions.all().toArray(String[]::new));
+
+        fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "start")))
+                .toCompletableFuture().join();
+        fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "member", "Member"))).toCompletableFuture().join();
+        fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "adventurer", "Adventurer"))).toCompletableFuture().join();
+        fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "veteran", "Veteran"))).toCompletableFuture().join();
+        fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "baseline", "member"))).toCompletableFuture().join();
+
+        var target = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "playtime", "veteran", "one-minute"))).toCompletableFuture().join();
+        var operator = advancedRequirement(fixture, owner, "operator_invalid", "IN_RANGE", "PT1M",
+                "SINCE_PRESTIGE_START", "LIVE");
+        var scope = advancedRequirement(fixture, owner, "scope_invalid", "GREATER_OR_EQUAL", "PT1M",
+                "EVER", "LIVE");
+        var completion = advancedRequirement(fixture, owner, "completion_invalid", "GREATER_OR_EQUAL", "PT1M",
+                "SINCE_PRESTIGE_START", "ONCE");
+
+        assertSetupInputFailure(target, "setup.requirement.target.invalid", "setup_requirement_target_invalid");
+        assertEquals("one-minute", target.messages().getFirst().argument("target").orElseThrow());
+        assertEquals("DURATION", target.messages().getFirst().argument("type").orElseThrow());
+        assertFalse(target.messages().stream().map(MessageReference::key)
+                .anyMatch(key -> key.contains("setup_draft_invalid")));
+        assertSetupInputFailure(operator, "setup.requirement.operator.invalid",
+                "setup_requirement_operator_invalid");
+        assertEquals("IN_RANGE", operator.messages().getFirst().argument("operator").orElseThrow());
+        assertTrue(operator.messages().getLast().argument("allowed").orElseThrow().contains("GREATER_OR_EQUAL"));
+        assertSetupInputFailure(scope, "setup.requirement.scope.invalid", "setup_requirement_scope_invalid");
+        assertEquals("EVER", scope.messages().getFirst().argument("scope").orElseThrow());
+        assertTrue(scope.messages().getLast().argument("allowed").orElseThrow().contains("SINCE_PRESTIGE_START"));
+        assertSetupInputFailure(completion, "setup.requirement.completion.invalid",
+                "setup_requirement_completion_invalid");
+        assertEquals("ONCE", completion.messages().getFirst().argument("completion").orElseThrow());
+        assertTrue(completion.messages().getLast().argument("allowed").orElseThrow().contains("LIVE"));
+    }
+
+    private static net.maddkraft.maddprestige.core.admin.command.CommandResponse advancedRequirement(
+            Fixture fixture,
+            PermissionSubject owner,
+            String requirement,
+            String operator,
+            String target,
+            String scope,
+            String completion) {
+        return fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "requirement", "adventurer",
+                requirement, "paper_statistics", "play_one_minute", operator, target, scope, completion)))
+                .toCompletableFuture().join();
+    }
+
+    private static void assertSetupInputFailure(
+            net.maddkraft.maddprestige.core.admin.command.CommandResponse response,
+            String code,
+            String identity) {
+        assertFalse(response.successful());
+        assertEquals(code, response.code());
+        assertEquals(List.of("command.error.administration." + identity + ".summary",
+                "command.error.administration." + identity + ".remediation"),
+                response.messages().stream().map(MessageReference::key).toList());
+        assertTrue(response.messages().stream().allMatch(message ->
+                message.argument("provider").filter("paper_statistics"::equals).isPresent()
+                        && message.argument("metric").filter("play_one_minute"::equals).isPresent()));
+    }
+
+    @Test
     @DisplayName("[Phase6-security] Unknown/unauthorized commands return bounded codes without internal failures")
     void normalizesCommandFailures() {
         Fixture fixture = new Fixture();
@@ -556,9 +665,13 @@ class PhaseSixCommandServiceTest {
         private final GuiSessionService gui;
 
         private Fixture() {
+            this(new ProviderRegistry());
+        }
+
+        private Fixture(ProviderRegistry providers) {
             var schema = PhaseSixSchema.create();
             configuration = new ConfigurationAdministrationService(canonical,
-                    new PhaseSixConfigurationWorkflow(canonical, new ProviderRegistry(),
+                    new PhaseSixConfigurationWorkflow(canonical, providers,
                             references, List.of()), schema,
                     history, new MemorySnapshots(), CLOCK);
             var introspection = new ConfigurationIntrospectionService(schema, canonical::active,
@@ -578,7 +691,7 @@ class PhaseSixCommandServiceTest {
                     plan -> CompletableFuture.completedFuture(new PrestigeExecutionResult(OperationId.random(),
                             PrestigeExecutionStatus.FAILED, "unused")), () -> activeRevision(this),
                     Duration.ofMinutes(1), CLOCK);
-            var doctor = new DoctorService(new ProviderRegistry(), canonical::active, List.of(), CLOCK);
+            var doctor = new DoctorService(providers, canonical::active, List.of(), CLOCK);
             var why = new WhyService(intent -> CompletableFuture.completedFuture(
                     RankUpAuthorizationResult.rejected(blocker(
                             net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
@@ -598,7 +711,7 @@ class PhaseSixCommandServiceTest {
                     Duration.ofMinutes(1), CLOCK);
             commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, configuration,
                     doctor, why, preview, confirmation, new PlayerProgressViewService(preview),
-                    new SetupWizardService(configuration), manual, gui, () -> activeRevision(this), Runnable::run);
+                    new SetupWizardService(configuration, providers), manual, gui, () -> activeRevision(this), Runnable::run);
         }
 
         private ConfigurationService activeConfiguration() {
@@ -621,6 +734,46 @@ class PhaseSixCommandServiceTest {
             service.apply(revision, compiled, ValidationReport.VALID, Set.of(), new BackupMetadata("test",
                     RevisionHasher.hashText("test"), CLOCK.instant(), true));
             return service;
+        }
+    }
+
+    private static final class DurationMetricProvider implements
+            net.maddkraft.maddprestige.api.metric.MetricProvider {
+        @Override
+        public net.maddkraft.maddprestige.api.provider.ProviderDescriptor descriptor() {
+            return new net.maddkraft.maddprestige.api.provider.ProviderDescriptor(
+                    new net.maddkraft.maddprestige.api.id.ProviderId("paper_statistics"), "test", "1", "1",
+                    List.of(), List.of(new net.maddkraft.maddprestige.api.provider.CapabilityDescriptor(
+                            "metric", "metric", "test", Map.of())));
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.provider.ProviderHealth health() {
+            return new net.maddkraft.maddprestige.api.provider.ProviderHealth(
+                    net.maddkraft.maddprestige.api.provider.ProviderHealthState.AVAILABLE,
+                    "available", "ready", CLOCK.instant());
+        }
+
+        @Override
+        public Set<net.maddkraft.maddprestige.api.metric.MetricDescriptor> metrics() {
+            return Set.of(new net.maddkraft.maddprestige.api.metric.MetricDescriptor(
+                    new net.maddkraft.maddprestige.api.id.ProviderId("paper_statistics"),
+                    new net.maddkraft.maddprestige.api.id.MetricId("play_one_minute"),
+                    net.maddkraft.maddprestige.api.metric.MetricValueType.DURATION,
+                    Set.of(net.maddkraft.maddprestige.api.metric.MetricOperator.GREATER_OR_EQUAL),
+                    Set.of(net.maddkraft.maddprestige.api.metric.MetricReadMode.CURRENT), true,
+                    net.maddkraft.maddprestige.api.metric.MetricMonotonicity.MONOTONIC,
+                    net.maddkraft.maddprestige.api.metric.MetricResetPolicy.NOT_APPLICABLE,
+                    Map.of(), "Play time", "Play time", "duration", "authoritative"));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<Map<net.maddkraft.maddprestige.api.metric.MetricQuery,
+                net.maddkraft.maddprestige.api.metric.MetricSample>> read(
+                UUID playerId,
+                List<net.maddkraft.maddprestige.api.metric.MetricQuery> queries,
+                long providerGeneration) {
+            return CompletableFuture.completedFuture(Map.of());
         }
     }
 

@@ -1,9 +1,11 @@
 package net.maddkraft.maddprestige.core.admin.setup;
 
 import java.util.Objects;
+import java.util.Optional;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.id.RequirementId;
+import net.maddkraft.maddprestige.api.metric.MetricValueType;
 
 public record SetupRequirement(
         RequirementId id,
@@ -12,7 +14,19 @@ public record SetupRequirement(
         String operator,
         String target,
         String scope,
-        String completion) {
+        String completion,
+        Optional<MetricValueType> valueType) {
+    public SetupRequirement(
+            RequirementId id,
+            ProviderId providerId,
+            MetricId metricId,
+            String operator,
+            String target,
+            String scope,
+            String completion) {
+        this(id, providerId, metricId, operator, target, scope, completion, Optional.empty());
+    }
+
     public SetupRequirement {
         id = Objects.requireNonNull(id, "requirement ID");
         providerId = Objects.requireNonNull(providerId, "provider ID");
@@ -21,6 +35,7 @@ public record SetupRequirement(
         target = bounded(target, "target");
         scope = bounded(scope, "scope");
         completion = bounded(completion, "completion");
+        valueType = Objects.requireNonNull(valueType, "value type");
     }
 
     private static String bounded(String value, String label) {

@@ -1,0 +1,11 @@
+Phase 8F Correction Pass 1 provenance audit
+Date: 2026-08-24
+Exact baseline: 993599dc47cacc76b6372302d338d1850bf2896e
+Review paths: 83
+Unresolved variables in final Phase 8F evidence: 0
+Representative unresolved-variable fixtures rejected: PASS
+Generated manifest freshness: PASS
+
+warning: in the working copy of 'DECISIONS.md', CRLF will be replaced by LF the next time Git touches it
+warning: in the working copy of 'pom.xml', CRLF will be replaced by LF the next time Git touches it
+PASS: resolved baseline 993599dc47cacc76b6372302d338d1850bf2896e; 83 exact review paths; no evidence placeholders.

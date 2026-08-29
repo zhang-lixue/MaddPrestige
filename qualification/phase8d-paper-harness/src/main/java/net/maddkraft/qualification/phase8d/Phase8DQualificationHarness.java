@@ -22,6 +22,9 @@ import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
@@ -39,7 +42,11 @@ import net.maddkraft.maddprestige.api.service.ServiceResult;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.Statistic;
 import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Player;
+import org.bukkit.event.EventException;
+import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.plugin.RegisteredListener;
 import org.bukkit.scheduler.BukkitTask;
 
 /** Qualifies the exact public A70 profile through a fresh process and unchanged restart. */
@@ -49,6 +56,7 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
     private static final Pattern REVISION_PATTERN = Pattern.compile("r_[0-9a-f]{32}");
     private static final Set<String> MANAGED_GROUPS = Set.of("Member", "Adventurer", "Veteran");
     private final CopyOnWriteArrayList<String> messages = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<String> dormantWarnings = new CopyOnWriteArrayList<>();
     private final ArrayDeque<Runnable> steps = new ArrayDeque<>();
     private CommandSender sender;
     private MaddPrestigeService service;
@@ -56,9 +64,11 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
     private java.io.File marker;
     private UUID setupSession;
     private UUID playerId;
+    private UUID dormantPlayerId;
     private String revision;
     private int passed;
     private boolean stopping;
+    private Handler dormantLogHandler;
 
     @Override
     public void onEnable() {
@@ -70,6 +80,10 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        org.bukkit.plugin.Plugin production = getServer().getPluginManager().getPlugin("MaddPrestige");
+        if (production != null && dormantLogHandler != null) {
+            production.getLogger().removeHandler(dormantLogHandler);
+        }
         getLogger().info("PHASE8D-Q shutdown pass-count=" + passed);
     }
 
@@ -93,11 +107,13 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
             return service != null && luckPerms != null && providerVisible("luckperms")
                     && providerVisible("paper_statistics");
         }, () -> {
+            captureDormantWarnings();
             require(service.stages().successful() && service.stages().value().orElseThrow().isEmpty(),
                     "fresh server was not dormant");
             pass("fresh SQLite/server directory published the exact production services in dormant mode");
             advance();
         }));
+        steps.add(this::qualifyDormantOnlineIntervals);
         steps.add(() -> {
             for (String group : List.of("Member", "Adventurer", "Veteran")) {
                 require(getServer().dispatchCommand(getServer().getConsoleSender(), "lp creategroup " + group),
@@ -119,32 +135,30 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
             pass("public setup session started");
             advance();
         }));
-        steps.add(commandStep(() -> "maddprestige setup provider " + setupSession + " luckperms",
-                "existing LuckPerms provider selected"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " member Member Member",
-                "Member baseline stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession
-                + " adventurer Adventurer Adventurer", "Adventurer stage added"));
-        steps.add(commandStep(() -> "maddprestige setup stage " + setupSession + " veteran Veteran Veteran",
-                "Veteran stage added"));
-        steps.add(commandStep(() -> "maddprestige setup baseline " + setupSession + " member",
-                "Member baseline selected"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
-                + " adventurer playtime_60_seconds paper_statistics play_one_minute GREATER_OR_EQUAL PT1M "
-                + "SINCE_PRESTIGE_START LIVE", "60-second current-Prestige requirement attached to Adventurer"));
-        steps.add(commandStep(() -> "maddprestige setup requirement " + setupSession
-                + " veteran playtime_180_seconds paper_statistics play_one_minute GREATER_OR_EQUAL PT3M "
-                + "SINCE_PRESTIGE_START LIVE", "180-second current-Prestige requirement attached to Veteran"));
-        steps.add(commandStep(() -> "maddprestige setup prestige " + setupSession + " enabled veteran member",
-                "Veteran-only Prestige reset to Member configured with no cost/reward"));
-        steps.add(() -> command("maddprestige setup preview " + setupSession, lines -> {
+        steps.add(commandStep(() -> "maddprestige setup provider luckperms",
+                "current-session LuckPerms provider selected without UUID repetition"));
+        steps.add(commandStep(() -> "maddprestige setup stage member Member Member",
+                "Member baseline stage added through the guided form"));
+        steps.add(commandStep(() -> "maddprestige setup stage adventurer Adventurer Adventurer",
+                "Adventurer stage added through the guided form"));
+        steps.add(commandStep(() -> "maddprestige setup stage veteran Veteran Veteran",
+                "Veteran stage added through the guided form"));
+        steps.add(commandStep(() -> "maddprestige setup baseline member",
+                "Member baseline selected through the guided form"));
+        steps.add(commandStep(() -> "maddprestige setup playtime adventurer PT1M",
+                "typed 60-second current-Prestige requirement generated for Adventurer"));
+        steps.add(commandStep(() -> "maddprestige setup playtime veteran PT3M",
+                "typed 180-second current-Prestige requirement generated for Veteran"));
+        steps.add(commandStep(() -> "maddprestige setup prestige enabled veteran member",
+                "contextual Prestige syntax configured Veteran eligibility and Member reset"));
+        steps.add(() -> command("maddprestige setup preview", lines -> {
             String output = text(lines);
-            require(output.contains("Validation: VALID") && output.contains("playtime_60_seconds")
-                    && output.contains("playtime_180_seconds"), "preview was not the exact valid public profile");
-            pass("canonical setup preview validated the exact three-stage profile");
+            require(output.contains("Validation: VALID") && output.contains("adventurer_playtime")
+                    && output.contains("veteran_playtime"), "preview was not the exact valid guided public profile");
+            pass("guided setup preview independently validated the exact three-stage profile");
             advance();
         }));
-        steps.add(() -> command("maddprestige setup acknowledge " + setupSession, lines -> {
+        steps.add(() -> command("maddprestige setup acknowledge", lines -> {
             setupSession = UUID.fromString(extract(UUID_PATTERN, lines));
             pass("activation risk was explicitly acknowledged using the server token");
             advance();
@@ -214,7 +228,7 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
     }
 
     private void qualifyInitialAndInsufficientAdventurer() {
-        playerId = UUID.randomUUID();
+        playerId = dormantPlayerId;
         OfflinePlayer player = getServer().getOfflinePlayer(playerId);
         player.setStatistic(Statistic.PLAY_ONE_MINUTE, 0);
         await("stable first progress read", service.playerProgress(playerId), firstRead -> {
@@ -226,10 +240,99 @@ public final class Phase8DQualificationHarness extends JavaPlugin {
                         "fresh stable read did not project real LuckPerms Member: " + groups);
                 require(dbCount("mp_operations", playerId) == 1 && dbCount("mp_stage_history", playerId) == 0,
                         "initial Member projection was not one journaled non-transition operation");
-                pass("fresh stable playerProgress established durable state and real LuckPerms Member projection");
+                require(dormantWarnings.isEmpty(), "dormant warning recurred after live activation: "
+                        + dormantWarnings);
+                pass("the same dormant player initialized after live activation without restart or stale marker");
                 qualifyRepeatedInitialization();
             });
         });
+    }
+
+    private void qualifyDormantOnlineIntervals() {
+        dormantPlayerId = UUID.randomUUID();
+        Player player = player(dormantPlayerId);
+        final int[] intervals = {0};
+        final BukkitTask[] task = new BukkitTask[1];
+        task[0] = getServer().getScheduler().runTaskTimer(this, () -> {
+            PlayerJoinEvent event = new PlayerJoinEvent(player, (Component) null);
+            for (RegisteredListener listener : PlayerJoinEvent.getHandlerList().getRegisteredListeners()) {
+                if (listener.getPlugin().getName().equals("MaddPrestige")) {
+                    try {
+                        listener.callEvent(event);
+                    } catch (EventException exception) {
+                        throw new IllegalStateException("MaddPrestige join listener failed", exception);
+                    }
+                }
+            }
+            intervals[0]++;
+            if (intervals[0] == 6) {
+                task[0].cancel();
+                getServer().getScheduler().runTaskLater(this, () -> {
+                    try {
+                        require(dormantWarnings.isEmpty(), "dormant placeholder warning was emitted: "
+                                + dormantWarnings);
+                        require(playerLifecycleRows(dormantPlayerId) == 0,
+                                "dormant placeholder ingress persisted canonical player state");
+                        pass("six one-second dormant player listener intervals emitted zero warnings and state");
+                        advance();
+                    } catch (Throwable failure) {
+                        fail("dormant player intervals", failure);
+                    }
+                }, 20L);
+            }
+        }, 1L, 20L);
+    }
+
+    private void captureDormantWarnings() {
+        org.bukkit.plugin.Plugin production = getServer().getPluginManager().getPlugin("MaddPrestige");
+        require(production != null, "production plugin is absent");
+        dormantLogHandler = new Handler() {
+            @Override
+            public void publish(LogRecord record) {
+                if (record.getLevel().intValue() >= Level.WARNING.intValue()
+                        && record.getMessage().contains("Placeholder snapshot")) {
+                    dormantWarnings.add(record.getMessage());
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        production.getLogger().addHandler(dormantLogHandler);
+    }
+
+    private long playerLifecycleRows(UUID target) {
+        String sql = "SELECT (SELECT COUNT(*) FROM mp_player_stage_state WHERE player_uuid = ?) "
+                + "+ (SELECT COUNT(*) FROM mp_player_prestige_state WHERE player_uuid = ?)";
+        try (Connection connection = sqliteConnection(); PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, target.toString());
+            statement.setString(2, target.toString());
+            try (ResultSet rows = statement.executeQuery()) {
+                require(rows.next(), "player lifecycle count query returned no row");
+                return rows.getLong(1);
+            }
+        } catch (Exception exception) {
+            throw new IllegalStateException("Cannot inspect disposable player lifecycle state", exception);
+        }
+    }
+
+    private Player player(UUID id) {
+        return (Player) Proxy.newProxyInstance(Player.class.getClassLoader(), new Class<?>[]{Player.class},
+                (proxy, method, arguments) -> switch (method.getName()) {
+                    case "getUniqueId" -> id;
+                    case "getName" -> "DormantA76Player";
+                    case "getServer" -> getServer();
+                    case "isOnline" -> true;
+                    case "toString" -> "DormantA76Player[" + id + "]";
+                    case "hashCode" -> System.identityHashCode(proxy);
+                    case "equals" -> proxy == arguments[0];
+                    default -> defaultValue(method.getReturnType());
+                });
     }
 
     private void qualifyRepeatedInitialization() {

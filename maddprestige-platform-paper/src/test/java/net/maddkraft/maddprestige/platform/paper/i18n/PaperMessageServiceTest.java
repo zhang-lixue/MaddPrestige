@@ -320,8 +320,10 @@ class PaperMessageServiceTest {
                 "setup.draft.invalid", "setup.group.missing", "setup.incomplete",
                 "setup.integration.unconfigurable",
                 "setup.prestige.stage_unknown", "setup.preview.required", "setup.provider.required",
-                "setup.requirement.baseline", "setup.requirement.duplicate",
-                "setup.requirement.metric_unknown", "setup.session.owner_mismatch", "setup.session.unknown",
+                "setup.requirement.baseline", "setup.requirement.completion.invalid",
+                "setup.requirement.duplicate", "setup.requirement.metric_unknown",
+                "setup.requirement.operator.invalid", "setup.requirement.scope.invalid",
+                "setup.requirement.target.invalid", "setup.session.owner_mismatch", "setup.session.unknown",
                 "setup.stage.duplicate", "setup.text.control_character", "stage.add.rejected",
                 "stage.change.remap_candidate_invalid", "stage.change.remap_invalid",
                 "stage.change.remap_missing", "stage.change.remap_required",
@@ -340,8 +342,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(85, identities.size());
-        assertEquals(85, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(89, identities.size());
+        assertEquals(89, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -472,7 +474,7 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(66, singleSource.size());
+        assertEquals(70, singleSource.size());
         assertEquals(19, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
@@ -726,6 +728,37 @@ class PaperMessageServiceTest {
         assertFalse(java.util.stream.Stream.of(authority, notRequired, group, duplicate, prestige, metric,
                         document, source, target).flatMap(List::stream)
                 .anyMatch(line -> line.contains("INTERNAL")));
+    }
+
+    @Test
+    @DisplayName("[A76][OR8F-A76-01] Requirement input diagnostics render exact owner-facing semantics")
+    void requirementInputDiagnosticsRenderExactOwnerFacingSemantics() {
+        List<String> target = administrationLines("setup.requirement.target.invalid",
+                "target", "one-minute", "type", "DURATION", "provider", "paper_statistics",
+                "metric", "play_one_minute");
+        List<String> operator = administrationLines("setup.requirement.operator.invalid",
+                "operator", "IN_RANGE", "type", "DURATION", "provider", "paper_statistics",
+                "metric", "play_one_minute", "allowed", "GREATER_OR_EQUAL, EQUAL");
+        List<String> scope = administrationLines("setup.requirement.scope.invalid",
+                "scope", "EVER", "provider", "paper_statistics", "metric", "play_one_minute",
+                "allowed", "ABSOLUTE, LIFETIME, SINCE_STAGE_START, SINCE_PRESTIGE_START, SINCE_SEASON_START");
+        List<String> completion = administrationLines("setup.requirement.completion.invalid",
+                "completion", "ONCE", "provider", "paper_statistics", "metric", "play_one_minute",
+                "allowed", "LIVE, LATCHED");
+        List<String> ancestry = administrationLines("setup.draft.invalid");
+
+        assertTrue(target.stream().anyMatch(line -> line.contains("one-minute") && line.contains("DURATION")));
+        assertTrue(target.stream().anyMatch(line -> line.contains("PT1M") && line.contains("1m")));
+        assertFalse(target.stream().anyMatch(line -> line.contains("ancestry") || line.contains("rollback")
+                || line.contains("first-run") || line.contains("active configuration")));
+        assertTrue(operator.stream().anyMatch(line -> line.contains("IN_RANGE") && line.contains("DURATION")));
+        assertTrue(operator.stream().anyMatch(line -> line.contains("GREATER_OR_EQUAL")));
+        assertTrue(scope.stream().anyMatch(line -> line.contains("EVER")));
+        assertTrue(scope.stream().anyMatch(line -> line.contains("SINCE_PRESTIGE_START")));
+        assertTrue(completion.stream().anyMatch(line -> line.contains("ONCE")));
+        assertTrue(completion.stream().anyMatch(line -> line.contains("LIVE") && line.contains("LATCHED")));
+        assertTrue(ancestry.stream().anyMatch(line -> line.contains("active or rollback ancestry")));
+        assertTrue(ancestry.stream().anyMatch(line -> line.contains("normal configuration or rollback workflow")));
     }
 
     @Test

@@ -156,7 +156,8 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
             ready = true;
             getServer().getServicesManager().register(MaddPrestigeService.class, runtime.service(), this,
                     ServicePriority.Normal);
-            getLogger().info("MaddPrestige V2 Phase 8D candidate ready; configuration is "
+            getLogger().info("MaddPrestige V2 " + getPluginMeta().getVersion()
+                    + " release candidate ready; configuration is "
                     + (runtime.operational() ? "active at " + runtime.revision().orElseThrow().value()
                             : runtime.authoritativeRevision().map(value ->
                                     "fail-closed pending compatible composition at " + value.value())

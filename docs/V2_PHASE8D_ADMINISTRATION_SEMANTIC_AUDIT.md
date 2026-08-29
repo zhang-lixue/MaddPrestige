@@ -1,21 +1,21 @@
 # Phase 8D administration semantic audit
 
-**Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7  
-**Scope:** all 84 known public `AdministrationException` codes  
+**Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7<br>
+**Scope:** all 89 known public `AdministrationException` codes
 **Result:** every production occurrence has an exact code identity plus a typed occurrence identity where one code is
 semantically overloaded
 
 ## Audit method and architecture
 
 Every production throw site was read against its exact failure condition and recovery instruction. The presentation
-boundary selects one of 84 dedicated base identities by exact code equality and, for the two overloaded codes, one of
+boundary selects one of 89 dedicated base identities by exact code equality and, for the two overloaded codes, one of
 five typed occurrence identities. It copies only immutable structured facts and lets the selected locale own all public
 prose. A genuinely unknown code still uses the bounded generic fallback.
 
 The earlier statement that one identity per code was sufficient is superseded. The mechanical occurrence inventory
-found 111 literal production sites and 19 codes occurring at least twice. Seventeen share a compatible public contract;
+found 116 literal production sites and 19 codes occurring at least twice. Seventeen share a compatible public contract;
 `config.apply.failed` and `config.validation.blocked` require `AdministrationSemanticVariant`. The deliberate site-level
-register is `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`. The remaining 65 codes each have one literal source site;
+register is `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`. The remaining 70 codes each have one literal source site;
 their exact trigger, consequence, remedy and facts are recorded in
 `V2_PHASE8D_ADMINISTRATION_SINGLE_SOURCE_AUDIT.md` and mechanically reconciled to production.
 
@@ -85,12 +85,17 @@ their exact trigger, consequence, remedy and facts are recorded in
 | `setup.draft.invalid` | `setup_draft_invalid` | Setup apply received a draft with active/rollback ancestry; use normal edit or rollback for existing deployments. | — |
 | `setup.group.missing` | `setup_group_missing` | A projected post-baseline stage has no selected existing external group; select/create it externally because MaddPrestige never creates groups. | `stage`, `provider` |
 | `setup.incomplete` | `setup_incomplete` | The ladder has fewer than two stages or no baseline; complete ordered stages and baseline. | — |
+| `setup.integration.unconfigurable` | `setup_integration_unconfigurable` | Simple setup cannot represent required integration metadata; choose a representable selection or use canonical configuration administration. | `provider`, `component`, `requirement` |
 | `setup.prestige.stage_unknown` | `setup_prestige_stage_unknown` | Prestige eligibility/reset references a stage absent from the session; select a configured stage. | `stage`, `purpose` |
 | `setup.preview.required` | `setup_preview_required` | Setup apply/acknowledgement was requested before preview; generate and review the exact candidate. | — |
 | `setup.provider.required` | `setup_provider_required` | A stage selected an external group before a rank provider; choose a provider or make it internal. | `stage`, `group` |
 | `setup.requirement.baseline` | `setup_requirement_baseline` | Eligibility was assigned to the baseline stage; choose a later stage. | `stage` |
+| `setup.requirement.completion.invalid` | `setup_requirement_completion_invalid` | The completion value is unknown; choose one of the listed completion modes. | `completion`, `allowed`, `provider`, `metric` |
 | `setup.requirement.duplicate` | `setup_requirement_duplicate` | A requirement ID is already assigned in setup; choose a unique immutable ID for the requested stage. | `requirement`, `stage` |
 | `setup.requirement.metric_unknown` | `setup_requirement_metric_unknown` | The provider does not advertise the metric with an authoritative type; run discovery and select an active advertised metric. | `provider`, `metric` |
+| `setup.requirement.operator.invalid` | `setup_requirement_operator_invalid` | The operator is unknown or incompatible with the typed single target; choose one listed compatible operator. | `operator`, `type`, `allowed`, `provider`, `metric` |
+| `setup.requirement.scope.invalid` | `setup_requirement_scope_invalid` | The measurement scope is unknown; choose one of the listed scopes. | `scope`, `allowed`, `provider`, `metric` |
+| `setup.requirement.target.invalid` | `setup_requirement_target_invalid` | The target is not valid for the provider-advertised type; use one accepted typed representation. | `target`, `type`, `provider`, `metric` |
 | `setup.session.owner_mismatch` | `setup_session_owner_mismatch` | Another administrator owns the session; its owner continues or the current actor starts another. | — |
 | `setup.session.unknown` | `setup_session_unknown` | The setup session is unknown or expired; start/resume a current session. | — |
 | `setup.stage.duplicate` | `setup_stage_duplicate` | The immutable stage ID already exists in the wizard; choose another ID. | `stage` |
@@ -110,9 +115,9 @@ their exact trigger, consequence, remedy and facts are recorded in
 
 ## Mechanical proof
 
-`PaperMessageServiceTest` compares the extracted literal production set with the exact 84-code register, asserts 84
+`PaperMessageServiceTest` compares the extracted literal production set with the exact 89-code register, asserts 89
 distinct base identities, inventories the exact 19 multi-source codes and requires all five typed variant identities and
-catalog pairs. It also derives the exact 65-code single-source set and requires exact equality with the dedicated audit
+catalog pairs. It also derives the exact 70-code single-source set and requires exact equality with the dedicated audit
 rows. It exercises outcome/context rendering, OR8D-11 object/consequence distinctions, list/map guidance,
 persisted-reference cause, alternate-catalog control, immutable fact propagation, bounded unknown fallback and the
 static prohibition on diagnostic-code fragment classification. `PhaseSixConfigurationAdministrationTest` exercises

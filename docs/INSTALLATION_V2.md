@@ -1,11 +1,11 @@
 # Installing MaddPrestige V2
 
-## Exact Phase 8D qualification platform
+## Exact final Phase 8 release-candidate platform
 
 - Java 25
 - Paper 26.1.2 build 74 stable
 - LuckPerms 5.5.71
-- the Phase 8D MaddPrestige `2.0.0-SNAPSHOT` candidate and its published checksum
+- the MaddPrestige `2.0.0-rc.1` candidate and its published checksum
 
 These are the qualified versions, not a promise of compatibility with every later build. SQLite is embedded in the
 MaddPrestige distribution. Do not add an external JDBC plugin or configure MySQL/MariaDB.
@@ -13,7 +13,7 @@ MaddPrestige distribution. Do not add an external JDBC plugin or configure MySQL
 ## Fresh installation
 
 1. Create an empty Paper server directory and accept Paper's EULA.
-2. Put the exact LuckPerms JAR and `MaddPrestige-2.0.0-SNAPSHOT.jar` in `plugins/`.
+2. Put the exact LuckPerms JAR and `MaddPrestige-2.0.0-rc.1.jar` in `plugins/`.
 3. Verify both artifacts against the checksums supplied with the candidate.
 4. Start Paper. Wait for `Done`, then confirm both plugins are enabled.
 5. Run `/maddprestige status` and `/maddprestige setup discover` as an operator.
@@ -29,7 +29,8 @@ MaddPrestige owns these paths beneath `plugins/MaddPrestige/`:
 - `locales/` — administrator-supplied UTF-8 locale catalogs.
 
 Do not edit the database or active pointer. Do not copy a live WAL database file as a backup. Use the shutdown and
-recovery workflow in [Migrations, backups, and recovery](MIGRATIONS_BACKUPS_RECOVERY.md).
+recovery workflow in [Migrations, backups, and recovery](MIGRATIONS_BACKUPS_RECOVERY.md). For a candidate update or
+rollback, follow [Upgrading and rolling back V2](UPGRADE_ROLLBACK_V2.md) in a disposable rehearsal first.
 
 ## Deployment boundary
 

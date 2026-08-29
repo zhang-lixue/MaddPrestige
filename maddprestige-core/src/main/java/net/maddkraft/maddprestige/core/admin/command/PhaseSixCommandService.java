@@ -124,7 +124,7 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> help(PermissionSubject subject, List<String> arguments) {
-        String topic = arguments.size() > 1 ? arguments.get(1) : "stages";
+        String topic = arguments.size() > 1 ? arguments.get(1) : "overview";
         List<MessageReference> lines = help.help(subject, topic);
         return completed(CommandResponse.success("help", lines.isEmpty()
                 ? List.of(m("command.help.no_match", "topic", topic), m("command.help.suggestions"))
@@ -429,8 +429,8 @@ public final class PhaseSixCommandService {
 
     private CompletionStage<CommandResponse> setup(PermissionSubject subject, List<String> arguments) {
         if (arguments.size() < 2) {
-            throw usage("setup <discover|start|provider|stage|baseline|requirement|cost|reward|prestige|preview|"
-                    + "acknowledge|confirm|apply|cancel> ...");
+            throw usage("setup <discover|start|provider|stage|baseline|playtime|requirement|cost|reward|prestige|"
+                    + "preview|acknowledge|confirm|apply|cancel> ...");
         }
         return switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
             case "discover" -> setupDiscover(subject, arguments);
@@ -438,6 +438,7 @@ public final class PhaseSixCommandService {
             case "provider" -> setupProvider(subject, arguments);
             case "stage" -> setupStage(subject, arguments);
             case "baseline" -> setupBaseline(subject, arguments);
+            case "playtime" -> setupPlaytime(subject, arguments);
             case "requirement" -> setupRequirement(subject, arguments);
             case "cost" -> setupCost(subject, arguments);
             case "reward" -> setupReward(subject, arguments);
@@ -447,8 +448,8 @@ public final class PhaseSixCommandService {
             case "confirm" -> setupConfirm(subject, arguments);
             case "apply" -> setupApply(subject, arguments);
             case "cancel" -> setupCancel(subject, arguments);
-            default -> throw usage("setup <discover|start|provider|stage|baseline|requirement|cost|reward|prestige|"
-                    + "preview|acknowledge|confirm|apply|cancel> ...");
+            default -> throw usage("setup <discover|start|provider|stage|baseline|playtime|requirement|cost|reward|"
+                    + "prestige|preview|acknowledge|confirm|apply|cancel> ...");
         };
     }
 
@@ -472,48 +473,73 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> setupProvider(PermissionSubject subject, List<String> arguments) {
-        requireSize(arguments, 4, "setup provider <session-id> <provider-id|internal>");
-        setup.selectRankProvider(subject, uuid(arguments.get(2), "setup session"),
-                arguments.get(3).equalsIgnoreCase("internal")
-                        ? Optional.empty() : Optional.of(new ProviderId(arguments.get(3))));
+        if (arguments.size() != 3 && arguments.size() != 4) {
+            throw usage("setup provider [session-id] <provider-id|internal>");
+        }
+        boolean explicit = arguments.size() == 4;
+        String provider = arguments.get(explicit ? 3 : 2);
+        setup.selectRankProvider(subject, setupSession(subject, arguments, explicit),
+                provider.equalsIgnoreCase("internal") ? Optional.empty() : Optional.of(new ProviderId(provider)));
         return completed(CommandResponse.success("setup.provider.selected", List.of(
                 m("command.setup.provider_selected"))));
     }
 
     private CompletionStage<CommandResponse> setupStage(PermissionSubject subject, List<String> arguments) {
-        if (arguments.size() < 5 || arguments.size() > 6) {
-            throw usage("setup stage <session-id> <stage-id> <display-name> [existing-group]");
+        boolean explicit = arguments.size() > 2 && looksLikeUuid(arguments.get(2));
+        int first = explicit ? 3 : 2;
+        if (arguments.size() < first + 2 || arguments.size() > first + 3) {
+            throw usage("setup stage [session-id] <stage-id> <display-name> [existing-group]");
         }
-        setup.addStage(subject, uuid(arguments.get(2), "setup session"), new SetupStage(
-                new StageId(arguments.get(3)), arguments.get(4),
-                arguments.size() == 6 ? Optional.of(arguments.get(5)) : Optional.empty()));
+        setup.addStage(subject, setupSession(subject, arguments, explicit), new SetupStage(
+                new StageId(arguments.get(first)), arguments.get(first + 1),
+                arguments.size() == first + 3 ? Optional.of(arguments.get(first + 2)) : Optional.empty()));
         return completed(CommandResponse.success("setup.stage.added", List.of(m("command.setup.stage_added"))));
     }
 
     private CompletionStage<CommandResponse> setupBaseline(PermissionSubject subject, List<String> arguments) {
-        requireSize(arguments, 4, "setup baseline <session-id> <stage-id>");
-        setup.selectBaseline(subject, uuid(arguments.get(2), "setup session"), new StageId(arguments.get(3)));
+        if (arguments.size() != 3 && arguments.size() != 4) {
+            throw usage("setup baseline [session-id] <stage-id>");
+        }
+        boolean explicit = arguments.size() == 4;
+        setup.selectBaseline(subject, setupSession(subject, arguments, explicit),
+                new StageId(arguments.get(explicit ? 3 : 2)));
         return completed(CommandResponse.success("setup.baseline.selected",
                 List.of(m("command.setup.baseline_selected"))));
+    }
+
+    private CompletionStage<CommandResponse> setupPlaytime(PermissionSubject subject, List<String> arguments) {
+        if (arguments.size() != 4 && arguments.size() != 5) {
+            throw usage("setup playtime [session-id] <target-stage> <duration>");
+        }
+        boolean explicit = arguments.size() == 5;
+        int first = explicit ? 3 : 2;
+        setup.configurePlaytimeRequirement(subject, setupSession(subject, arguments, explicit),
+                new StageId(arguments.get(first)), arguments.get(first + 1));
+        return completed(CommandResponse.success("setup.requirement.configured",
+                List.of(m("command.setup.playtime_configured", "stage", arguments.get(first),
+                        "target", arguments.get(first + 1)))));
     }
 
     private CompletionStage<CommandResponse> setupRequirement(
             PermissionSubject subject,
             List<String> arguments) {
-        if (arguments.size() == 10) {
-            setup.configureRequirement(subject, uuid(arguments.get(2), "setup session"), new SetupRequirement(
-                    new RequirementId(arguments.get(3)), new ProviderId(arguments.get(4)),
-                    new MetricId(arguments.get(5)), arguments.get(6), arguments.get(7), arguments.get(8),
-                    arguments.get(9)));
-        } else if (arguments.size() == 11) {
-            setup.configureRequirementForStage(subject, uuid(arguments.get(2), "setup session"),
-                    new StageId(arguments.get(3)), new SetupRequirement(
-                            new RequirementId(arguments.get(4)), new ProviderId(arguments.get(5)),
-                            new MetricId(arguments.get(6)), arguments.get(7), arguments.get(8), arguments.get(9),
-                            arguments.get(10)));
-        } else {
-            throw usage("setup requirement <session> [target-stage] <id> <provider> <metric> <operator> "
+        boolean explicit = arguments.size() > 2 && looksLikeUuid(arguments.get(2));
+        int first = explicit ? 3 : 2;
+        int fields = arguments.size() - first;
+        if (fields != 7 && fields != 8) {
+            throw usage("setup requirement [session] [target-stage] <id> <provider> <metric> <operator> "
                     + "<target> <scope> <completion>");
+        }
+        UUID sessionId = setupSession(subject, arguments, explicit);
+        int requirement = fields == 8 ? first + 1 : first;
+        SetupRequirement value = new SetupRequirement(new RequirementId(arguments.get(requirement)),
+                new ProviderId(arguments.get(requirement + 1)), new MetricId(arguments.get(requirement + 2)),
+                arguments.get(requirement + 3), arguments.get(requirement + 4), arguments.get(requirement + 5),
+                arguments.get(requirement + 6));
+        if (fields == 8) {
+            setup.configureRequirementForStage(subject, sessionId, new StageId(arguments.get(first)), value);
+        } else {
+            setup.configureRequirement(subject, sessionId, value);
         }
         return completed(CommandResponse.success("setup.requirement.configured",
                 List.of(m("command.setup.requirement_configured"))));
@@ -540,23 +566,31 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> setupPrestige(PermissionSubject subject, List<String> arguments) {
-        UUID sessionId = uuid(arguments.size() > 2 ? arguments.get(2) : "", "setup session");
-        if (arguments.size() == 4 && arguments.get(3).equalsIgnoreCase("disabled")) {
-            setup.configurePrestige(subject, sessionId, SetupPrestige.disabled());
-        } else if (arguments.size() == 6 && arguments.get(3).equalsIgnoreCase("enabled")) {
-            setup.configurePrestige(subject, sessionId, new SetupPrestige(true,
-                    Optional.of(new StageId(arguments.get(4))), Optional.of(new StageId(arguments.get(5)))));
-        } else {
-            throw usage("setup prestige <session> disabled | setup prestige <session> enabled <required-stage> "
+        boolean explicit = arguments.size() > 2 && looksLikeUuid(arguments.get(2));
+        int mode = explicit ? 3 : 2;
+        boolean disabled = arguments.size() == mode + 1 && arguments.get(mode).equalsIgnoreCase("disabled");
+        boolean enabled = arguments.size() == mode + 3 && arguments.get(mode).equalsIgnoreCase("enabled");
+        if (!disabled && !enabled) {
+            throw usage("setup prestige [session] disabled | setup prestige [session] enabled <required-stage> "
                     + "<reset-stage>");
+        }
+        UUID sessionId = setupSession(subject, arguments, explicit);
+        if (disabled) {
+            setup.configurePrestige(subject, sessionId, SetupPrestige.disabled());
+        } else if (enabled) {
+            setup.configurePrestige(subject, sessionId, new SetupPrestige(true,
+                    Optional.of(new StageId(arguments.get(mode + 1))),
+                    Optional.of(new StageId(arguments.get(mode + 2)))));
         }
         return completed(CommandResponse.success("setup.prestige.configured",
                 List.of(m("command.setup.prestige_configured"))));
     }
 
     private CompletionStage<CommandResponse> setupPreview(PermissionSubject subject, List<String> arguments) {
-        requireSize(arguments, 3, "setup preview <session-id>");
-        return setup.preview(subject, uuid(arguments.get(2), "setup session")).thenApply(value -> {
+        if (arguments.size() != 2 && arguments.size() != 3) {
+            throw usage("setup preview [session-id]");
+        }
+        return setup.preview(subject, setupSession(subject, arguments, arguments.size() == 3)).thenApply(value -> {
             ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(value.configuration()));
             lines.addAll(value.playerExperience());
             return CommandResponse.success("setup.preview", lines);
@@ -564,17 +598,22 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> setupApply(PermissionSubject subject, List<String> arguments) {
-        if (arguments.size() < 4) {
-            throw usage("setup apply <session-id> <reason>");
+        boolean explicit = arguments.size() > 2 && looksLikeUuid(arguments.get(2));
+        int reason = explicit ? 3 : 2;
+        if (arguments.size() <= reason) {
+            throw usage("setup apply [session-id] <reason>");
         }
-        return setup.apply(subject, uuid(arguments.get(2), "setup session"), Set.of(), join(arguments, 3))
+        return setup.apply(subject, setupSession(subject, arguments, explicit), Set.of(), join(arguments, reason))
                 .thenApply(value -> CommandResponse.success("setup.applied", List.of(
                         m("command.setup.applied", "revision", value.id().value()))));
     }
 
     private CompletionStage<CommandResponse> setupAcknowledge(PermissionSubject subject, List<String> arguments) {
-        requireSize(arguments, 3, "setup acknowledge <session-id>");
-        var prepared = setup.prepareAcknowledgement(subject, uuid(arguments.get(2), "setup session"));
+        if (arguments.size() != 2 && arguments.size() != 3) {
+            throw usage("setup acknowledge [session-id]");
+        }
+        var prepared = setup.prepareAcknowledgement(subject,
+                setupSession(subject, arguments, arguments.size() == 3));
         ArrayList<MessageReference> lines = new ArrayList<>();
         prepared.findings().forEach(finding -> lines.addAll(SemanticPresentation.validationFinding(finding)));
         lines.add(m("command.acknowledgement.id", "acknowledgement", prepared.acknowledgementId()));
@@ -592,9 +631,24 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> setupCancel(PermissionSubject subject, List<String> arguments) {
-        requireSize(arguments, 3, "setup cancel <session-id>");
-        setup.cancel(subject, uuid(arguments.get(2), "setup session"));
+        if (arguments.size() != 2 && arguments.size() != 3) {
+            throw usage("setup cancel [session-id]");
+        }
+        setup.cancel(subject, setupSession(subject, arguments, arguments.size() == 3));
         return completed(CommandResponse.success("setup.cancelled", List.of(m("command.setup.cancelled"))));
+    }
+
+    private UUID setupSession(PermissionSubject subject, List<String> arguments, boolean explicit) {
+        return explicit ? uuid(arguments.get(2), "setup session") : setup.currentSession(subject);
+    }
+
+    private static boolean looksLikeUuid(String value) {
+        try {
+            UUID.fromString(value);
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private CompletionStage<CommandResponse> doctor(PermissionSubject subject) {

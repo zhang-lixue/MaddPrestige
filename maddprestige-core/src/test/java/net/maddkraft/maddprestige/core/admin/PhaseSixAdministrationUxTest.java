@@ -102,16 +102,25 @@ class PhaseSixAdministrationUxTest {
         var registration = providers.register("test-owner", new TestMetricProvider());
         providers.activate(registration);
         CommandCompletionService completion = new CommandCompletionService();
-        completion.refresh(providers, PhaseSixSchema.create(), StageConfiguration.inactive());
+        completion.refresh(providers, PhaseSixSchema.create(), stages("Member"));
         PermissionSubject setup = subject(PhaseSixPermissions.SETUP);
+        String session = "00000000-0000-0000-0000-000000000001";
 
         assertEquals(List.of("metrics"), completion.suggest(setup,
-                List.of("setup", "requirement", "session", "id", "")));
+                List.of("setup", "requirement", session, "id", "")));
         assertEquals(List.of("blocks", "play_time"), completion.suggest(setup,
-                List.of("setup", "requirement", "session", "id", "metrics", "")));
-        assertEquals(List.of("since-prestige-start"), completion.suggest(setup,
-                List.of("setup", "requirement", "session", "id", "metrics", "play_time", "greater-or-equal",
-                        "10", "since-p")));
+                List.of("setup", "requirement", session, "id", "metrics", "")));
+        assertEquals(List.of("SINCE_PRESTIGE_START"), completion.suggest(setup,
+                List.of("setup", "requirement", session, "id", "metrics", "play_time", "GREATER_OR_EQUAL",
+                        "10", "SINCE_P")));
+        assertEquals(List.of("first", "second"), completion.suggest(setup,
+                List.of("setup", "playtime", "")));
+        assertEquals(List.of("PT1M"), completion.suggest(setup,
+                List.of("setup", "playtime", "first", "PT1")));
+        assertEquals(List.of("first", "second"), completion.suggest(setup,
+                List.of("setup", "prestige", "enabled", "")));
+        assertEquals(List.of("first", "second"), completion.suggest(setup,
+                List.of("setup", "prestige", "enabled", "first", "")));
         assertTrue(completion.suggest(subject(PhaseSixPermissions.USE), List.of("")).stream()
                 .noneMatch("requirement"::equals));
 
@@ -143,9 +152,14 @@ class PhaseSixAdministrationUxTest {
                 .help(subject(PhaseSixPermissions.USE), "measurement");
 
         assertEquals(List.of("command.help.measurement.title", "command.help.measurement.description",
-                "command.help.valid_values", "command.help.measurement.baseline_safety"),
+                "command.help.valid_values", "command.help.measurement.duration_targets",
+                "command.help.measurement.playtime_example", "command.help.measurement.baseline_safety"),
                 lines.stream().map(value -> value.key()).toList());
         assertTrue(lines.get(2).argument("value").orElseThrow().contains("since-stage-start"));
+        assertEquals("command.help.setup.title", new ContextualHelpService(PhaseSixSchema.create())
+                .help(subject(PhaseSixPermissions.USE), "setup").getFirst().key());
+        assertEquals("command.help.overview.title", new ContextualHelpService(PhaseSixSchema.create())
+                .help(subject(PhaseSixPermissions.USE), "overview").getFirst().key());
     }
 
     @Test

@@ -15,5 +15,5 @@ depends on it remains blocked.
 
 External plugins register the Stable `ProviderDeclaration` service through Paper `ServicesManager`; MaddPrestige
 attests the owning plugin and assigns the namespace/generation. See the compilable
-[`examples/provider-sdk`](../examples/provider-sdk). That example is API documentation, not evidence that the broader
-Phase 8E independent multi-provider/dependency matrix is complete.
+[`examples/provider-sdk`](../examples/provider-sdk). That example is API documentation; the accepted Phase 8E evidence separately proves the independent multi-provider and
+dependency/fault matrix.

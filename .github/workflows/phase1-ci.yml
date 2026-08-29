@@ -1,4 +1,4 @@
-name: Phase 1 foundation verification
+name: MaddPrestige release-candidate verification
 
 on:
   push:
@@ -50,6 +50,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -58,10 +60,14 @@ jobs:
       - name: Compare two clean distribution builds
         shell: bash
         run: |
-          bash ./mvnw --batch-mode --no-transfer-progress clean package
-          cp maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar /tmp/MaddPrestige-first.jar
-          bash ./mvnw --batch-mode --no-transfer-progress clean package
-          cmp /tmp/MaddPrestige-first.jar maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar
+          version=$(bash ./mvnw --batch-mode --no-transfer-progress help:evaluate -Dexpression=project.version -q -DforceStdout)
+          artifact="maddprestige-distribution/target/MaddPrestige-${version}.jar"
+          bash ./mvnw --batch-mode --no-transfer-progress clean verify
+          cp "$artifact" /tmp/MaddPrestige-first.jar
+          cp target/bom.json /tmp/MaddPrestige-first-bom.json
+          bash ./mvnw --batch-mode --no-transfer-progress clean verify
+          cmp /tmp/MaddPrestige-first.jar "$artifact"
+          cmp /tmp/MaddPrestige-first-bom.json target/bom.json
 
   dependency-review:
     if: github.event_name == 'pull_request' && github.event.repository.private == false
@@ -89,6 +95,8 @@ jobs:
           --health-retries=12
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -126,6 +134,8 @@ jobs:
           --health-retries=12
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

@@ -1,5 +1,7 @@
 # Installation and first-run configuration
 
+> **Historical V1 document.** This is retained as accepted 1.x evidence, not current V2 installation, API, compatibility, or operator guidance. Start with [the V2 README](../README.md).
+
 ## EssentialsX home limits
 
 MaddPrestige grants `essentials.sethome.multiple.maddkraft_<number>`. Merge the following into EssentialsX's existing `sethome-multiple` section:
@@ -76,4 +78,3 @@ Use `%maddprestige_title%` in TAB's name-tag/tab formatting wherever you want on
 4. Test one staff account and confirm `maddprestige.staff` excludes it from scoring.
 5. Test `/rankup`, `/prestige`, and all three Tea Leaf reward types on a staging player.
 6. Back up `plugins/MaddPrestige/maddprestige.db` with the server stopped or via a SQLite-aware backup process.
-

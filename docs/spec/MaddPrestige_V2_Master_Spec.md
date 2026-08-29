@@ -1,7 +1,7 @@
 # MaddPrestige V2 — Master Product & Engineering Specification
 
-**Status:** Architecture / product specification draft v1  
-**Primary deployment:** MaddKraft SMP  
+**Status:** Architecture / product specification draft v1<br>
+**Primary deployment:** MaddKraft SMP<br>
 **Product goal:** A production-grade, reusable Paper progression/prestige framework that can be deployed by unrelated servers without MaddKraft-specific assumptions.
 
 **Owner product-scope amendment — 2026-08-17:** MaddPrestige 2.0 officially supports SQLite as its production
@@ -13,6 +13,12 @@ boundaries retained for a proper future external-SQL implementation. A64 is defe
 SQLite-native backup, strict manifest/hash/integrity/history validation, disposable restore rehearsal, populated
 prefix-to-current migration qualification and DB/config startup compatibility. This is candidate evidence, not owner
 acceptance and not Phase 9 live MaddKraft migration evidence. A63 remains Partial; A64 remains Later.
+**Phase 8F final acceptance note — 2026-08-28:** the final Phase 8 candidate uses semantic pre-release identity
+`2.0.0-rc.1` and owner-frozen Stable compatibility baseline `2.x-stable-1`. Targeted Owner Review 3 and the owner-operated
+real-player fresh-RC run pass against exact SHA-256 `0D961DB73D6C44CF18986CA42B7950914CEA5A1598BA7D41D0E919BFB76C6513`;
+A76 is Satisfied under the D-179 replacement policy. Phase 8F and the Phase 8 work phase meet their exit criteria. This
+does not claim GA or production readiness: A63 remains Partial for Phase 9 deployment-clone qualification and A64
+remains Later.
 
 ---
 
@@ -2339,6 +2345,11 @@ production repositories; three-backend parity suites; MySQL/MariaDB row-lock/dea
 outage/failover qualification; and multi-process/shared-database deployment support.
 
 **2.0 gate:** A61–A63, A65–A68, A70, A76 plus the full regression suite. A64 is `Later`, not `Satisfied`.
+
+**Phase 8 exit reconciliation — 2026-08-28:** A76 and every Phase 8-owned release-hardening gate pass, so Phase 8 is
+complete. The broader 2.0 gate above is not yet complete because A63 deliberately retains the real MaddKraft
+clone/deployment migration in Phase 9. Phase completion therefore authorizes release-candidate publication work, not
+GA or production deployment.
 
 ## Phase 9 — MaddKraft migration and production qualification
 

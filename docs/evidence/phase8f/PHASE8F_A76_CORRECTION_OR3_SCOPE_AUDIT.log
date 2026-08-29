@@ -1,0 +1,55 @@
+Phase 8F A76 Correction Owner Review 3 scope audit
+date=2026-08-28
+branch=v2/phase-8f
+head=993599dc47cacc76b6372302d338d1850bf2896e
+baseline=993599dc47cacc76b6372302d338d1850bf2896e
+review_paths=128
+staged_paths=0
+unstaged_tracked_paths=55
+untracked_paths=73
+
+OR8F-A76-02 production Java paths=2
+- maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/bootstrap/ProductionRuntime.java
+- maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/PlaceholderSnapshotPublisher.java
+protected_V1_Java_changes=0
+Stable_SDK_source_changes=0
+Stable_Paper_event_source_changes=0
+external_SQL_production_additions=0
+Phase_9_paths=0
+GUI_paths=0
+Sonar_suppression_or_exclusion_paths=0
+scratch_correction_paths=0
+unrelated_setup_redesign_in_OR8F-A76-02=0
+
+focused=89 tests / 6 suites / 0 failures / 0 errors / 0 skips
+isolated_changed_Paper_harness=PASS
+clean_verify_1=553 tests / 103 suites / 0 failures / 0 errors / 0 skips / Checkstyle 0
+clean_verify_2=553 tests / 103 suites / 0 failures / 0 errors / 0 skips / Checkstyle 0
+git_diff_check=PASS
+manifest_check=PASS / 128 exact paths
+
+Paper_Java=Eclipse Adoptium Temurin 25.0.3+9-LTS
+Paper=26.1.2 build 74 / 52893229 bytes / 1D70B1DAB9CF4A6DE615209A536F3A45A2186240253C428213CE2188AB95E5F7
+LuckPerms=5.5.71 / 1501521 bytes / 49CECB66FA1FD22A133039A490E9C1E5095A238E7CD66EB9D2A16FE6C897550D
+Paper_harness=28569 bytes / 896DD00DA7DE6FD6A6989C69FD891AD53E6FAD5F4944371EDD57C2012C72F132
+paper_fresh_assertions=30/30
+paper_dormant_intervals=6 one-second intervals / 0 Placeholder warnings / 0 lifecycle rows
+paper_dormant_to_active=same player initialized and received real Member projection without restart
+paper_restart_assertions=3/3
+paper_failure_patterns=0
+
+active_genuine_failure_regression=PASS / exact luckperms provider-unavailable warning retained
+distribution=16507914 bytes / 0D961DB73D6C44CF18986CA42B7950914CEA5A1598BA7D41D0E919BFB76C6513
+aggregate_SBOM=190831 bytes / 3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E
+artifact_reproducibility=PASS
+local_absolute_paths_in_OR3_evidence=0
+
+commit=none
+push=none
+PR=none
+merge=none
+publication=none
+force_push=none
+branch_protection_bypass=none
+Phase_9_started=no
+A76=Partial / Blocked; Owner Review 3 and a new owner-operated run remain required

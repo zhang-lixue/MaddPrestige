@@ -1,14 +1,14 @@
 # Phase 8D single-source administration semantic audit
 
-**Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7  
-**Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`  
-**Date:** 2026-08-22  
-**Scope:** all 66 codes with exactly one literal production `AdministrationException` construction site
+**Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7<br>
+**Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`<br>
+**Date:** 2026-08-22<br>
+**Scope:** all 70 codes with exactly one literal production `AdministrationException` construction site
 
 ## Method and result
 
-The current production inventory contains 112 literal exception occurrences and 85 public administration codes. The
-19 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 66 remaining codes
+The current production inventory contains 116 literal exception occurrences and 89 public administration codes. The
+19 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 70 remaining codes
 are enumerated below. Each row was checked directly against the named production branch, not inferred from its code or
 developer exception text. The review compares the exact trigger, safety consequence, catalog-owned remediation and
 structured facts with the selected public semantic identity.
@@ -23,7 +23,11 @@ Phase 8E Correction Pass 2 additionally consolidates both enforcement paths for
 `setup.integration.unconfigurable` through one structured exception helper. Both paths now supply the exact
 `provider`, `component` and `requirement` facts, so that identity is included in this single-source register.
 
-Result: all 66 single-source codes have accurate catalog semantics. Together with the current 19-code multi-source
+Phase 8F A76 Correction Owner Review 2 adds four exact requirement-input identities for invalid target, operator,
+scope and completion values. Each retains its supplied value, provider/metric context and mechanically derived valid
+alternatives; `setup.draft.invalid` remains exclusive to active/rollback ancestry.
+
+Result: all 70 single-source codes have accurate catalog semantics. Together with the current 19-code multi-source
 register, every known public administration failure occurrence has been checked against its real production source
 condition.
 
@@ -83,9 +87,13 @@ Source locations are relative to
 | `setup.integration.unconfigurable` | `admin/setup/SetupWizardService.java:670` | `setup_integration_unconfigurable` | A selected built-in requirement/reward needs dimensions or metadata that simple setup cannot generate; the same helper is called at selection time and defensively during document generation. | Preview/publication stops before an incomplete revision can disable its own required provider. | Choose a representable built-in selection or use canonical configuration administration for the exact integration metadata. | `provider`, `component`, `requirement` |
 | `setup.prestige.stage_unknown` | `admin/setup/SetupWizardService.java:344` | `setup_prestige_stage_unknown` | Prestige eligibility/reset references a stage absent from the setup session. | Invalid prestige stage references are not stored. | Select a configured setup stage. | `stage`, `purpose` |
 | `setup.provider.required` | `admin/setup/SetupWizardService.java:142` | `setup_provider_required` | A stage selects an external group while the setup has no rank provider. | The invalid projected stage is not added. | Choose the provider first or make the stage internal-only. | `stage`, `group` |
-| `setup.requirement.baseline` | `admin/setup/SetupWizardService.java:183` | `setup_requirement_baseline` | Eligibility requirement targets the selected baseline stage. | Baseline cannot become gated by forward progress. | Assign the requirement to a later stage. | `stage` |
-| `setup.requirement.duplicate` | `admin/setup/SetupWizardService.java:194` | `setup_requirement_duplicate` | Requirement ID already exists in general or another stage assignment. | Immutable requirement identity remains unique. | Choose one unique immutable ID for the requested stage. | `requirement`, `stage` |
-| `setup.requirement.metric_unknown` | `admin/setup/SetupWizardService.java:683` | `setup_requirement_metric_unknown` | Active provider discovery does not advertise the chosen metric with a value type. | Setup does not guess metric type. | Run discovery and select an advertised metric. | `provider`, `metric` |
+| `setup.requirement.baseline` | `admin/setup/SetupWizardService.java:226` | `setup_requirement_baseline` | Eligibility requirement targets the selected baseline stage. | Baseline cannot become gated by forward progress. | Assign the requirement to a later stage. | `stage` |
+| `setup.requirement.completion.invalid` | `admin/setup/SetupWizardService.java:787` | `setup_requirement_completion_invalid` | Requirement command supplies a value outside the `CompletionMode` enum. | The malformed requirement is rejected before setup-session mutation. | Choose one listed completion mode. | `completion`, `allowed`, `provider`, `metric` |
+| `setup.requirement.duplicate` | `admin/setup/SetupWizardService.java:239` | `setup_requirement_duplicate` | Requirement ID already exists in general or another stage assignment. | Immutable requirement identity remains unique. | Choose one unique immutable ID for the requested stage. | `requirement`, `stage` |
+| `setup.requirement.metric_unknown` | `admin/setup/SetupWizardService.java:831` | `setup_requirement_metric_unknown` | Active provider discovery does not advertise the chosen metric with a value type. | Setup does not guess metric type. | Run discovery and select an advertised metric. | `provider`, `metric` |
+| `setup.requirement.operator.invalid` | `admin/setup/SetupWizardService.java:808` | `setup_requirement_operator_invalid` | Requirement command supplies an unknown, type-incompatible or range operator to the single-target setup surface. | The malformed requirement is rejected before setup-session mutation. | Choose one compatible listed single-value operator. | `operator`, `type`, `allowed`, `provider`, `metric` |
+| `setup.requirement.scope.invalid` | `admin/setup/SetupWizardService.java:775` | `setup_requirement_scope_invalid` | Requirement command supplies a value outside the `MeasurementScope` enum. | The malformed requirement is rejected before setup-session mutation. | Choose one listed measurement scope. | `scope`, `allowed`, `provider`, `metric` |
+| `setup.requirement.target.invalid` | `admin/setup/SetupWizardService.java:797` | `setup_requirement_target_invalid` | Requirement target cannot be parsed as the provider-advertised metric type. | The malformed requirement is rejected before setup-session mutation. | Use a value accepted by that type; durations accept documented ISO-8601 and supported short forms. | `target`, `type`, `provider`, `metric` |
 | `setup.session.owner_mismatch` | `admin/setup/SetupWizardService.java:322` | `setup_session_owner_mismatch` | Requesting actor differs from setup-session owner. | Session authority is not transferable. | Have the owner continue or start a separate session. | — |
 | `setup.session.unknown` | `admin/setup/SetupWizardService.java:318` | `setup_session_unknown` | Setup session ID is absent after expiry pruning. | No absent session is resumed. | Start or resume a current session. | — |
 | `setup.stage.duplicate` | `admin/setup/SetupWizardService.java:138` | `setup_stage_duplicate` | Immutable stage ID already occurs in the setup session. | Duplicate identity is not added. | Choose a unique immutable stage ID. | `stage` |
@@ -106,7 +114,7 @@ Source locations are relative to
 
 `PaperMessageServiceTest.administrationSingleSourceInventoryMatchesSemanticAudit` walks every production Java source,
 extracts literal constructor codes and derives the exact single-source set from occurrence counts. It parses the rows
-above and requires exact equality: 66 single-source rows, 19 multi-source codes, and a union equal to all 85 known
+above and requires exact equality: 70 single-source rows, 19 multi-source codes, and a union equal to all 89 known
 public codes. A new, removed, renamed or reclassified single-source code fails until this source-level audit is updated
 deliberately.
 

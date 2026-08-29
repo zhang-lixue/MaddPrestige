@@ -12,6 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.metric.MetricProvider;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
 import net.maddkraft.maddprestige.core.schema.SchemaValueType;
@@ -20,6 +21,15 @@ import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 public final class CommandCompletionService {
     private static final int MAX_SUGGESTIONS = 50;
     private final AtomicReference<CompletionCatalog> catalog = new AtomicReference<>(CompletionCatalog.empty());
+    private final SetupWizardService setup;
+
+    public CommandCompletionService() {
+        this.setup = null;
+    }
+
+    public CommandCompletionService(SetupWizardService setup) {
+        this.setup = Objects.requireNonNull(setup, "setup");
+    }
 
     public void refresh(ProviderRegistry providers, SchemaRegistry schema, StageConfiguration stages) {
         Objects.requireNonNull(providers, "providers");
@@ -82,10 +92,10 @@ public final class CommandCompletionService {
             return tokens.size() == 2 ? List.of("rankup", "prestige") : List.of();
         }
         if (root.equals("help")) {
-            return List.of("measurement", "requirements", "scaling", "stages", "providers");
+            return List.of("overview", "setup", "measurement", "requirements", "scaling", "stages", "providers");
         }
         if (root.equals("setup") && subject.has(PhaseSixPermissions.SETUP)) {
-            return setupCandidates(tokens);
+            return setupCandidates(subject, tokens);
         }
         if (root.equals("staff") && subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT)) {
             if (tokens.size() == 2) {
@@ -200,50 +210,83 @@ public final class CommandCompletionService {
         return List.of();
     }
 
-    private List<String> setupCandidates(List<String> tokens) {
+    private List<String> setupCandidates(PermissionSubject subject, List<String> tokens) {
         if (tokens.size() == 2) {
-            return List.of("discover", "start", "provider", "stage", "baseline", "requirement", "cost", "reward",
-                    "prestige", "preview", "acknowledge", "confirm", "apply", "cancel");
+            return List.of("discover", "start", "provider", "stage", "baseline", "playtime", "requirement", "cost",
+                    "reward", "prestige", "preview", "acknowledge", "confirm", "apply", "cancel");
         }
         String operation = tokens.get(1).toLowerCase(Locale.ROOT);
-        if (operation.equals("provider") && tokens.size() == 4) {
+        List<String> stages = setup == null ? catalog.get().stageIds()
+                : setup.currentCompletion(subject).map(SetupWizardService.SetupCompletion::stageIds)
+                        .orElse(catalog.get().stageIds());
+        boolean explicit = tokens.size() > 2 && looksLikeUuid(tokens.get(2));
+        int first = explicit ? 3 : 2;
+        if (operation.equals("provider") && tokens.size() == first + 1) {
             ArrayList<String> values = new ArrayList<>(catalog.get().providerIds());
             values.add("internal");
             return values;
         }
-        if (operation.equals("baseline") && tokens.size() == 4) {
-            return catalog.get().stageIds();
+        if (operation.equals("baseline") && tokens.size() == first + 1) {
+            return stages;
+        }
+        if (operation.equals("playtime")) {
+            if (tokens.size() == first + 1) {
+                return stages;
+            }
+            if (tokens.size() == first + 2) {
+                return List.of("PT1M", "PT3M", "1m", "3m");
+            }
         }
         if (operation.equals("requirement")) {
-            if (tokens.size() == 5) {
+            if (tokens.size() == first + 1) {
+                return stages;
+            }
+            boolean targeted = tokens.size() > first
+                    && stages.stream().anyMatch(stage -> stage.equalsIgnoreCase(tokens.get(first)));
+            int provider = first + (targeted ? 2 : 1);
+            if (tokens.size() == provider + 1) {
                 return catalog.get().providerIds();
             }
-            if (tokens.size() == 6) {
-                return catalog.get().metricsByProvider().getOrDefault(tokens.get(4), List.of());
+            if (tokens.size() == provider + 2) {
+                return catalog.get().metricsByProvider().getOrDefault(tokens.get(provider), List.of());
             }
-            if (tokens.size() == 7) {
-                return List.of("equal", "greater-or-equal", "less-or-equal");
+            if (tokens.size() == provider + 3) {
+                return List.of("EQUAL", "GREATER_OR_EQUAL", "LESS_OR_EQUAL");
             }
-            if (tokens.size() == 9) {
-                return List.of("absolute", "lifetime", "since-stage-start", "since-prestige-start",
-                        "since-season-start");
+            if (tokens.size() == provider + 4 && tokens.get(provider).equalsIgnoreCase("paper_statistics")
+                    && tokens.get(provider + 1).equalsIgnoreCase("play_one_minute")) {
+                return List.of("PT1M", "PT3M", "1m", "3m");
             }
-            if (tokens.size() == 10) {
-                return List.of("live", "latched");
+            if (tokens.size() == provider + 5) {
+                return List.of("ABSOLUTE", "LIFETIME", "SINCE_STAGE_START", "SINCE_PRESTIGE_START",
+                        "SINCE_SEASON_START");
+            }
+            if (tokens.size() == provider + 6) {
+                return List.of("LIVE", "LATCHED");
             }
         }
         if (Set.of("cost", "reward").contains(operation) && tokens.size() == 5) {
             return catalog.get().providerIds();
         }
         if (operation.equals("prestige")) {
-            if (tokens.size() == 4) {
+            if (tokens.size() == first + 1) {
                 return List.of("disabled", "enabled");
             }
-            if (tokens.size() == 5 || tokens.size() == 6) {
-                return catalog.get().stageIds();
+            if (tokens.size() > first && tokens.get(first).equalsIgnoreCase("enabled")
+                    && (tokens.size() == first + 2 || tokens.size() == first + 3)) {
+                return stages;
             }
         }
         return List.of();
+    }
+
+    private static boolean looksLikeUuid(String value) {
+        try {
+            UUID.fromString(value);
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private List<String> valuesForPath(String path) {

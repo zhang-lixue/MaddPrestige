@@ -1,5 +1,7 @@
 # Tebex setup
 
+> **Historical V1 document.** This is retained as accepted 1.x evidence, not current V2 installation, API, compatibility, or operator guidance. Start with [the V2 README](../README.md).
+
 Create one package for each paid monarchy rank. Configure the package's successful-payment console command as follows:
 
 | Package | Console command |
@@ -26,4 +28,3 @@ Recommended store wording:
 - A player's free Curious/Odd/Mad/Unbound progression is independent of their paid rank.
 - Patron and prestige limits use the higher allowance, not the sum.
 - Purchases never guarantee MaddHatter eligibility or contest victory.
-

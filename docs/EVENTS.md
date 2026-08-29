@@ -1,6 +1,6 @@
 # Stable Paper events
 
-The Phase 8 candidate exposes six synchronous Paper events:
+Compatibility baseline `2.x-stable-1` exposes six synchronous Paper events:
 
 - `PreRankUpEvent` — cancellable;
 - `PostRankUpEvent`;

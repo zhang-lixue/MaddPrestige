@@ -1,0 +1,14 @@
+Phase 8F Correction Pass 1 accepted-artifact comparison
+Date: 2026-08-24
+
+Distribution actual: 16497928 bytes / 112A0534F6166D8842F470A6C898A452284362761BF5350578453AE198961111
+Distribution accepted: 16,497,928 bytes / 112A0534F6166D8842F470A6C898A452284362761BF5350578453AE198961111
+Distribution equal: True
+
+Aggregate SBOM actual: 190831 bytes / 3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E
+Aggregate SBOM accepted: 190,831 bytes / 3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E
+Aggregate SBOM equal: True
+
+Accepted two-clean-build reproducibility evidence remains applicable: YES
+Additional independent clean build required: NO; runtime JAR and SBOM bytes are unchanged
+Paper rerun required: NO; the exact accepted runtime JAR is unchanged

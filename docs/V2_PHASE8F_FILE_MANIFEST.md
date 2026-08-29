@@ -1,0 +1,146 @@
+# Phase 8F file manifest
+
+Date: 2026-08-28<br>
+Baseline: `993599dc47cacc76b6372302d338d1850bf2896e`<br>
+Branch: `v2/phase-8f`<br>
+Review paths: 130
+
+## Exact review paths
+
+- `.github/workflows/phase1-ci.yml`
+- `DECISIONS.md`
+- `docs/API.md`
+- `docs/API_SDK.md`
+- `docs/COMPATIBILITY.md`
+- `docs/EVENTS.md`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_ARTIFACT_COMPARE.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_CLEAN_VERIFY_1.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_CLEAN_VERIFY_2.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_FOCUSED_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_ARTIFACT_COMPARE.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_CLEAN_VERIFY_1.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_CLEAN_VERIFY_2.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_FOCUSED_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_ISOLATED_PAPER_HARNESS.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_PAPER_FIRST_BOOT_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_PAPER_RESTART_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR2_SCOPE_AUDIT.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_ARTIFACT_COMPARE.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_CLEAN_VERIFY_1.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_CLEAN_VERIFY_2.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_FOCUSED_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_ISOLATED_PAPER_HARNESS.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_PAPER_FIRST_BOOT_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_PAPER_RESTART_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_OR3_SCOPE_AUDIT.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_PAPER_FIRST_BOOT_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_PAPER_RESTART_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_A76_CORRECTION_SCOPE_AUDIT.log`
+- `docs/evidence/phase8f/PHASE8F_A76_FINAL_ACCEPTANCE_RECONCILIATION_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_API_INVENTORY.log`
+- `docs/evidence/phase8f/PHASE8F_CLEAN_VERIFY_1.log`
+- `docs/evidence/phase8f/PHASE8F_CLEAN_VERIFY_2.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_ARTIFACT_COMPARE.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_CLEAN_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_FOCUSED_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_PACKAGE_CONTENT.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_PLACEHOLDER_AUDIT.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_SCOPE_AUDIT.log`
+- `docs/evidence/phase8f/PHASE8F_CORRECTION1_VERIFY_TOTALS.log`
+- `docs/evidence/phase8f/PHASE8F_DEPENDENCY_SECURITY_AUDIT.log`
+- `docs/evidence/phase8f/PHASE8F_DEPENDENCY_SECURITY_CACHED.log`
+- `docs/evidence/phase8f/PHASE8F_DEPENDENCY_TREE.log`
+- `docs/evidence/phase8f/PHASE8F_FINAL_VERIFY_TOTALS.log`
+- `docs/evidence/phase8f/PHASE8F_FOCUSED_VERIFY.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_EXAMPLE_PROVIDER.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8B_PAPER_HARNESS.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8C_PAPER_HARNESS.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8D_PAPER_HARNESS.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8E_ALPHA_PROVIDER.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8E_BETA_PROVIDER.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8E_ECONOMY_PROVIDER.log`
+- `docs/evidence/phase8f/PHASE8F_ISOLATED_PHASE8E_PAPER_HARNESS.log`
+- `docs/evidence/phase8f/PHASE8F_LOCAL_INSTALL.log`
+- `docs/evidence/phase8f/PHASE8F_PAPER_FIRST_BOOT_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_PAPER_RESTART_SANITIZED.log`
+- `docs/evidence/phase8f/PHASE8F_REPRO_BUILD1_HASHES.log`
+- `docs/evidence/phase8f/PHASE8F_REPRO_BUILD2_AND_COMPARE.log`
+- `docs/evidence/phase8f/PHASE8F_SCOPE_AUDIT.log`
+- `docs/INSTALLATION.md`
+- `docs/INSTALLATION_V2.md`
+- `docs/PROVIDERS_INTEGRATIONS.md`
+- `docs/QUICK_START.md`
+- `docs/RELATIONSHIPS.md`
+- `docs/REQUIREMENTS_SCOPES.md`
+- `docs/spec/MaddPrestige_V2_Master_Spec.md`
+- `docs/TEBEX.md`
+- `docs/UPGRADE_ROLLBACK_V2.md`
+- `docs/V2_ARCHITECTURE.md`
+- `docs/V2_PHASE8_FAILURE_REGISTER.md`
+- `docs/V2_PHASE8D_A76_PROTOCOL.md`
+- `docs/V2_PHASE8D_ADMINISTRATION_SEMANTIC_AUDIT.md`
+- `docs/V2_PHASE8D_ADMINISTRATION_SINGLE_SOURCE_AUDIT.md`
+- `docs/V2_PHASE8F_A76_OWNER_ACCEPTANCE.md`
+- `docs/V2_PHASE8F_A76_SETUP_CORRECTION.md`
+- `docs/V2_PHASE8F_API_INVENTORY.md`
+- `docs/V2_PHASE8F_COMPATIBILITY_BASELINE.md`
+- `docs/V2_PHASE8F_FILE_MANIFEST.md`
+- `docs/V2_PHASE8F_IMPLEMENTATION.md`
+- `docs/V2_PHASE8F_PACKAGE_CONTENT_AUDIT.md`
+- `docs/V2_PHASE8F_PAPER_API_INVENTORY.md`
+- `docs/V2_PHASE8F_RELEASE_DOCUMENTATION_AUDIT.md`
+- `docs/V2_PHASE8F_RELEASE_INSTALL_QUALIFICATION.md`
+- `docs/V2_PHASE8F_RELEASE_MATRIX.md`
+- `docs/V2_PHASE8F_REPRODUCIBLE_BUILD_EVIDENCE.md`
+- `docs/V2_TRACEABILITY.md`
+- `examples/provider-sdk/pom.xml`
+- `maddprestige-api/pom.xml`
+- `maddprestige-api/src/test/java/net/maddkraft/maddprestige/api/service/StableApiCompatibilityBaselineTest.java`
+- `maddprestige-core/pom.xml`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/CommandCompletionService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/ContextualHelpService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/command/PhaseSixCommandService.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/presentation/SemanticPresentation.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupRequirement.java`
+- `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin/setup/SetupWizardService.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixAdministrationUxTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixCommandServiceTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/admin/PhaseSixConfigurationAdministrationTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/documentation/PhaseEightDPublicDocumentationTest.java`
+- `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/documentation/PhaseEightFEvidenceIntegrityTest.java`
+- `maddprestige-distribution/pom.xml`
+- `maddprestige-distribution/src/main/resources/THIRD-PARTY-NOTICES.txt`
+- `maddprestige-distribution/src/test/java/net/maddkraft/maddprestige/distribution/PhaseEightFReleasePackageIT.java`
+- `maddprestige-integrations/pom.xml`
+- `maddprestige-persistence/pom.xml`
+- `maddprestige-platform-paper/pom.xml`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/bootstrap/MaddPrestigeV2Plugin.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/bootstrap/ProductionRuntime.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/i18n/PaperMessageService.java`
+- `maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper/placeholder/PlaceholderSnapshotPublisher.java`
+- `maddprestige-platform-paper/src/main/resources/locales/en_US.yml`
+- `maddprestige-platform-paper/src/test/java/net/maddkraft/maddprestige/platform/paper/event/StablePaperEventCompatibilityBaselineTest.java`
+- `maddprestige-platform-paper/src/test/java/net/maddkraft/maddprestige/platform/paper/i18n/PaperMessageServiceTest.java`
+- `maddprestige-platform-paper/src/test/java/net/maddkraft/maddprestige/platform/paper/placeholder/PlaceholderSnapshotPublisherTest.java`
+- `maddprestige-testkit/pom.xml`
+- `PHASE8F_OWNER_REVIEW_SUMMARY.txt`
+- `pom.xml`
+- `qualification/phase8b-paper-harness/pom.xml`
+- `qualification/phase8c-paper-harness/pom.xml`
+- `qualification/phase8d-paper-harness/pom.xml`
+- `qualification/phase8d-paper-harness/src/main/java/net/maddkraft/qualification/phase8d/Phase8DQualificationHarness.java`
+- `qualification/phase8e-alpha-provider/pom.xml`
+- `qualification/phase8e-beta-provider/pom.xml`
+- `qualification/phase8e-paper-harness/pom.xml`
+- `qualification/README.md`
+- `README.md`
+- `STATUS.md`
+- `tools/Generate-Phase8FApiInventory.ps1`
+- `tools/Generate-Phase8FFileManifest.ps1`
+
+## Excluded build and runtime material
+
+The review set excludes Maven targets and caches, distribution/SBOM/review archives, third-party JARs,
+Paper libraries, worlds, runtime databases, logs, JFR data, credentials, secrets and disposable server state.
+The A76 setup-correction owner-review ZIP carries the distribution and aggregate SBOM only as sealed
+candidate artifacts in a dedicated artifact directory; neither is a Git review path.

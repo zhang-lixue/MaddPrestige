@@ -14,8 +14,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
+import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
+import net.maddkraft.maddprestige.api.id.RequirementId;
+import net.maddkraft.maddprestige.api.metric.MetricOperator;
 import net.maddkraft.maddprestige.api.metric.MetricProvider;
+import net.maddkraft.maddprestige.api.metric.MetricValue;
+import net.maddkraft.maddprestige.api.metric.MetricValueType;
+import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.rank.RankAdapter;
@@ -27,6 +33,8 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationS
 import net.maddkraft.maddprestige.core.admin.config.PreparedConfigurationAcknowledgement;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
+import net.maddkraft.maddprestige.core.requirement.CompletionMode;
+import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
 
 public final class SetupWizardService {
     private static final String ANY_METRIC = "*";
@@ -59,6 +67,7 @@ public final class SetupWizardService {
     private final Clock clock;
     private final Duration lifetime;
     private final Map<UUID, Session> sessions = new ConcurrentHashMap<>();
+    private final Map<Actor, UUID> currentSessions = new ConcurrentHashMap<>();
     private final Map<UUID, UUID> acknowledgementSessions = new ConcurrentHashMap<>();
 
     public SetupWizardService(ConfigurationAdministrationService configuration) {
@@ -126,7 +135,35 @@ public final class SetupWizardService {
         sessions.put(id, new Session(subject, Optional.empty(), List.of(), Optional.empty(), Optional.empty(),
                 Map.of(), Optional.empty(), Optional.empty(), SetupPrestige.disabled(), Optional.empty(),
                 Instant.now(clock).plus(lifetime)));
+        currentSessions.put(subject.actor(), id);
         return id;
+    }
+
+    /** Returns the current unexpired setup session owned by the actor. */
+    public UUID currentSession(PermissionSubject subject) {
+        subject.require(PhaseSixPermissions.SETUP);
+        pruneExpired();
+        UUID sessionId = currentSessions.get(subject.actor());
+        if (sessionId == null || !sessions.containsKey(sessionId)) {
+            throw setupFailure("setup.session.unknown",
+                    "This administrator has no current setup session.",
+                    "Run /maddprestige setup start, then continue without pasting its UUID.");
+        }
+        require(subject, sessionId);
+        return sessionId;
+    }
+
+    /** Returns an in-memory snapshot used only for contextual tab completion. */
+    public Optional<SetupCompletion> currentCompletion(PermissionSubject subject) {
+        if (!subject.has(PhaseSixPermissions.SETUP)) {
+            return Optional.empty();
+        }
+        UUID sessionId = currentSessions.get(subject.actor());
+        Session session = sessionId == null ? null : sessions.get(sessionId);
+        return session == null || !Instant.now(clock).isBefore(session.expiresAt())
+                || !session.subject().actor().equals(subject.actor()) ? Optional.empty()
+                : Optional.of(new SetupCompletion(sessionId,
+                        session.stages().stream().map(stage -> stage.id().value()).toList()));
     }
 
     public void selectRankProvider(PermissionSubject subject, UUID sessionId, Optional<ProviderId> providerId) {
@@ -172,9 +209,10 @@ public final class SetupWizardService {
 
     public void configureRequirement(PermissionSubject subject, UUID sessionId, SetupRequirement requirement) {
         Session session = require(subject, sessionId);
-        rejectUnconfigurableRequirement(Objects.requireNonNull(requirement, "requirement"));
+        SetupRequirement replacement = canonicalRequirement(Objects.requireNonNull(requirement, "requirement"));
+        rejectUnconfigurableRequirement(replacement);
         discardDraft(subject, session);
-        sessions.put(sessionId, session.withRequirement(requirement));
+        sessions.put(sessionId, session.withRequirement(replacement));
     }
 
     public void configureRequirementForStage(
@@ -189,7 +227,7 @@ public final class SetupWizardService {
                     "The baseline stage cannot require eligibility progress.",
                     "Choose a stage after the baseline.", "stage", stageId.value());
         }
-        SetupRequirement replacement = Objects.requireNonNull(requirement, "requirement");
+        SetupRequirement replacement = canonicalRequirement(Objects.requireNonNull(requirement, "requirement"));
         rejectUnconfigurableRequirement(replacement);
         boolean duplicate = session.requirement().filter(value -> value.id().equals(replacement.id())).isPresent()
                 || session.stageRequirements().entrySet().stream()
@@ -203,6 +241,26 @@ public final class SetupWizardService {
         }
         discardDraft(subject, session);
         sessions.put(sessionId, session.withStageRequirement(stageId, replacement));
+    }
+
+    /** Configures the normal owner-facing Paper playtime requirement with canonical safe defaults. */
+    public void configurePlaytimeRequirement(
+            PermissionSubject subject,
+            UUID sessionId,
+            net.maddkraft.maddprestige.api.id.StageId stageId,
+            String target) {
+        Objects.requireNonNull(stageId, "stage ID");
+        String suffix = "_playtime";
+        String candidate = stageId.value() + suffix;
+        if (candidate.length() > 64) {
+            String fingerprint = Integer.toUnsignedString(stageId.value().hashCode(), 36);
+            candidate = stageId.value().substring(0, 64 - suffix.length() - fingerprint.length() - 1)
+                    + "_" + fingerprint + suffix;
+        }
+        configureRequirementForStage(subject, sessionId, stageId, new SetupRequirement(
+                new RequirementId(candidate), new ProviderId("paper_statistics"),
+                new MetricId("play_one_minute"), "GREATER_OR_EQUAL", target,
+                "SINCE_PRESTIGE_START", "LIVE"));
     }
 
     public void configureCost(PermissionSubject subject, UUID sessionId, SetupCost cost) {
@@ -268,6 +326,7 @@ public final class SetupWizardService {
         return configuration.applySetup(subject, draftId, acknowledgements, reason)
                 .thenApply(revision -> {
                     sessions.remove(sessionId);
+                    currentSessions.remove(subject.actor(), sessionId);
                     return revision;
                 });
     }
@@ -300,6 +359,7 @@ public final class SetupWizardService {
         return configuration.confirmAcknowledgement(subject, acknowledgementId, reason).thenApply(revision -> {
             acknowledgementSessions.remove(acknowledgementId, sessionId);
             sessions.remove(sessionId);
+            currentSessions.remove(subject.actor(), sessionId);
             return revision;
         });
     }
@@ -308,6 +368,7 @@ public final class SetupWizardService {
         Session session = require(subject, sessionId);
         discardDraft(subject, session);
         sessions.remove(sessionId);
+        currentSessions.remove(subject.actor(), sessionId);
         acknowledgementSessions.entrySet().removeIf(entry -> entry.getValue().equals(sessionId));
     }
 
@@ -336,6 +397,7 @@ public final class SetupWizardService {
         sessions.forEach((id, session) -> {
             if (!now.isBefore(session.expiresAt()) && sessions.remove(id, session)) {
                 discardDraft(session.subject(), session);
+                currentSessions.remove(session.subject().actor(), id);
                 acknowledgementSessions.entrySet().removeIf(entry -> entry.getValue().equals(id));
             }
         });
@@ -417,7 +479,8 @@ public final class SetupWizardService {
             yaml.append("requirements: {}\ntrees: {}\n");
         } else {
             yaml.append("requirements:\n");
-            definitions.values().forEach(value -> appendRequirement(yaml, value, requirementValueType(value)));
+            definitions.values().forEach(value -> appendRequirement(yaml, value,
+                    value.valueType().orElseGet(() -> requirementValueType(value)).name()));
             yaml.append("trees:\n");
             session.requirement().ifPresent(value -> appendTree(yaml, "setup_eligibility", value));
             session.stages().stream().map(SetupStage::id).forEach(stage -> Optional.ofNullable(
@@ -679,12 +742,102 @@ public final class SetupWizardService {
                 "provider", provider, "component", integration, "requirement", requiredParameters);
     }
 
-    private String requirementValueType(SetupRequirement requirement) {
+    private SetupRequirement canonicalRequirement(SetupRequirement requirement) {
+        MetricValueType valueType = requirementValueType(requirement);
+        MetricOperator operator = requirementOperator(requirement, valueType);
+        if (!operator.supports(valueType) || operator == MetricOperator.IN_RANGE) {
+            throw invalidRequirementOperator(requirement, valueType, operator.name());
+        }
+        MetricValue target;
+        try {
+            target = MetricValue.parse(valueType, requirement.target().strip());
+        } catch (RuntimeException exception) {
+            throw invalidRequirementTarget(requirement, valueType);
+        }
+        MeasurementScope scope = requirementScope(requirement);
+        CompletionMode completion = requirementCompletion(requirement);
+        return new SetupRequirement(requirement.id(), requirement.providerId(), requirement.metricId(),
+                operator.name(), target.canonical(), scope.name(), completion.name(), Optional.of(valueType));
+    }
+
+    private static AdministrationException setupFailure(
+            String code, String summary, String remediation, Object... facts) {
+        return new AdministrationException(code, summary, remediation, facts);
+    }
+
+    private static MetricOperator requirementOperator(SetupRequirement requirement, MetricValueType valueType) {
+        try {
+            return enumValue(MetricOperator.class, requirement.operator());
+        } catch (RuntimeException exception) {
+            throw invalidRequirementOperator(requirement, valueType, requirement.operator());
+        }
+    }
+
+    private static MeasurementScope requirementScope(SetupRequirement requirement) {
+        try {
+            return enumValue(MeasurementScope.class, requirement.scope());
+        } catch (RuntimeException exception) {
+            throw new AdministrationException("setup.requirement.scope.invalid",
+                    "Unknown setup measurement scope: " + requirement.scope(),
+                    "Use one of the documented measurement scopes.",
+                    "scope", requirement.scope(), "allowed", enumNames(MeasurementScope.class),
+                    "provider", requirement.providerId().value(), "metric", requirement.metricId().value());
+        }
+    }
+
+    private static CompletionMode requirementCompletion(SetupRequirement requirement) {
+        try {
+            return enumValue(CompletionMode.class, requirement.completion());
+        } catch (RuntimeException exception) {
+            throw new AdministrationException("setup.requirement.completion.invalid",
+                    "Unknown setup completion mode: " + requirement.completion(),
+                    "Use one of the documented completion modes.",
+                    "completion", requirement.completion(), "allowed", enumNames(CompletionMode.class),
+                    "provider", requirement.providerId().value(), "metric", requirement.metricId().value());
+        }
+    }
+
+    private static AdministrationException invalidRequirementTarget(
+            SetupRequirement requirement, MetricValueType valueType) {
+        return new AdministrationException("setup.requirement.target.invalid",
+                "Target " + requirement.target() + " is not a valid " + valueType + " value.",
+                valueType == MetricValueType.DURATION
+                        ? "Use ISO-8601 such as PT1M or PT3M, or a supported short duration such as 1m or 3m."
+                        : "Use a target accepted by the selected metric type.",
+                "provider", requirement.providerId().value(), "metric", requirement.metricId().value(),
+                "type", valueType, "target", requirement.target());
+    }
+
+    private static AdministrationException invalidRequirementOperator(
+            SetupRequirement requirement, MetricValueType valueType, String operator) {
+        return new AdministrationException("setup.requirement.operator.invalid",
+                "Operator " + operator + " is not supported by this single-value " + valueType + " target.",
+                "Use one compatible single-value operator.",
+                "provider", requirement.providerId().value(), "metric", requirement.metricId().value(),
+                "type", valueType, "operator", operator, "allowed", compatibleOperators(valueType));
+    }
+
+    private static String compatibleOperators(MetricValueType valueType) {
+        return java.util.Arrays.stream(MetricOperator.values())
+                .filter(operator -> operator != MetricOperator.IN_RANGE && operator.supports(valueType))
+                .map(Enum::name).collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private static <T extends Enum<T>> String enumNames(Class<T> type) {
+        return java.util.Arrays.stream(type.getEnumConstants()).map(Enum::name)
+                .collect(java.util.stream.Collectors.joining(", "));
+    }
+
+    private static <T extends Enum<T>> T enumValue(Class<T> type, String value) {
+        return Enum.valueOf(type, value.strip().replace('-', '_').toUpperCase(java.util.Locale.ROOT));
+    }
+
+    private MetricValueType requirementValueType(SetupRequirement requirement) {
         return providers.flatMap(registry -> registry.provider(requirement.providerId()))
                 .filter(MetricProvider.class::isInstance).map(MetricProvider.class::cast)
                 .flatMap(provider -> provider.metrics().stream()
                         .filter(metric -> metric.metricId().equals(requirement.metricId())).findFirst())
-                .map(metric -> metric.valueType().name())
+                .map(metric -> metric.valueType())
                 .orElseThrow(() -> new AdministrationException("setup.requirement.metric_unknown",
                         "The selected setup metric has no authoritative value type: "
                                 + requirement.providerId().value() + ":" + requirement.metricId().value(),
@@ -746,6 +899,13 @@ public final class SetupWizardService {
                     "The " + field + " contains an unsupported control character.",
                     "Use printable Unicode text; line breaks and tabs will be escaped safely.",
                     "component", field);
+        }
+    }
+
+    public record SetupCompletion(UUID sessionId, List<String> stageIds) {
+        public SetupCompletion {
+            sessionId = Objects.requireNonNull(sessionId, "session ID");
+            stageIds = List.copyOf(Objects.requireNonNull(stageIds, "stage IDs"));
         }
     }
 
