@@ -151,7 +151,7 @@ class PhaseFourLifecycleTest {
     }
 
     @Test
-    @DisplayName("[A58][A59] Restart recovery verifies committed internal state without duplicate effects")
+    @DisplayName("[A58][A59][Phase 9B] Restart recovery preserves numeric state without stage mutation")
     void recoversCommittedInternalTransactionExactlyOnce() throws Exception {
         try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
             Fixture fixture = fixture(database, true, true, Optional.empty(), Map.of());
@@ -169,7 +169,7 @@ class PhaseFourLifecycleTest {
             var outcome = restarted.recover(100).getFirst();
 
             assertEquals(OperationState.COMPLETED, outcome.state());
-            assertEquals(ORIGIN, new SqlitePlayerStageRepository(database.foundation())
+            assertEquals(SUMMIT, new SqlitePlayerStageRepository(database.foundation())
                     .find(fixture.playerId).orElseThrow().stageId());
             var prestige = new SqlitePlayerPrestigeRepository(database.foundation())
                     .find(fixture.playerId).orElseThrow();
@@ -181,10 +181,8 @@ class PhaseFourLifecycleTest {
                     .history(fixture.playerId, CURRENCY, 10).size());
             assertTrue(fixture.lifecycle.awarded(fixture.playerId, MILESTONE, "once"));
             assertEquals(1, fixture.lifecycle.history(fixture.playerId, 10).size());
-            assertEquals("Prestige reset", new SqlitePlayerStageRepository(database.foundation())
-                    .history(fixture.playerId, 10).getFirst().reason());
-            assertEquals(Optional.of(fixture.playerId), new SqlitePlayerStageRepository(database.foundation())
-                    .history(fixture.playerId, 10).getFirst().actor().uuid());
+            assertTrue(new SqlitePlayerStageRepository(database.foundation())
+                    .history(fixture.playerId, 10).isEmpty());
             assertTrue(restarted.recover(100).isEmpty());
         }
     }
@@ -202,6 +200,55 @@ class PhaseFourLifecycleTest {
             assertEquals(PrestigeExecutionStatus.FAILED, executor.execute(second).status());
             assertEquals(1, fixture.prestigeStates.find(fixture.playerId).orElseThrow().currentPrestige());
             assertEquals(1, fixture.lifecycle.history(fixture.playerId, 10).size());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9B] A milestone-only reward executes without an every-Prestige reward")
+    void milestoneOnlyRewardExecutesAtConfiguredLevel() throws Exception {
+        try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
+            ProviderRegistry providers = new ProviderRegistry();
+            ProviderId providerId = new ProviderId("milestone_reward");
+            FakeRewardProvider provider = new FakeRewardProvider(providerId);
+            var registration = providers.register("maddprestige-testkit", provider);
+            providers.activate(registration);
+            RewardDefinition reward = new RewardDefinition(new RewardId("milestone_only"), providerId,
+                    "generic", MetricValue.count(1), Map.of(), "Milestone only", RewardFailurePolicy.REQUIRED,
+                    RewardRepeatability.ONCE_PER_OPERATION);
+            Fixture fixture = fixture(database, false, true, List.of(), Optional.of(reward),
+                    Map.of(providerId, registration.generation()), providers, ResetPreservePolicy.safeDefaults(),
+                    StageProjection.none(), false);
+
+            PrestigePlan plan = fixture.plan("milestone-only");
+            assertEquals(1, plan.rewards().size());
+            assertEquals(PrestigeExecutionStatus.COMPLETED, fixture.executor().execute(plan).status());
+            assertEquals(1, provider.executionAttempts());
+            assertTrue(fixture.lifecycle.awarded(fixture.playerId, MILESTONE, "once"));
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9B] Every-Prestige and milestone rewards execute together at the same numeric level")
+    void everyPrestigeAndMilestoneRewardsCompose() throws Exception {
+        try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
+            ProviderRegistry providers = new ProviderRegistry();
+            ProviderId providerId = new ProviderId("combined_reward");
+            FakeRewardProvider provider = new FakeRewardProvider(providerId);
+            var registration = providers.register("maddprestige-testkit", provider);
+            providers.activate(registration);
+            RewardDefinition reward = new RewardDefinition(new RewardId("combined_bonus"), providerId,
+                    "generic", MetricValue.count(1), Map.of(), "Combined bonus", RewardFailurePolicy.REQUIRED,
+                    RewardRepeatability.ONCE_PER_OPERATION);
+            Fixture fixture = fixture(database, false, true, List.of(), Optional.of(reward),
+                    Map.of(providerId, registration.generation()), providers, ResetPreservePolicy.safeDefaults(),
+                    StageProjection.none(), true);
+
+            PrestigePlan plan = fixture.plan("combined-rewards");
+
+            assertEquals(2, plan.rewards().size());
+            assertEquals(PrestigeExecutionStatus.COMPLETED, fixture.executor().execute(plan).status());
+            assertEquals(2, provider.executionAttempts());
+            assertTrue(fixture.lifecycle.awarded(fixture.playerId, MILESTONE, "once"));
         }
     }
 
@@ -428,8 +475,8 @@ class PhaseFourLifecycleTest {
                     new PhaseFourConfigurationSnapshot(REVISION, phaseFour, pins));
             SqlitePrestigeLifecycleRepository lifecycle = new SqlitePrestigeLifecycleRepository(database.foundation());
             PrestigeAuthorizationService authorization = new PrestigeAuthorizationService(() -> Optional.of(active),
-                    stageStates::find, prestigeStates::find,
-                    (ignored, stage, state, configuration) -> new PrestigeProgressContext(playerId, REVISION,
+                    prestigeStates::find,
+                    (ignored, state, configuration) -> new PrestigeProgressContext(playerId, REVISION,
                             state.currentPrestige(), ExactDecimal.ZERO, new ScopeContext(Map.of(
                                     MeasurementScope.SINCE_PRESTIGE_START, state.prestigeScope()))),
                     requirementStates, providers, new SqliteCurrencyLedgerStore(database.foundation()), lifecycle,
@@ -512,7 +559,7 @@ class PhaseFourLifecycleTest {
                     assertEquals(scoped == ResetDisposition.RESET,
                             plan.simulation().scopedRequirementState().newScopeEstablished());
                     assertEquals(PrestigeExecutionStatus.COMPLETED, fixture.executor().execute(plan).status());
-                    assertEquals(ORIGIN, fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
+                    assertEquals(SUMMIT, fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
                     assertEquals(plan.simulation().prestigeScopeAfter(), fixture.prestigeStates
                             .find(fixture.playerId).orElseThrow().prestigeScope());
                     assertEquals(1, fixture.prestigeStates.find(fixture.playerId).orElseThrow().lifetimePrestige());
@@ -522,7 +569,7 @@ class PhaseFourLifecycleTest {
                     assertEquals(currency == ResetDisposition.RESET ? 1 : 0,
                             ledger.history(fixture.playerId, CURRENCY, 10).size());
                     assertTrue(fixture.lifecycle.awarded(fixture.playerId, MILESTONE, "once"));
-                    assertEquals(1, fixture.stageStates.history(fixture.playerId, 10).size());
+                    assertTrue(fixture.stageStates.history(fixture.playerId, 10).isEmpty());
                 }
             }
         }
@@ -707,7 +754,7 @@ class PhaseFourLifecycleTest {
     }
 
     @Test
-    @DisplayName("[A69] Prestige sourced from a removed stage performs no cost, projection, commit, or reward")
+    @DisplayName("[Phase 9B] Stage remap does not fence or project a numeric Prestige operation")
     void configurationFenceRechecksPrestigeBeforeEveryEffect() throws Exception {
         try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
             ProviderRegistry providers = new ProviderRegistry();
@@ -746,21 +793,21 @@ class PhaseFourLifecycleTest {
                             ORIGIN, ConfigurationStageReservationKind.DISABLED), Optional.of(remap),
                     new Actor("console", Optional.empty(), "Owner"), "pause before activation", NOW);
 
-            assertEquals(PrestigeExecutionStatus.UNAUTHORIZED,
+            assertEquals(PrestigeExecutionStatus.COMPLETED,
                     fixture.executor(fence).execute(authorizedBeforeRemap).status());
-            assertEquals(OperationState.FAILED,
+            assertEquals(OperationState.COMPLETED,
                     fixture.operations.find(authorizedBeforeRemap.operationId()).orElseThrow().state());
-            assertEquals(new java.math.BigDecimal("5"), cost.balance(fixture.playerId));
+            assertEquals(new java.math.BigDecimal("4"), cost.balance(fixture.playerId));
             assertEquals(0, rank.projectionAttempts.get());
-            assertEquals(0, reward.executionAttempts());
+            assertEquals(1, reward.executionAttempts());
             assertEquals(new StageId("replacement_summit"),
                     fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
-            assertEquals(0, fixture.prestigeStates.find(fixture.playerId).orElseThrow().currentPrestige());
+            assertEquals(1, fixture.prestigeStates.find(fixture.playerId).orElseThrow().currentPrestige());
         }
     }
 
     @Test
-    @DisplayName("[A69] A Prestige source-stage lease wins before remap and releases after terminal completion")
+    @DisplayName("[Phase 9B] Numeric Prestige and legacy stage remap have independent concurrency domains")
     void prestigeSourceOperationWinsThenRemapRetriesSafely() throws Exception {
         try (DisposableSqliteFixture database = DisposableSqliteFixture.create()) {
             ProviderRegistry providers = new ProviderRegistry();
@@ -793,30 +840,18 @@ class PhaseFourLifecycleTest {
                     CompletableFuture.supplyAsync(() -> fixture.executor(fence).execute(plan));
             assertTrue(costStarted.await(10, TimeUnit.SECONDS));
 
-            assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
-                    () -> fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
-                            Map.of(ORIGIN, ConfigurationStageReservationKind.REMOVED), Optional.empty(),
-                            new Actor("console", Optional.empty(), "Owner"),
-                            "Prestige zero-reference reset target lease must win", NOW));
-            assertThrows(net.maddkraft.maddprestige.core.stage.StageTransitionBlockedException.class,
-                    () -> fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
-                            Map.of(SUMMIT, ConfigurationStageReservationKind.REMOVED), Optional.of(staleSnapshot),
-                            new Actor("console", Optional.empty(), "Owner"),
-                            "Prestige source lease must win", NOW));
-            assertEquals(SUMMIT, fixture.stageStates.find(waitingPlayer).orElseThrow().stageId());
-            allowCompletion.countDown();
-            assertEquals(PrestigeExecutionStatus.COMPLETED, executing.get(10, TimeUnit.SECONDS).status());
-            assertEquals(ORIGIN, fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
-            assertEquals(new java.math.BigDecimal("4"), cost.balance(fixture.playerId));
-            assertTrue(fence.leases(10).isEmpty());
-
-            var freshSnapshot = fence.capture(Optional.of(remapPlan)).remap().orElseThrow();
             fence.beginTransition(removalRevision, Optional.of(REVISION), removalHash,
-                    Map.of(SUMMIT, ConfigurationStageReservationKind.REMOVED), Optional.of(freshSnapshot),
+                    Map.of(SUMMIT, ConfigurationStageReservationKind.REMOVED), Optional.of(staleSnapshot),
                     new Actor("console", Optional.empty(), "Owner"),
-                    "retry after Prestige completion", NOW.plusSeconds(1));
+                    "numeric Prestige has no stage lease", NOW);
             assertEquals(new StageId("replacement_summit"),
                     fixture.stageStates.find(waitingPlayer).orElseThrow().stageId());
+            allowCompletion.countDown();
+            assertEquals(PrestigeExecutionStatus.COMPLETED, executing.get(10, TimeUnit.SECONDS).status());
+            assertEquals(new StageId("replacement_summit"),
+                    fixture.stageStates.find(fixture.playerId).orElseThrow().stageId());
+            assertEquals(new java.math.BigDecimal("4"), cost.balance(fixture.playerId));
+            assertTrue(fence.leases(10).isEmpty());
         }
     }
 
@@ -863,7 +898,7 @@ class PhaseFourLifecycleTest {
             ResetPreservePolicy resetPolicy,
             StageProjection resetProjection) {
         return fixture(database, currency, milestone, cost.stream().toList(), reward, pins, providers, resetPolicy,
-                resetProjection);
+                resetProjection, true);
     }
 
     private static Fixture fixture(
@@ -875,7 +910,8 @@ class PhaseFourLifecycleTest {
             Map<ProviderId, Long> pins,
             ProviderRegistry providers,
             ResetPreservePolicy resetPolicy,
-            StageProjection resetProjection) {
+            StageProjection resetProjection,
+            boolean everyPrestigeReward) {
         new SqliteConfigRevisionRepository(database.foundation()).insert(REVISION,
                 RevisionHasher.hashText("phase four lifecycle"));
         UUID playerId = UUID.randomUUID();
@@ -903,7 +939,8 @@ class PhaseFourLifecycleTest {
         PrestigeConfiguration prestige = new PrestigeConfiguration(true, Set.of(SUMMIT), ORIGIN, 1, 1,
                 PrestigeLimit.finite(1), Duration.ZERO, Optional.empty(),
                 costs.stream().map(CostDefinition::id).toList(),
-                rewardId == null ? List.of() : List.of(rewardId), Optional.empty(), Optional.empty(),
+                rewardId == null || !everyPrestigeReward ? List.of() : List.of(rewardId),
+                Optional.empty(), Optional.empty(),
                 resetPolicy, false);
         Map<CurrencyId, CurrencyDefinition> currencies = currency ? Map.of(CURRENCY,
                 new CurrencyDefinition(CURRENCY, "Credits", Optional.of("¤"), 2, RoundingMode.UNNECESSARY, 12,
@@ -911,7 +948,7 @@ class PhaseFourLifecycleTest {
         Map<MilestoneId, MilestoneDefinition> milestones = milestone ? Map.of(MILESTONE,
                 new MilestoneDefinition(MILESTONE, "First", true, MilestoneTriggerType.CURRENT_PRESTIGE,
                         MetricValue.count(1), Optional.empty(), Optional.empty(), MilestoneRepeatability.ONCE,
-                        List.of())) : Map.of();
+                        rewardId == null ? List.of() : List.of(rewardId))) : Map.of();
         PhaseFourConfiguration phaseFour = new PhaseFourConfiguration(4, prestige, currencies, Map.of(), milestones,
                 Map.of(), CompetitionConfiguration.disabled());
         ActiveStageConfiguration prior = new ActiveStageConfiguration(
@@ -923,8 +960,8 @@ class PhaseFourLifecycleTest {
         SqlitePrestigeLifecycleRepository lifecycle = new SqlitePrestigeLifecycleRepository(database.foundation());
         SqliteCurrencyLedgerStore ledger = new SqliteCurrencyLedgerStore(database.foundation());
         PrestigeAuthorizationService authorization = new PrestigeAuthorizationService(() -> Optional.of(active),
-                stageStates::find, prestigeStates::find,
-                (ignored, stage, state, configuration) -> new PrestigeProgressContext(playerId, REVISION,
+                prestigeStates::find,
+                (ignored, state, configuration) -> new PrestigeProgressContext(playerId, REVISION,
                         state.currentPrestige(), ExactDecimal.ZERO, new ScopeContext(Map.of(
                                 MeasurementScope.SINCE_PRESTIGE_START, state.prestigeScope()))),
                 requirementStates, providers, ledger, lifecycle, ActiveSeasonContext::none, CLOCK);
@@ -955,7 +992,7 @@ class PhaseFourLifecycleTest {
             Fixture fixture = fixture(database, true, false, costs, Optional.empty(),
                     Map.of(nativeId, nativeRegistration.generation(),
                             externalId, externalRegistration.generation()),
-                    providers, ResetPreservePolicy.safeDefaults(), StageProjection.none());
+                    providers, ResetPreservePolicy.safeDefaults(), StageProjection.none(), true);
             externalProvider.balance(fixture.playerId, "10");
             PrestigePlan plan = fixture.plan("mixed-recovery-" + nativeFirst);
             int nativeIndex = nativeFirst ? 0 : 1;

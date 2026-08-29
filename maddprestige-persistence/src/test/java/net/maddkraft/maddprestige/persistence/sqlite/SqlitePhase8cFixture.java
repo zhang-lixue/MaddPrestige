@@ -81,6 +81,19 @@ final class SqlitePhase8cFixture {
                     + "lifetime_prestige, state_revision, config_revision_id, prestige_scope_id, last_prestiged_at, "
                     + "created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", PLAYER.toString(), 3, 5, 9L,
                     REVISION, "global", CLOCK.instant().toString(), CLOCK.instant().toString(), CLOCK.instant().toString());
+            execute(foundation, "INSERT INTO mp_prestige_operation_details (operation_id, source_stage_id, "
+                    + "reset_stage_id, expected_prestige_revision, current_before, current_after, lifetime_before, "
+                    + "lifetime_after, scope_before, scope_after, stage_config_provenance, "
+                    + "prestige_config_provenance, confirmation_snapshot, planned_at) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", OPERATION.toString(), "veteran",
+                    "member", 9L, 3, 4, 5, 6, "global", "global", REVISION, REVISION, "fixture snapshot",
+                    CLOCK.instant().toString());
+            execute(foundation, "INSERT INTO mp_prestige_history (history_id, player_uuid, operation_id, "
+                    + "event_type, source_stage_id, reset_stage_id, current_before, current_after, lifetime_before, "
+                    + "lifetime_after, result, costs_snapshot, rewards_snapshot, config_revision_id, occurred_at) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", UUID.randomUUID().toString(),
+                    PLAYER.toString(), OPERATION.toString(), "PRESTIGE_COMPLETED", "veteran", "member", 3, 4, 5, 6,
+                    "SUCCESS", "fixture costs", "fixture rewards", REVISION, CLOCK.instant().toString());
             execute(foundation, "INSERT INTO mp_currency_ledger (operation_id, action_id, player_uuid, currency_id, "
                     + "delta_text, balance_after_text, mutation_kind, actor_type, actor_name, source, reason, "
                     + "config_revision_id, occurred_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",

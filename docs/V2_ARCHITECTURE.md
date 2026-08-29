@@ -1,7 +1,9 @@
 # MaddPrestige V2 architecture
 
-**Architecture baseline:** Owner-accepted Phase 8F final release candidate, 2026-08-28
-**Runtime status:** the V2 Paper entry composes the owner-accepted Phase 1-8F runtime. Compatibility baseline `2.x-stable-1` is owner-frozen; targeted Owner Review 3 and the real-player owner-operated A76 run pass against exact `2.0.0-rc.1`. Phase 8 is complete, while Phase 9 MaddKraft deployment/migration/production qualification has not started and GA readiness is not claimed.
+**Architecture baseline:** Phase 9B numeric Prestige owner-review candidate, 2026-08-29
+**Runtime status:** the V2 Paper entry advances one durable numeric Prestige level without a stage/rank/LuckPerms
+ladder. Compatibility baseline `2.x-stable-1` remains unchanged. No real clone qualification, live deployment, V1
+player import, or production-balance selection has occurred, and GA readiness is not claimed.
 
 ## Module graph
 
@@ -20,10 +22,15 @@ api/core/persistence ────────┘
 ```
 
 - `maddprestige-api` contains immutable public value objects, typed metric/cost/reward/provider contracts, identifiers, structured results, provider metadata, operation plans, validation, explanations, audit contracts, and the asynchronous generic rank-adapter contract. It imports no Paper, SQL, Vault, LuckPerms, or V1 types.
-- `maddprestige-core` contains schema/configuration, lossless YAML documents, provider registry, typed requirement trees/scopes/scaling/catch-up, manual progress, safe command rewards, immutable rank-up and Prestige authorization/simulation, exact internal currency contracts, entitlement merging, milestone/season models, operation state validation, arbitrary ordered stages, reconciliation decisions, legacy plans, and generic safe defaults. It imports no Paper, SQL, or external plugin APIs.
-- `maddprestige-persistence` owns repository interfaces, JDBC boundaries, backup verification, deterministic migration history, UUID-first player-stage/Prestige/baseline/latch/manual/season/currency state, persisted rank-up/Prestige/projection/reconciliation coordination, bounded startup recovery, the disposable SQLite V2 schema, and external-backend contract harness.
-- `maddprestige-platform-paper` owns the V2 production composition, explicit Paper server-thread/worker boundaries, built-in Bukkit statistic/world capabilities, durable Phase 5 event-source plumbing and optional dependency/service/event lifecycle observation.
-- `maddprestige-integrations` owns dependency-health classification, the first-party LuckPerms 5.5 rank adapter, accepted Phase 5 implementations and isolated Phase 7 GriefPrevention/WorldGuard/CraftEngine public-API adapters. Vendor APIs remain provided/optional and are never imported by generic core.
+- `maddprestige-core` contains numeric Prestige authorization, immutable configuration, typed provider requirements,
+  distinct costs/rewards, independent segmented scaling, currency/shop mechanics, milestones/seasons, and retained
+  stage/rank compatibility types. It imports no Paper, SQL, or external plugin APIs.
+- `maddprestige-persistence` owns numeric Prestige state, journaled/recoverable transitions, requirement scopes,
+  ledgers/milestones/history, deterministic migrations/backups, and retained compatibility tables.
+- `maddprestige-platform-paper` composes the numeric runtime, initializes fresh players at Prestige 0, blocks rank-up
+  as compatibility-only, and owns explicit server-thread/worker/provider lifecycle boundaries.
+- `maddprestige-integrations` owns isolated optional providers. LuckPerms grants configured additive permission/existing
+  group rewards without creating groups or owning progression; mcMMO supplies provider-owned `total_level` reads.
 - `maddprestige-testkit` provides fake rank/currency/progression/cost/reward providers, health simulation, failure injection, action fakes, golden configuration helpers, and disposable SQLite fixtures.
 - `maddprestige-distribution` packages the active V2 entry and shaded first-party modules while keeping optional third-party APIs provided and unshaded. Frozen V1 Java remains unchanged for regression evidence but is not the active descriptor entry.
 
@@ -39,23 +46,25 @@ api/core/persistence ────────┘
 8. Active configuration is one atomic immutable reference. Invalid/unacknowledged candidates and unverified backups cannot activate.
 9. Exact decimals enter through decimal text or `BigDecimal`, never through `double`.
 10. Paper-thread work and asynchronous work are explicit scheduler targets.
-11. Stage state stores UUID plus immutable `StageId`; display, ordinal, and external group are configuration/provider data.
+11. Compatibility stage state stores UUID plus immutable `StageId`; it is not numeric Prestige authority.
 12. Contextual or temporary managed-group nodes are ambiguous, preserved, and never cleaned by name alone.
-13. A rank operation carries the exact managed set, desired projection, configuration revision, and provider generation that planned it.
+13. Retained rank operations carry exact compatibility authority; production numeric Prestige does not invoke them.
 14. Requirement evaluation is read-only; baseline and latch writes occur only in explicit lifecycle transition services.
 15. Unavailable, invalid, and error metric samples are distinct from unsatisfied and never become numeric zero.
 16. Costs sharing a provider are preflighted as one batch; required rewards preflight before cost consumption.
 17. Canonical rank-up authorization, not a caller-composed evaluation/action list, resolves the legal transition and seals the exact plan.
-18. For projected stages, execution orders verified costs → journaled external projection → optimistic internal commit → rewards; uncertainty/divergence requires reconciliation.
+18. Compatibility projected-stage execution retains its accepted ordering; numeric Prestige performs no projection.
 19. Command actions remain disabled unless exact templates, normalized roots, structured tokens, and bounded operation limits validate; recursion uses trusted runtime context, not metadata.
-20. Active stage and Phase 3 configuration publish as one revision-consistent immutable snapshot pair retaining the exact validated active/reference provider-generation pins.
+20. Configuration publication remains revision-consistent; inactive stage documents may be empty for numeric Prestige.
 21. Reversible cost compensation has a distinct preplanned action record and never erases original effect evidence.
 22. `RankUpIntent` is request intent only. Trusted engine composition supplies scaling index, catch-up position, lifecycle scope identities, and persistent requirement state; a UI/API caller cannot assert them.
 23. `PlayerStageState.configRevision` is historical provenance for the configuration that last wrote that row. A rank-up separately binds that observed source revision and the current active revision governing the new plan/write.
 24. Rank projection is a required provider role during planning/simulation: its exact pin must be active, healthy, and a `RankAdapter`. Optional reward health remains role-local and may omit only that reward.
 25. A blocked canonical plan carries denied authority. An executable authorization seals every execution-consequential plan field and is checked before journal insertion; `unavailableProviders` remains diagnostic-only because no execution decision consumes it.
-26. Prestige has its own intent-only authorization and plan because its multi-domain reset transaction is not a rank-up, while sharing the accepted operation/action journal.
-27. A successful Prestige changes stage, current/lifetime counts, Prestige scope/baselines, configured internal currency, milestone awards and stage/Prestige history in one SQLite transaction guarded by both stage and Prestige CAS revisions.
+26. Prestige has its own intent-only authorization and plan because numeric progression is not rank-up, while sharing
+    the accepted operation/action journal.
+27. A successful Prestige advances current/lifetime numeric counts exactly one and atomically updates only configured
+    MaddPrestige scopes/baselines, currency, milestones, and Prestige history. It performs no stage CAS or history.
 28. Internal currency identity is independent of display metadata; all mutations are exact, bounded, audited, transactionally ledgered and idempotent by operation/action ID.
 29. External metric read capability never implies reset authority. Phase 4 external resets are disabled and unsupported configuration fails closed.
 30. Seasons are one-active progression-data containers with immutable scope/archive history; they never own world or unrelated gameplay lifecycle.
@@ -66,7 +75,10 @@ api/core/persistence ────────┘
 35. SQLite, not a process-local monitor, is the internal-currency concurrency authority. Independent connections use transactions, uniqueness, and bounded contention retry. Currency replay equivalence binds financial identity plus actor type/UUID/name, source, reason, and configuration revision; retry timestamps are not identity.
 36. Season entry, its authoritative `ACTIVE` qualification, and all required season baselines share one transaction. Active progress updates use a conditional `ACTIVE` write; archive makes normal season progress immutable.
 37. Recovery may replay only exact persisted native idempotent payloads through the same healthy generation, or compensate exact known-applied native reversible/idempotent costs. Terminal `COMPENSATED` requires every consequential cost effect to be reversed or proven absent; any mixed uncertain external cost keeps `NEEDS_RECONCILIATION` even after safe native compensation.
-38. Normal rank-up and Prestige-reset stage history persist complete actor type/optional UUID/name provenance. Migration 5 preserves legacy null-UUID rows while making actor UUID durable across restart.
+38. Numeric Prestige history persists complete actor provenance. Compatibility rank history remains historical;
+    migration 5 is unchanged and migration 12 marks new Prestige records `NUMERIC_LEVEL`.
+39. Fresh V2 initialization writes Prestige 0 without a stage row. Startup accepts that state, and V1 data is never
+    imported into the active V2 database.
 
 ## Configuration flow foundation
 

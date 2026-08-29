@@ -1,4 +1,15 @@
-# MaddKraft legacy migration mapping and rollback contract
+# MaddKraft legacy migration proposal - HISTORICAL / SUPERSEDED / NON-EXECUTABLE
+
+## Authoritative no-import policy
+
+MaddPrestige V2 starts fresh. It never reads or imports MaddPrestige V1 per-player state. V1 ranks, Prestige,
+Tea Leaves, perks, progress, pending operations, seasons/history/competition data, and preferences do not seed V2.
+No V1-to-V2 player migration executor will be built. External plugin data remains externally owned and untouched.
+Every newly established V2 player starts at numeric Prestige 0.
+
+The remainder of this document and the eight verbatim `OWNER_DECISION_REQUIRED` markers are retained solely as
+historical Phase 9A evidence of the former fail-closed migration proposal. They are resolved by supersession, are
+not unresolved owner decisions, and are not deployment requirements.
 
 ## Truth boundary
 
@@ -9,9 +20,9 @@ The repository contains a frozen V1 schema-1 fixture, not production MaddKraft p
 row, one `seasons` row, the singleton empty `hatter_holder`, and zero rows in every player, ledger, transaction,
 contest, grant, audit, and preference table. It cannot prove a real player-data migration.
 
-`qualification/phase9a/maddkraft-clone/legacy-migration-mapping.yml` is an owner-review template, not an executable
-manifest. Execution remains `blocked` while any `OWNER_DECISION_REQUIRED` value exists. No V1-to-V2 mutation executor
-is accepted yet; Phase 9A deliberately does not invent one before the data and meanings are approved.
+`qualification/phase9a/maddkraft-clone/legacy-migration-mapping.yml` is a historical owner-review template, not an
+executable manifest. Its `execution: blocked` value and eight decision markers record that the abandoned proposal
+failed closed. They no longer gate deployment because the accepted decision is no import and no executor.
 
 ## Exact V1 data inventory
 
@@ -66,7 +77,10 @@ config shape; it did not add mutation.
 | `gui`, `messages`, MaddKraft branding | archive/reference only; V2 canonical locale/UI configuration is separate |
 | world/chapter lifecycle commands | discard from MaddPrestige; external world systems remain owners |
 
-## Source inventory and manifest procedure
+## Superseded source inventory and manifest procedure
+
+This historical procedure must not be used to prepare or execute a V1 player import. It remains as review evidence
+for the proposal that was considered and rejected.
 
 With Paper stopped and the clone checkpoint immutable:
 
@@ -84,7 +98,7 @@ With Paper stopped and the clone checkpoint immutable:
 6. The dry-run report must enumerate every source row by category, exact destination or archive decision, skips,
    blockers, warnings, and expected destination counts. Aggregate-only output is insufficient.
 
-## Pre-migration backup contract
+## Superseded pre-migration backup proposal
 
 The server must be cleanly stopped before capturing the legacy source. A backup is accepted only when all of these are
 true:
@@ -105,9 +119,9 @@ directory backup: it validates V2 schema/history and is composed only for `maddp
 `FileBackupService` is valid only for already quiesced fixture files; the Phase 9 operator/host boundary must prove
 the source is stopped.
 
-## Migration execution contract
+## Superseded execution proposal - must not be implemented
 
-A future executor may run only after the owner has accepted the manifest and dry-run report. It must:
+The former proposal described an executor with the following constraints. No such executor will be built or run:
 
 - open the source read-only and verify its complete fingerprint again;
 - require the accepted backup/restore-rehearsal identity;
@@ -121,10 +135,10 @@ A future executor may run only after the owner has accepted the manifest and dry
 - reject changed source, mapping, configuration, provider generation, or prior destination state;
 - leave unresolved/failed players blocked and visible rather than silently defaulted.
 
-Because that executor is currently absent, actual clone migration is a production-readiness blocker, not work hidden by
-the Phase 9A plan.
+The absence of that executor is intentional and is not a production-readiness blocker. Qualification instead proves
+that fresh V2 initialization does not read or import V1 player data.
 
-## Post-migration reconciliation
+## Superseded post-migration reconciliation proposal
 
 For each mapped UUID, compare source decision, target stage/Prestige/currency/entitlements/history, LP managed group,
 unrelated LP memberships, and audit/run report. Compare source and destination aggregates by category, then sample all
@@ -135,7 +149,7 @@ The run is rejected if any source row lacks a report disposition, any destinatio
 initialization reason, any unrelated LP node changes, a missing group is created, a pending V1 transaction is replayed,
 or the second boot changes migration results.
 
-## Rollback criteria and procedure
+## Superseded migration rollback proposal
 
 Rollback immediately on backup/manifest mismatch, source fingerprint drift, unresolved affected mapping, V2 startup
 failure, schema/integrity failure, unexpected LP membership change, count mismatch, provider/reconciliation ambiguity,
@@ -153,7 +167,9 @@ unexplained console error, duplicate effect, or any failed readiness gate with u
 
 No Phase 9 rollback authorizes production changes. Promotion to production is a separate later owner action.
 
-## Owner decisions required before clone mutation
+## Historical owner questions - resolved by supersession
+
+These questions are not outstanding. The owner selected no import and no V1-to-V2 player mutation executor.
 
 1. Map each actual distinct legacy progression value to `wanderer`, `curious`, `dreamer`, `tea_guest`,
    `wonderlander`, `madcap`, or archive/reject.

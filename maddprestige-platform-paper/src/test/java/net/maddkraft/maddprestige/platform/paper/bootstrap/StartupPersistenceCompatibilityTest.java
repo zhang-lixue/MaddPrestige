@@ -1,6 +1,7 @@
 package net.maddkraft.maddprestige.platform.paper.bootstrap;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -164,7 +165,7 @@ class StartupPersistenceCompatibilityTest {
         boolean[] servicePublished = {false};
 
         assertThrows(PersistenceException.class, () -> {
-            SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC());
+            SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseNineB());
             servicePublished[0] = true;
         });
 
@@ -172,17 +173,25 @@ class StartupPersistenceCompatibilityTest {
     }
 
     @Test
-    @DisplayName("[A63] Current config reconstructs populated atomic stage and Prestige state")
+    @DisplayName("[A63][P9B] Populated Phase 8 stage state archives and starts under empty numeric config at P0")
     void acceptsReconstructiblePopulatedState() {
-        SqliteFoundation foundation = current("compatible.sqlite");
+        SqliteFoundation foundation = phaseEight("compatible.sqlite");
         StoredConfigurationRevision stored = revision(foundation, "revision-current", validDocuments(), NOW);
-        insertPlayer(foundation, stored.id(), "veteran", true);
+        UUID player = insertPlayer(foundation, stored.id(), "veteran", true);
+        migrate(foundation, SqliteMigrations.phaseNineB());
 
         assertDoesNotThrow(() -> StartupPersistenceCompatibility.assess(foundation, Optional.of(stored)));
+        assertEquals("0", scalar(foundation,
+                "SELECT COUNT(*) FROM mp_player_stage_state WHERE player_uuid='" + player + "'"));
+        assertEquals("veteran", scalar(foundation,
+                "SELECT stage_id FROM mp_legacy_stage_player_state WHERE player_uuid='" + player + "'"));
+        assertEquals("0:0", scalar(foundation,
+                "SELECT current_prestige || ':' || lifetime_prestige FROM mp_player_prestige_state "
+                        + "WHERE player_uuid='" + player + "'"));
     }
 
     @Test
-    @DisplayName("[A63] Stale pointer, unknown stage, and non-atomic player state fail closed")
+    @DisplayName("[A63][P9B] A stale active pointer remains fail closed")
     void rejectsIncompatibleDatabaseAuthority() {
         SqliteFoundation staleFoundation = current("stale.sqlite");
         StoredConfigurationRevision stale = revision(staleFoundation, "revision-stale", validDocuments(), NOW);
@@ -190,24 +199,21 @@ class StartupPersistenceCompatibilityTest {
         assertThrows(PersistenceException.class,
                 () -> StartupPersistenceCompatibility.assess(staleFoundation, Optional.of(stale)));
 
-        SqliteFoundation stageFoundation = current("unknown-stage.sqlite");
-        StoredConfigurationRevision stageConfig = revision(
-                stageFoundation, "revision-stage", validDocuments(), NOW);
-        insertPlayer(stageFoundation, stageConfig.id(), "removed-stage", true);
-        assertThrows(PersistenceException.class,
-                () -> StartupPersistenceCompatibility.assess(stageFoundation, Optional.of(stageConfig)));
-
-        SqliteFoundation atomicFoundation = current("non-atomic.sqlite");
-        StoredConfigurationRevision atomicConfig = revision(
-                atomicFoundation, "revision-atomic", validDocuments(), NOW);
-        insertPlayer(atomicFoundation, atomicConfig.id(), "veteran", false);
-        assertThrows(PersistenceException.class,
-                () -> StartupPersistenceCompatibility.assess(atomicFoundation, Optional.of(atomicConfig)));
     }
 
     @Test
-    @DisplayName("[A63] Unsupported future active configuration schema fails closed")
-    void rejectsFutureConfigurationSchema() {
+    @DisplayName("[P9B] Numeric Prestige state without a legacy stage survives startup compatibility assessment")
+    void acceptsNumericPrestigeStateWithoutLegacyStage() {
+        SqliteFoundation foundation = current("numeric-prestige-only.sqlite");
+        StoredConfigurationRevision stored = revision(foundation, "revision-numeric", validDocuments(), NOW);
+        insertPrestigeOnly(foundation, stored.id());
+
+        assertDoesNotThrow(() -> StartupPersistenceCompatibility.assess(foundation, Optional.of(stored)));
+    }
+
+    @Test
+    @DisplayName("[P9B] Persistence compatibility does not reinterpret stage schema as numeric authority")
+    void leavesConfigurationSemanticValidationToRuntimeComposition() {
         SqliteFoundation foundation = current("future-config.sqlite");
         Map<String, String> future = Map.of("progression.yml", """
                 schema-version: 99
@@ -217,19 +223,29 @@ class StartupPersistenceCompatibilityTest {
                 """);
         StoredConfigurationRevision stored = revision(foundation, "revision-future", future, NOW);
 
-        PersistenceException failure = assertThrows(PersistenceException.class,
-                () -> StartupPersistenceCompatibility.assess(foundation, Optional.of(stored)));
-
-        assertTrue(failure.getMessage().contains("unsupported or invalid"));
+        assertDoesNotThrow(() -> StartupPersistenceCompatibility.assess(foundation, Optional.of(stored)));
     }
 
     private SqliteFoundation current(String name) {
         Path database = temporaryDirectory.resolve(name);
         SqliteFoundation foundation = new SqliteFoundation(database);
-        new MigrationRunner(foundation, ignored -> new VerifiedBackup(
-                "fixture", Optional.of(database), Optional.of(RevisionHasher.hashText("fixture")), NOW, true,
-                "controlled startup fixture"), CLOCK).migrate(SqliteMigrations.phaseEightC());
+        migrate(foundation, SqliteMigrations.phaseNineB());
         return foundation;
+    }
+
+    private SqliteFoundation phaseEight(String name) {
+        Path database = temporaryDirectory.resolve(name);
+        SqliteFoundation foundation = new SqliteFoundation(database);
+        migrate(foundation, SqliteMigrations.phaseEightC());
+        return foundation;
+    }
+
+    private void migrate(SqliteFoundation foundation,
+            java.util.List<net.maddkraft.maddprestige.persistence.migration.Migration> migrations) {
+        new MigrationRunner(foundation, ignored -> new VerifiedBackup(
+                "fixture", Optional.of(foundation.databaseFile()),
+                Optional.of(RevisionHasher.hashText("fixture")), NOW, true,
+                "controlled startup fixture"), CLOCK).migrate(migrations);
     }
 
     private static StoredConfigurationRevision revision(
@@ -254,9 +270,10 @@ class StartupPersistenceCompatibilityTest {
                 "test", ConfigurationApplicationStatus.APPLIED, appliedAt, Optional.of(appliedAt), Optional.empty());
     }
 
-    private static void insertPlayer(
+    private static UUID insertPlayer(
             SqliteFoundation foundation, ConfigRevisionId revision, String stage, boolean withPrestige) {
-        String player = UUID.randomUUID().toString();
+        UUID playerId = UUID.randomUUID();
+        String player = playerId.toString();
         execute(foundation, "INSERT INTO mp_player_stage_state (player_uuid, stage_id, state_revision, "
                 + "config_revision_id, stage_entered_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 player, stage, 4, revision.value(), NOW.toString(), NOW.toString(), NOW.toString());
@@ -266,6 +283,14 @@ class StartupPersistenceCompatibilityTest {
                     + "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", player, 2, 3, 5, revision.value(), "global",
                     NOW.toString(), NOW.toString());
         }
+        return playerId;
+    }
+
+    private static void insertPrestigeOnly(SqliteFoundation foundation, ConfigRevisionId revision) {
+        execute(foundation, "INSERT INTO mp_player_prestige_state (player_uuid, current_prestige, "
+                + "lifetime_prestige, state_revision, config_revision_id, prestige_scope_id, created_at, "
+                + "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", UUID.randomUUID().toString(), 2, 2, 5,
+                revision.value(), "global", NOW.toString(), NOW.toString());
     }
 
     private static UUID insertOperation(SqliteFoundation foundation, ConfigRevisionId revision) {
@@ -308,18 +333,20 @@ class StartupPersistenceCompatibilityTest {
         }
     }
 
+    private static String scalar(SqliteFoundation foundation, String sql) {
+        try (Connection connection = foundation.open(); PreparedStatement statement = connection.prepareStatement(sql);
+                var row = statement.executeQuery()) {
+            return row.next() ? row.getString(1) : null;
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not query startup compatibility fixture", exception);
+        }
+    }
+
     private static Map<String, String> validDocuments() {
         return Map.of("progression.yml", """
                 schema-version: 3
-                active: true
+                active: false
                 reconciliation-policy: warn-only
-                baseline: veteran
-                stages:
-                  veteran:
-                    enabled: true
-                    display-name: Veteran
-                    projection: none
-                order: [veteran]
                 """);
     }
 }

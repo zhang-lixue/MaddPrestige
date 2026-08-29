@@ -2,6 +2,7 @@ package net.maddkraft.maddprestige.core.prestige;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Clock;
@@ -63,18 +64,19 @@ class PrestigeAuthorizationServiceTest {
         PrestigePlan plan = fixture.authorize().plan().orElseThrow();
 
         assertTrue(plan.executionAllowed());
-        assertEquals(SUMMIT, plan.simulation().sourceStage());
-        assertEquals(ORIGIN, plan.simulation().resetStage());
+        assertEquals(new StageId("numeric-level"), plan.simulation().sourceStage());
+        assertEquals(new StageId("numeric-level"), plan.simulation().resetStage());
         assertEquals(1, plan.simulation().currentPrestigeBefore());
         assertEquals(2, plan.simulation().currentPrestigeAfter());
-        assertEquals(4, plan.simulation().lifetimePrestigeBefore());
-        assertEquals(5, plan.simulation().lifetimePrestigeAfter());
-        assertEquals("RESET", plan.simulation().componentConsequences().stream()
+        assertEquals(1, plan.simulation().lifetimePrestigeBefore());
+        assertEquals(2, plan.simulation().lifetimePrestigeAfter());
+        assertEquals("PRESERVE", plan.simulation().componentConsequences().stream()
                 .filter(value -> value.component() == ResetComponent.PROGRESSION_STAGE)
                 .findFirst().orElseThrow().disposition().name());
         assertFalse(plan.simulation().prestigeScopeBefore().equals(plan.simulation().prestigeScopeAfter()));
         assertEquals(beforeStage, fixture.stageState);
         assertEquals(beforePrestige, fixture.prestigeState);
+        assertTrue(plan.rewards().isEmpty());
     }
 
     @Test
@@ -94,7 +96,7 @@ class PrestigeAuthorizationServiceTest {
     @Test
     void exactMaximumAndCooldownBlockerIdentitiesAndFactsSurviveRealAuthorization() {
         PrestigeAuthorizationResult maximum = fixture(PrestigeLimit.finite(1), 1, SUMMIT, ORIGIN).authorize();
-        PrestigeAuthorizationResult cooldown = fixture(PrestigeLimit.unlimited(), 0, 4, 7, 3, SUMMIT, ORIGIN,
+        PrestigeAuthorizationResult cooldown = fixture(PrestigeLimit.unlimited(), 0, 0, 7, 3, SUMMIT, ORIGIN,
                 Duration.ofMinutes(10), Optional.of(NOW.minusSeconds(60))).authorize();
 
         assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
@@ -107,20 +109,45 @@ class PrestigeAuthorizationServiceTest {
 
     @Test
     void counterAndRevisionOverflowBlockBeforeExecutableAuthority() {
-        assertTrue(fixture(PrestigeLimit.unlimited(), 0, Long.MAX_VALUE, 7, 3, SUMMIT, ORIGIN)
-                .authorize().rejection().orElseThrow().contains("Lifetime"));
-        assertTrue(fixture(PrestigeLimit.unlimited(), 0, 4, Long.MAX_VALUE, 3, SUMMIT, ORIGIN)
-                .authorize().rejection().orElseThrow().contains("stage state revision"));
-        assertTrue(fixture(PrestigeLimit.unlimited(), 0, 4, 7, Long.MAX_VALUE, SUMMIT, ORIGIN)
+        assertTrue(fixture(PrestigeLimit.unlimited(), Long.MAX_VALUE, SUMMIT, ORIGIN)
+                .authorize().rejection().orElseThrow().contains("overflow"));
+        assertTrue(fixture(PrestigeLimit.unlimited(), 4, 4, Long.MAX_VALUE, 3, SUMMIT, ORIGIN)
+                .authorize().plan().orElseThrow().executionAllowed());
+        assertTrue(fixture(PrestigeLimit.unlimited(), 4, 4, 7, Long.MAX_VALUE, SUMMIT, ORIGIN)
                 .authorize().rejection().orElseThrow().contains("Prestige state revision"));
     }
 
     @Test
-    void unknownOrIneligibleConfiguredStagesFailClosed() {
+    void activeNumericModelRejectsDivergedCompatibilityCountersAndNonUnitIncrements() {
+        PrestigeAuthorizationResult diverged = fixture(PrestigeLimit.unlimited(), 3, 4, 7, 3, SUMMIT, ORIGIN)
+                .authorize();
+
+        assertEquals(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
+                .PLAYER_PRESTIGE_STATE_UNAVAILABLE, diverged.authorizationBlockers().getFirst().kind());
+        assertTrue(diverged.rejection().orElseThrow().contains("one authoritative value"));
+        assertThrows(IllegalArgumentException.class, () -> new PrestigeConfiguration(true, Set.of(), ORIGIN, 2, 1,
+                PrestigeLimit.unlimited(), Duration.ZERO, Optional.empty(), List.of(), List.of(), Optional.empty(),
+                Optional.empty(), ResetPreservePolicy.safeDefaults(), false));
+        assertThrows(IllegalArgumentException.class, () -> new PrestigeConfiguration(true, Set.of(), ORIGIN, 1, 2,
+                PrestigeLimit.unlimited(), Duration.ZERO, Optional.empty(), List.of(), List.of(), Optional.empty(),
+                Optional.empty(), ResetPreservePolicy.safeDefaults(), false));
+    }
+
+    @Test
+    void legacyStageMetadataDoesNotControlNumericPrestige() {
         assertTrue(fixture(PrestigeLimit.unlimited(), 0, ORIGIN, ORIGIN)
-                .authorize().rejection().orElseThrow().contains("ineligible"));
+                .authorize().plan().orElseThrow().executionAllowed());
         assertTrue(fixture(PrestigeLimit.unlimited(), 0, SUMMIT, new StageId("missing_stage"))
-                .authorize().rejection().orElseThrow().contains("unknown"));
+                .authorize().plan().orElseThrow().executionAllowed());
+    }
+
+    @Test
+    void worldAndResourceResetConceptsAreAbsentFromCorePrestigeStateAndIntent() {
+        for (Class<?> type : List.of(PlayerPrestigeState.class, PrestigeIntent.class, PrestigeConfiguration.class)) {
+            assertTrue(java.util.Arrays.stream(type.getRecordComponents())
+                    .map(component -> component.getName().toLowerCase(java.util.Locale.ROOT))
+                    .noneMatch(name -> name.contains("world") || name.contains("resource")), type.getName());
+        }
     }
 
     @Test
@@ -146,7 +173,7 @@ class PrestigeAuthorizationServiceTest {
             long currentPrestige,
             StageId requiredStage,
             StageId resetStage) {
-        return fixture(limit, currentPrestige, Math.max(4, currentPrestige), 7, 3, requiredStage, resetStage);
+        return fixture(limit, currentPrestige, currentPrestige, 7, 3, requiredStage, resetStage);
     }
 
     private static Fixture fixture(
@@ -206,8 +233,8 @@ class PrestigeAuthorizationServiceTest {
             }
         };
         PrestigeAuthorizationService service = new PrestigeAuthorizationService(() -> Optional.of(active),
-                ignored -> Optional.of(stageState), ignored -> Optional.of(prestigeState),
-                (ignored, stage, state, configuration) -> new PrestigeProgressContext(playerId, REVISION,
+                ignored -> Optional.of(prestigeState),
+                (ignored, state, configuration) -> new PrestigeProgressContext(playerId, REVISION,
                         currentPrestige, ExactDecimal.ZERO, new ScopeContext(Map.of(
                                 MeasurementScope.SINCE_PRESTIGE_START, state.prestigeScope()))),
                 requirementStates, providers, (ignored, currency) -> ExactDecimal.ZERO,

@@ -44,12 +44,11 @@ final class AuthoritativeProgressContextFactory {
 
     PrestigeProgressContext prestige(
             UUID playerId,
-            PlayerStageState stage,
             PlayerPrestigeState prestige,
             ActivePhaseFourConfiguration active) {
         SeasonPosition season = seasonPosition(playerId);
         return new PrestigeProgressContext(playerId, active.phaseFour().revisionId(), prestige.currentPrestige(),
-                season.catchUpPosition(), scopes(playerId, stage, prestige, season.context()));
+                season.catchUpPosition(), prestigeScopes(playerId, prestige, season.context()));
     }
 
     static ScopeId initialPrestigeScope(UUID playerId) {
@@ -77,6 +76,18 @@ final class AuthoritativeProgressContextFactory {
         scopes.put(MeasurementScope.ABSOLUTE, new ScopeId("absolute_" + compact(playerId)));
         scopes.put(MeasurementScope.LIFETIME, new ScopeId("lifetime_" + compact(playerId)));
         scopes.put(MeasurementScope.SINCE_STAGE_START, stageScope(stage));
+        scopes.put(MeasurementScope.SINCE_PRESTIGE_START, prestige.prestigeScope());
+        season.scopeId().ifPresent(scope -> scopes.put(MeasurementScope.SINCE_SEASON_START, scope));
+        return new ScopeContext(Map.copyOf(scopes));
+    }
+
+    private static ScopeContext prestigeScopes(
+            UUID playerId,
+            PlayerPrestigeState prestige,
+            ActiveSeasonContext season) {
+        LinkedHashMap<MeasurementScope, ScopeId> scopes = new LinkedHashMap<>();
+        scopes.put(MeasurementScope.ABSOLUTE, new ScopeId("absolute_" + compact(playerId)));
+        scopes.put(MeasurementScope.LIFETIME, new ScopeId("lifetime_" + compact(playerId)));
         scopes.put(MeasurementScope.SINCE_PRESTIGE_START, prestige.prestigeScope());
         season.scopeId().ifPresent(scope -> scopes.put(MeasurementScope.SINCE_SEASON_START, scope));
         return new ScopeContext(Map.copyOf(scopes));

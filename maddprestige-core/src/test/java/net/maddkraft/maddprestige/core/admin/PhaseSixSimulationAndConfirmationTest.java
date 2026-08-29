@@ -30,6 +30,7 @@ import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationService;
 import net.maddkraft.maddprestige.core.plan.RankUpIntent;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionResult;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
+import net.maddkraft.maddprestige.core.plan.RankUpPlan;
 import net.maddkraft.maddprestige.core.plan.RankUpProgressContext;
 import net.maddkraft.maddprestige.core.prestige.PrestigeAuthorizationResult;
 import net.maddkraft.maddprestige.core.prestige.PrestigeExecutionResult;
@@ -57,19 +58,17 @@ class PhaseSixSimulationAndConfirmationTest {
     private static final ConfigRevisionId REVISION = new ConfigRevisionId("simulation_revision");
 
     @Test
-    @DisplayName("[A26][Phase6] Command/GUI preview service reuses authorization and performs zero mutation")
+    @DisplayName("[A26][Phase 9B] Rank preview is blocked before authorization or mutation")
     void simulationUsesCanonicalPlanWithoutExecution() {
         Fixture fixture = new Fixture();
         PlayerStageState before = fixture.state;
 
-        var preview = fixture.previews.simulateRankUp(fixture.self, fixture.playerId)
-                .toCompletableFuture().join();
+        CompletionException wrapped = assertThrows(CompletionException.class,
+                () -> fixture.previews.simulateRankUp(fixture.self, fixture.playerId).toCompletableFuture().join());
 
-        assertTrue(preview.executable());
-        assertEquals("first → second", preview.stateChange());
-        assertEquals(REVISION, preview.configRevision());
+        assertEquals("rankup.compatibility_only", ((AdministrationException) wrapped.getCause()).code());
         assertEquals(before, fixture.state);
-        assertEquals(1, fixture.authorizationReads.get());
+        assertEquals(0, fixture.authorizationReads.get());
         assertEquals(0, fixture.executions.get());
     }
 
@@ -96,17 +95,8 @@ class PhaseSixSimulationAndConfirmationTest {
                 () -> previews.simulateRankUp(self, player).toCompletableFuture().join());
         AdministrationException rejected = (AdministrationException) wrapped.getCause();
 
-        assertEquals("operation.preview.blocked", rejected.code());
-        assertEquals(List.of(net.maddkraft.maddprestige.core.authorization.AuthorizationBlockerKind
-                .NO_ACTIVE_STAGE_SNAPSHOT), rejected.authorizationBlockers().stream()
-                        .map(net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker::kind).toList());
-        assertEquals("rank-up", rejected.facts().get("operation"));
-        assertEquals(List.of("command.error.administration.operation_preview_blocked.summary",
-                "command.why.blocker.no_active_stage_snapshot",
-                "command.error.administration.operation_preview_blocked.remediation"),
-                net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation.administration(rejected)
-                        .stream().map(net.maddkraft.maddprestige.core.admin.presentation.MessageReference::key)
-                        .toList());
+        assertEquals("rankup.compatibility_only", rejected.code());
+        assertTrue(rejected.authorizationBlockers().isEmpty());
     }
 
     @Test
@@ -184,19 +174,18 @@ class PhaseSixSimulationAndConfirmationTest {
         PermissionSubject simulator = new PermissionSubject(new Actor("staff", Optional.of(UUID.randomUUID()),
                 "Simulator"), Set.of(PhaseSixPermissions.SIMULATE));
 
-        assertTrue(fixture.previews.simulateRankUp(simulator, fixture.playerId)
-                .toCompletableFuture().join().executable());
+        assertThrows(CompletionException.class, () -> fixture.previews.simulateRankUp(simulator, fixture.playerId)
+                .toCompletableFuture().join());
         assertThrows(AdministrationException.class, () -> fixture.confirmations
                 .prepareRankUp(simulator, fixture.playerId));
         assertEquals(0, fixture.executions.get());
     }
 
     @Test
-    @DisplayName("[A27] Confirmation is actor-bound, single-use, revision-bound, and executes once")
+    @DisplayName("[A27][Phase 9B] Retained rank confirmation is actor/single-use/revision-safe and never executes")
     void confirmationRevalidatesAuthorityAndStaleness() {
         Fixture fixture = new Fixture();
-        var stale = fixture.confirmations.prepareRankUp(fixture.self, fixture.playerId)
-                .toCompletableFuture().join();
+        var stale = retainedRankConfirmation(fixture);
         fixture.activeRevision.set(Optional.of(new ConfigRevisionId("changed_revision")));
 
         AdministrationException staleFailure = assertThrows(AdministrationException.class, () ->
@@ -205,40 +194,38 @@ class PhaseSixSimulationAndConfirmationTest {
         assertEquals(0, fixture.executions.get());
 
         fixture.activeRevision.set(Optional.of(REVISION));
-        var current = fixture.confirmations.prepareRankUp(fixture.self, fixture.playerId)
-                .toCompletableFuture().join();
-        var result = fixture.confirmations.confirm(fixture.self, current.confirmationId())
-                .toCompletableFuture().join();
-        assertEquals("COMPLETED", result.status());
-        assertEquals(1, fixture.executions.get());
-        assertThrows(AdministrationException.class, () -> fixture.confirmations
-                .confirm(fixture.self, current.confirmationId()));
-        assertEquals(1, fixture.executions.get());
+        var current = retainedRankConfirmation(fixture);
+        AdministrationException blocked = assertThrows(AdministrationException.class,
+                () -> fixture.confirmations.confirm(fixture.self, current.confirmationId()));
+        assertEquals("rankup.compatibility_only", blocked.code());
+        assertEquals(0, fixture.executions.get());
+        assertThrows(AdministrationException.class,
+                () -> fixture.confirmations.confirm(fixture.self, current.confirmationId()));
+        assertEquals(0, fixture.executions.get());
     }
 
     @Test
     @DisplayName("[A27][Phase6-security] Wrong actor cannot destroy another actor's confirmation")
     void wrongActorDoesNotConsumeConfirmation() {
         Fixture fixture = new Fixture();
-        var prepared = fixture.confirmations.prepareRankUp(fixture.self, fixture.playerId)
-                .toCompletableFuture().join();
+        var prepared = retainedRankConfirmation(fixture);
         PermissionSubject intruder = new PermissionSubject(new Actor("staff", Optional.of(UUID.randomUUID()),
                 "Intruder"), Set.of(PhaseSixPermissions.EXECUTE));
 
         AdministrationException mismatch = assertThrows(AdministrationException.class, () ->
                 fixture.confirmations.confirm(intruder, prepared.confirmationId()));
         assertEquals("confirmation.actor_mismatch", mismatch.code());
-        assertEquals("COMPLETED", fixture.confirmations.confirm(fixture.self, prepared.confirmationId())
-                .toCompletableFuture().join().status());
-        assertEquals(1, fixture.executions.get());
+        AdministrationException blocked = assertThrows(AdministrationException.class,
+                () -> fixture.confirmations.confirm(fixture.self, prepared.confirmationId()));
+        assertEquals("rankup.compatibility_only", blocked.code());
+        assertEquals(0, fixture.executions.get());
     }
 
     @Test
     @DisplayName("[A27][Phase6-security] Concurrent confirmation has exactly one consuming winner")
     void concurrentConfirmationExecutesExactlyOnce() {
         Fixture fixture = new Fixture();
-        var prepared = fixture.confirmations.prepareRankUp(fixture.self, fixture.playerId)
-                .toCompletableFuture().join();
+        var prepared = retainedRankConfirmation(fixture);
         CountDownLatch gate = new CountDownLatch(1);
         var first = CompletableFuture.supplyAsync(() -> confirmAfter(gate, fixture, prepared.confirmationId()));
         var second = CompletableFuture.supplyAsync(() -> confirmAfter(gate, fixture, prepared.confirmationId()));
@@ -246,7 +233,7 @@ class PhaseSixSimulationAndConfirmationTest {
         gate.countDown();
 
         assertEquals(1, java.util.stream.Stream.of(first.join(), second.join()).filter(Boolean::booleanValue).count());
-        assertEquals(1, fixture.executions.get());
+        assertEquals(0, fixture.executions.get());
     }
 
     private static boolean confirmAfter(CountDownLatch gate, Fixture fixture, UUID confirmationId) {
@@ -258,8 +245,24 @@ class PhaseSixSimulationAndConfirmationTest {
             Thread.currentThread().interrupt();
             throw new AssertionError(exception);
         } catch (AdministrationException exception) {
+            if (exception.code().equals("rankup.compatibility_only")) {
+                return true;
+            }
             assertTrue(Set.of("confirmation.already_used", "confirmation.unknown").contains(exception.code()));
             return false;
+        }
+    }
+
+    private static PreparedConfirmation retainedRankConfirmation(Fixture fixture) {
+        RankUpPlan plan = fixture.authorization.authorize(new RankUpIntent(fixture.self.actor(), fixture.playerId,
+                Optional.empty(), "retained-confirmation-test")).toCompletableFuture().join().plan().orElseThrow();
+        try {
+            var store = OperationConfirmationService.class.getDeclaredMethod(
+                    "store", PermissionSubject.class, RankUpPlan.class);
+            store.setAccessible(true);
+            return (PreparedConfirmation) store.invoke(fixture.confirmations, fixture.self, plan);
+        } catch (ReflectiveOperationException exception) {
+            throw new AssertionError("Could not construct retained compatibility confirmation", exception);
         }
     }
 

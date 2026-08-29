@@ -4,18 +4,16 @@ schema-version: 4
 
 prestige:
   enabled: false
-  required-stages: []
-  reset-stage: disabled
-  current-count-increment: 1
-  lifetime-count-increment: 1
   maximum: unlimited
   cooldown: PT0S
   costs: []
   rewards: []
+  # Optional independent maps keyed by configured cost/reward ID. Each profile uses contiguous segments.
+  cost-scaling: {}
+  reward-scaling: {}
   external-resets:
     enabled: false
   reset-policy:
-    progression-stage: RESET
     active-requirement-progress: RESET
     latched-completions: RESET
     baselines: RESET

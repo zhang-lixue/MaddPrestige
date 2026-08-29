@@ -77,8 +77,9 @@ public final class OperationConfirmationService {
         if (confirmation.plan() instanceof RankUpPlan rankPlan) {
             requireExecution(subject, rankPlan.playerId(), PhaseSixPermissions.RANK_UP);
             consume(id, confirmation);
-            return rankUpExecutor.execute(rankPlan).thenApply(result -> new OperationExecutionResult(
-                    result.operationId(), result.status().name(), result.detail()));
+            throw new AdministrationException("rankup.compatibility_only",
+                    "Rank-up confirmations are compatibility-only and cannot execute.",
+                    "Use the numeric Prestige operation; active progression is Prestige N to N + 1.");
         }
         PrestigePlan prestigePlan = (PrestigePlan) confirmation.plan();
         requireExecution(subject, prestigePlan.playerId(), PhaseSixPermissions.PRESTIGE);

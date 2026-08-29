@@ -1,17 +1,18 @@
 # MaddPrestige 2.0
 
-MaddPrestige V2 is a generic, provider-driven progression and Prestige platform for a single Paper server. Ordered
-stage IDs are independent of display names and external rank groups; requirements, costs, rewards, lifecycle rules,
-currencies, entitlements, seasons, and optional integrations compile into one immutable active configuration revision.
+MaddPrestige V2 is a generic, provider-driven numeric Prestige platform for a single Paper server. Its authoritative
+player progression state is a durable non-negative integer: a successful operation advances `P` to `P + 1`, subject
+to administrator-configured requirements, independent costs, rewards, cooldown, and optional maximum. Stages, ranks,
+LuckPerms groups, seasons, and world resets are not intrinsic to Prestige.
 
-This repository is a Phase 8 release candidate, not a production-ready or GA release. Production deployment and real
-server migration qualification remain Phase 9.
+This repository is a Phase 9B owner-review candidate, not a production-ready or GA release. It has not undergone real
+clone qualification and authorizes no live deployment, V1 player import, or production balance.
 
 ## Final Phase 8 release candidate
 
 - Java 25.
 - Paper 26.1.2 build 74 stable.
-- LuckPerms 5.5.71 for the exactly qualified rank-projected profile.
+- LuckPerms 5.5.71 when an active configuration explicitly uses optional permission/group rewards.
 - SQLite is the sole MaddPrestige 2.0 production persistence backend.
 - One Paper process and one server directory per database.
 - MySQL/MariaDB and shared-database/multi-process operation are deferred post-2.0.
@@ -22,17 +23,18 @@ Optional providers are required only when an active configuration references the
 ## Start here
 
 1. [Install the candidate](docs/INSTALLATION_V2.md).
-2. Follow the exact [Member → Adventurer → Veteran Quick Start](docs/QUICK_START.md).
+2. Follow the [numeric Prestige Quick Start](docs/QUICK_START.md).
 3. Keep [commands and permissions](docs/COMMANDS_PERMISSIONS.md) and
    [diagnostics](docs/DIAGNOSTICS_TROUBLESHOOTING.md) available to operators.
 4. Read [configuration](docs/CONFIGURATION.md) before making later revisions.
 
-The frozen generic profile is under [examples/member-adventurer-veteran](examples/member-adventurer-veteran). A
-minimal external API consumer is under [examples/provider-sdk](examples/provider-sdk).
+The active stage-free example is under [examples/numeric-prestige](examples/numeric-prestige). The former
+[stage-ladder example](examples/member-adventurer-veteran) is retained as compatibility evidence only. A minimal
+external API consumer is under [examples/provider-sdk](examples/provider-sdk).
 
 ## Public documentation
 
-- [Stages and ranks](docs/STAGES_RANKS.md)
+- [Stage/rank compatibility](docs/STAGES_RANKS.md)
 - [Requirements and scopes](docs/REQUIREMENTS_SCOPES.md)
 - [Costs and rewards](docs/COSTS_REWARDS.md)
 - [Prestige lifecycle](docs/PRESTIGE_LIFECYCLE.md)

@@ -12,9 +12,9 @@ import net.maddkraft.maddprestige.api.id.StageId;
  * Immutable materialized player-progress read model; construction performs no I/O.
  *
  * @param playerId queried player
- * @param stage materialized canonical stage, or empty for a player with no committed progression state
- * @param currentPrestige non-negative Prestige count in the current reset scope
- * @param lifetimePrestige non-negative lifetime count, never less than {@code currentPrestige}
+ * @param stage retired stage-era compatibility value; empty for active numeric Prestige snapshots
+ * @param currentPrestige non-negative authoritative numeric Prestige value
+ * @param lifetimePrestige compatibility mirror of {@code currentPrestige} in the active numeric model
  * @param configRevision revision that materialized this read model, or empty before first committed state
  * @param attributes immutable implementation-neutral machine attributes, at most 32 bounded entries
  * @param observedAt non-null observation time; the snapshot is not live after construction

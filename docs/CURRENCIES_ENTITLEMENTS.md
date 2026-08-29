@@ -8,6 +8,7 @@ Entitlements are declarative provider-owned capabilities with explicit grant/rev
 from progression stages and paid/store ranks. Optional integration absence makes a referenced entitlement unavailable;
 it must not corrupt unrelated progression.
 
-The Member/Adventurer/Veteran example uses `currencies: {}` and `entitlements: {}`. Add either only through a validated
-draft after reading schema-owned help and provider health. Store/supporter fulfillment and MaddKraft-specific
-entitlements are outside this generic Quick Start.
+The numeric example uses `currencies: {}` and `entitlements: {}`. Currency display name, precision, limits, and scope
+are administrator configuration; the feature may remain disabled. A configurable first-party Prestige shop is
+authorized later Phase 9 work but is not implemented, so there are currently no shop entries, prices, purchases,
+discounts, or shop GUI to configure.

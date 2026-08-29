@@ -42,8 +42,8 @@ public final class SqlitePrestigeAdministrationStore implements PrestigeAdminist
                     throw new StalePlayerStageStateException("Manual Prestige compare-and-set failed");
                 }
                 Instant now = Instant.now(clock);
-                PlayerPrestigeState replacement = new PlayerPrestigeState(current.playerId(),
-                        adjustment.currentPrestige(), adjustment.lifetimePrestige(),
+                long prestige = adjustment.currentPrestige();
+                PlayerPrestigeState replacement = new PlayerPrestigeState(current.playerId(), prestige, prestige,
                         Math.addExact(current.stateRevision(), 1), adjustment.configRevision(),
                         current.prestigeScope(), current.lastPrestigedAt(), current.createdAt(), now);
                 update(connection, replacement, current.stateRevision());

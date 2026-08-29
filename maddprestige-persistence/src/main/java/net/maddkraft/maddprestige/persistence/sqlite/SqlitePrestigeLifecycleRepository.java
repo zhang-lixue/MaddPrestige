@@ -88,9 +88,6 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             SqliteStageTransitionGuard.beginImmediate(connection);
             try {
                 requireExecuting(connection, plan.operationId());
-                SqliteStageTransitionGuard.requireNoPendingRemap(connection,
-                        java.util.List.of(plan.simulation().sourceStage(), plan.simulation().resetStage()));
-                updateStage(connection, plan, now);
                 updatePrestige(connection, plan, now);
                 insertPrestigeBaselines(connection, plan, now);
                 for (CurrencyConsequence currency : plan.simulation().currencyChanges()) {
@@ -99,7 +96,6 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
                 for (MilestoneConsequence milestone : plan.simulation().milestoneConsequences()) {
                     insertMilestone(connection, plan, milestone, now);
                 }
-                insertStageHistory(connection, plan, now);
                 insertPrestigeHistory(connection, plan, now);
                 SqliteStageTransitionGuard.commit(connection);
             } catch (SQLException | RuntimeException exception) {
@@ -445,32 +441,6 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
         }
     }
 
-    private static void updateStage(Connection connection, PrestigePlan plan, Instant now) throws SQLException {
-        String sql = "UPDATE mp_player_stage_state SET stage_id = ?, state_revision = ?, config_revision_id = ?, "
-                + "stage_entered_at = ?, updated_at = ?, last_reconciled_at = ?, last_provider_generation = ? "
-                + "WHERE player_uuid = ? AND stage_id = ? AND state_revision = ? AND config_revision_id = ?";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, plan.simulation().resetStage().value());
-            statement.setLong(2, Math.addExact(plan.expectedStageRevision(), 1));
-            statement.setString(3, plan.configRevision().value());
-            statement.setString(4, now.toString());
-            statement.setString(5, now.toString());
-            statement.setString(6, now.toString());
-            if (plan.rankProjectionRequest().isPresent()) {
-                statement.setLong(7, plan.rankProjectionRequest().orElseThrow().providerGeneration());
-            } else {
-                statement.setNull(7, Types.BIGINT);
-            }
-            statement.setString(8, plan.playerId().toString());
-            statement.setString(9, plan.simulation().sourceStage().value());
-            statement.setLong(10, plan.expectedStageRevision());
-            statement.setString(11, plan.simulation().playerStageProvenance().value());
-            if (statement.executeUpdate() != 1) {
-                throw new PersistenceException("Authoritative stage CAS failed during Prestige");
-            }
-        }
-    }
-
     private static void updatePrestige(Connection connection, PrestigePlan plan, Instant now) throws SQLException {
         String sql = "UPDATE mp_player_prestige_state SET current_prestige = ?, lifetime_prestige = ?, "
                 + "state_revision = ?, config_revision_id = ?, prestige_scope_id = ?, last_prestiged_at = ?, "
@@ -590,29 +560,6 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             statement.setString(6, milestone.rewardIds().stream().map(value -> value.value())
                     .sorted().reduce((left, right) -> left + "," + right).orElse(""));
             statement.setString(7, now.toString());
-            statement.executeUpdate();
-        }
-    }
-
-    private static void insertStageHistory(Connection connection, PrestigePlan plan, Instant now) throws SQLException {
-        String sql = "INSERT INTO mp_stage_history (history_id, player_uuid, stage_id, entered_at, operation_id, "
-                + "actor_type, actor_uuid, actor_name, reason, config_revision_id) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        try (PreparedStatement statement = connection.prepareStatement(sql)) {
-            statement.setString(1, UUID.randomUUID().toString());
-            statement.setString(2, plan.playerId().toString());
-            statement.setString(3, plan.simulation().resetStage().value());
-            statement.setString(4, now.toString());
-            statement.setString(5, plan.operationId().toString());
-            statement.setString(6, plan.operationPlan().actor().type());
-            if (plan.operationPlan().actor().uuid().isPresent()) {
-                statement.setString(7, plan.operationPlan().actor().uuid().orElseThrow().toString());
-            } else {
-                statement.setNull(7, Types.VARCHAR);
-            }
-            statement.setString(8, plan.operationPlan().actor().displayName());
-            statement.setString(9, "Prestige reset");
-            statement.setString(10, plan.configRevision().value());
             statement.executeUpdate();
         }
     }

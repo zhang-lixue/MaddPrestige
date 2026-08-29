@@ -1,6 +1,7 @@
 # Stable Paper events
 
-Compatibility baseline `2.x-stable-1` exposes six synchronous Paper events:
+Compatibility baseline `2.x-stable-1` exposes six synchronous Paper events. Rank-up events are retained compatibility
+types; the numeric production runtime blocks rank-up and therefore does not use them as progression authority:
 
 - `PreRankUpEvent` — cancellable;
 - `PostRankUpEvent`;
@@ -9,8 +10,9 @@ Compatibility baseline `2.x-stable-1` exposes six synchronous Paper events:
 - `ConfigAppliedEvent`;
 - `ProviderHealthChangedEvent`.
 
-Rank/Prestige PRE fires on the Paper server thread after canonical authorization and before unknown-player
-materialization, leases, journaling, or effects. Cancellation or listener failure is zero-effect. MaddPrestige then
+Prestige PRE fires on the Paper server thread after canonical authorization and before unknown-player materialization,
+journaling, or effects. The retained rank event types are never dispatched by numeric production. Cancellation or
+listener failure is zero-effect. MaddPrestige then
 revalidates the exact player/config/provider authority before durability. POST fires after a durable terminal state and
 before the caller's completion stage resolves; listener failure cannot rewrite that result.
 

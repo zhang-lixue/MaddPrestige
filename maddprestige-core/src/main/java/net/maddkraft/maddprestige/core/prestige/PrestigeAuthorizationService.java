@@ -27,7 +27,6 @@ import net.maddkraft.maddprestige.api.operation.OperationActionPlan;
 import net.maddkraft.maddprestige.api.operation.OperationPlan;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
-import net.maddkraft.maddprestige.api.rank.RankAdapter;
 import net.maddkraft.maddprestige.api.rank.RankProjectionRequest;
 import net.maddkraft.maddprestige.api.reward.RewardDefinition;
 import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
@@ -43,9 +42,7 @@ import net.maddkraft.maddprestige.core.milestone.MilestoneDefinition;
 import net.maddkraft.maddprestige.core.milestone.MilestoneRepeatability;
 import net.maddkraft.maddprestige.core.milestone.MilestoneStateReader;
 import net.maddkraft.maddprestige.core.milestone.MilestoneTriggerType;
-import net.maddkraft.maddprestige.core.plan.PlayerStageStateSource;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
-import net.maddkraft.maddprestige.core.rank.ProjectionPolicy;
 import net.maddkraft.maddprestige.core.requirement.MetricBinding;
 import net.maddkraft.maddprestige.core.requirement.RequirementEvaluationAuthorizer;
 import net.maddkraft.maddprestige.core.requirement.RequirementEvaluationContext;
@@ -56,14 +53,13 @@ import net.maddkraft.maddprestige.core.requirement.RequirementDefinition;
 import net.maddkraft.maddprestige.core.requirement.RequirementStateReader;
 import net.maddkraft.maddprestige.core.season.ActiveSeasonContext;
 import net.maddkraft.maddprestige.core.season.ActiveSeasonSource;
-import net.maddkraft.maddprestige.core.stage.PlayerStageState;
-import net.maddkraft.maddprestige.core.stage.StageDefinition;
 
 /** Sole production path from consequence-free Prestige intent to an authorization-sealed confirmation plan. */
 public final class PrestigeAuthorizationService {
     private static final ProviderId INTERNAL_PROVIDER = new ProviderId("maddprestige.internal");
+    private static final net.maddkraft.maddprestige.api.id.StageId NUMERIC_COMPATIBILITY_MARKER =
+            new net.maddkraft.maddprestige.api.id.StageId("numeric-level");
     private final Supplier<Optional<ActivePhaseFourConfiguration>> activeConfiguration;
-    private final PlayerStageStateSource stageStates;
     private final PlayerPrestigeStateSource prestigeStates;
     private final PrestigeProgressContextSource progressContexts;
     private final RequirementStateReader requirementStates;
@@ -76,7 +72,6 @@ public final class PrestigeAuthorizationService {
 
     public PrestigeAuthorizationService(
             Supplier<Optional<ActivePhaseFourConfiguration>> activeConfiguration,
-            PlayerStageStateSource stageStates,
             PlayerPrestigeStateSource prestigeStates,
             PrestigeProgressContextSource progressContexts,
             RequirementStateReader requirementStates,
@@ -86,7 +81,6 @@ public final class PrestigeAuthorizationService {
             ActiveSeasonSource seasons,
             Clock clock) {
         this.activeConfiguration = Objects.requireNonNull(activeConfiguration, "active configuration");
-        this.stageStates = Objects.requireNonNull(stageStates, "stage states");
         this.prestigeStates = Objects.requireNonNull(prestigeStates, "Prestige states");
         this.progressContexts = Objects.requireNonNull(progressContexts, "progress contexts");
         this.requirementStates = Objects.requireNonNull(requirementStates, "requirement states");
@@ -96,6 +90,24 @@ public final class PrestigeAuthorizationService {
         this.seasons = Objects.requireNonNull(seasons, "season source");
         this.clock = Objects.requireNonNull(clock, "clock");
         actions = new PrestigeActionPlanner(providers);
+    }
+
+    /** Compatibility constructor; the legacy stage source is deliberately not consulted by numeric Prestige. */
+    @Deprecated
+    public PrestigeAuthorizationService(
+            Supplier<Optional<ActivePhaseFourConfiguration>> activeConfiguration,
+            net.maddkraft.maddprestige.core.plan.PlayerStageStateSource ignoredStageStates,
+            PlayerPrestigeStateSource prestigeStates,
+            PrestigeProgressContextSource progressContexts,
+            RequirementStateReader requirementStates,
+            ProviderRegistry providers,
+            CurrencyBalanceSource balances,
+            MilestoneStateReader milestoneStates,
+            ActiveSeasonSource seasons,
+            Clock clock) {
+        this(activeConfiguration, prestigeStates, progressContexts, requirementStates, providers, balances,
+                milestoneStates, seasons, clock);
+        Objects.requireNonNull(ignoredStageStates, "legacy stage states");
     }
 
     public CompletionStage<PrestigeAuthorizationResult> authorize(PrestigeIntent intent) {
@@ -114,10 +126,8 @@ public final class PrestigeAuthorizationService {
                     "Active Phase 4 provider-generation bindings are stale or inconsistent",
                     "provider", provider);
         }
-        PlayerStageState stageState;
         PlayerPrestigeState prestigeState;
         try {
-            stageState = stageStates.find(intent.playerId()).orElseThrow();
             prestigeState = prestigeStates.find(intent.playerId()).orElseThrow();
         } catch (RuntimeException exception) {
             return rejected(AuthorizationBlockerKind.PLAYER_PRESTIGE_STATE_UNAVAILABLE,
@@ -125,55 +135,33 @@ public final class PrestigeAuthorizationService {
                     "player", intent.playerId());
         }
         PrestigeConfiguration configuration = active.phaseFour().configuration().prestige();
-        var stages = active.priorPhases().stages().configuration();
         if (!configuration.enabled()) {
             return rejected(AuthorizationBlockerKind.PRESTIGE_DISABLED,
                     "Prestige is disabled");
         }
-        if (!stages.active()) {
-            return rejected(AuthorizationBlockerKind.STAGE_LADDER_INACTIVE,
-                    "The canonical stage ladder is inactive");
-        }
-        StageDefinition sourceStage = stages.stages().get(stageState.stageId());
-        StageDefinition resetStage = stages.stages().get(configuration.resetStage());
-        if (sourceStage == null) {
-            return rejected(AuthorizationBlockerKind.CURRENT_STAGE_UNKNOWN,
-                    "The current stage is unknown", "current_stage", stageState.stageId().value());
-        }
-        if (!sourceStage.enabled()) {
-            return rejected(AuthorizationBlockerKind.CURRENT_STAGE_DISABLED,
-                    "The current stage is disabled", "current_stage", stageState.stageId().value());
-        }
-        if (resetStage == null || !resetStage.enabled()) {
-            return rejected(AuthorizationBlockerKind.TARGET_STAGE_UNKNOWN_OR_DISABLED,
-                    "The configured reset stage is unknown or disabled", "target_stage",
-                    configuration.resetStage().value());
-        }
-        if (!configuration.requiredStages().contains(stageState.stageId())) {
-            return rejected(AuthorizationBlockerKind.PRESTIGE_STAGE_INELIGIBLE,
-                    "The current stage is ineligible for Prestige", "current_stage", stageState.stageId().value());
+        if (prestigeState.currentPrestige() != prestigeState.lifetimePrestige()) {
+            return rejected(AuthorizationBlockerKind.PLAYER_PRESTIGE_STATE_UNAVAILABLE,
+                    "Compatibility Prestige counters diverged; numeric Prestige requires one authoritative value",
+                    "current_prestige", prestigeState.currentPrestige(),
+                    "lifetime_prestige", prestigeState.lifetimePrestige());
         }
         Instant now = clock.instant();
-        if (!canIncrement(prestigeState.currentPrestige(), configuration.currentCountIncrement())) {
+        if (!canIncrement(prestigeState.currentPrestige(), 1)) {
             return rejected(AuthorizationBlockerKind.PRESTIGE_COUNTER_OVERFLOW,
                     "Current Prestige count would overflow the authoritative counter", "counter", "current",
                     "current_prestige", prestigeState.currentPrestige());
         }
-        if (!configuration.limit().allows(prestigeState.currentPrestige(), configuration.currentCountIncrement())) {
+        if (!configuration.limit().allows(prestigeState.currentPrestige(), 1)) {
             return rejected(AuthorizationBlockerKind.PRESTIGE_MAXIMUM_REACHED,
                     "Finite Prestige maximum has been reached", "current_prestige",
                     prestigeState.currentPrestige(), "prestige_maximum",
                     configuration.limit().maximum().isPresent()
                             ? configuration.limit().maximum().getAsLong() : "unbounded");
         }
-        if (!canIncrement(prestigeState.lifetimePrestige(), configuration.lifetimeCountIncrement())) {
+        if (!canIncrement(prestigeState.lifetimePrestige(), 1)) {
             return rejected(AuthorizationBlockerKind.PRESTIGE_COUNTER_OVERFLOW,
                     "Lifetime Prestige count would overflow the authoritative counter", "counter", "lifetime",
                     "current_prestige", prestigeState.lifetimePrestige());
-        }
-        if (stageState.stateRevision() == Long.MAX_VALUE) {
-            return rejected(AuthorizationBlockerKind.STAGE_REVISION_OVERFLOW,
-                    "Player stage state revision cannot be incremented", "revision", stageState.stateRevision());
         }
         if (prestigeState.stateRevision() == Long.MAX_VALUE) {
             return rejected(AuthorizationBlockerKind.PRESTIGE_REVISION_OVERFLOW,
@@ -189,7 +177,7 @@ public final class PrestigeAuthorizationService {
         }
         PrestigeProgressContext progress;
         try {
-            progress = Objects.requireNonNull(progressContexts.load(intent.playerId(), stageState, prestigeState,
+            progress = Objects.requireNonNull(progressContexts.load(intent.playerId(), prestigeState,
                     active), "trusted progress context");
         } catch (RuntimeException exception) {
             return rejected(AuthorizationBlockerKind.TRUSTED_CONTEXT_LOAD_FAILED,
@@ -209,8 +197,11 @@ public final class PrestigeAuthorizationService {
                     "Prestige references an unknown requirement tree", "requirement",
                     configuration.requirementTreeId().orElseThrow().value());
         }
+        long targetLevel = Math.addExact(prestigeState.currentPrestige(), 1);
         List<CostDefinition> costs = configuration.costIds().stream().map(phaseThree.costs()::get)
-                .filter(Objects::nonNull).toList();
+                .filter(Objects::nonNull)
+                .map(definition -> active.phaseFour().configuration().valueScaling().scale(definition, targetLevel))
+                .toList();
         if (costs.size() != configuration.costIds().size()) {
             String missing = configuration.costIds().stream().filter(id -> !phaseThree.costs().containsKey(id))
                     .findFirst().orElseThrow().value();
@@ -219,7 +210,9 @@ public final class PrestigeAuthorizationService {
         }
         ActiveSeasonContext season = seasons.active();
         List<MilestoneConsequence> milestoneConsequences = milestones(active, prestigeState, season);
-        List<RewardDefinition> rewards = rewardDefinitions(configuration, milestoneConsequences, phaseThree.rewards());
+        List<RewardDefinition> rewards = rewardDefinitions(configuration, milestoneConsequences, phaseThree.rewards())
+                .stream().map(definition -> active.phaseFour().configuration().valueScaling()
+                        .scale(definition, targetLevel)).toList();
         if (rewards.size() != configuration.rewardIds().size()
                 + milestoneConsequences.stream().mapToInt(value -> value.rewardIds().size()).sum()) {
             String missing = java.util.stream.Stream.concat(configuration.rewardIds().stream(),
@@ -231,7 +224,8 @@ public final class PrestigeAuthorizationService {
         Set<RequirementDefinition> prestigeDefinitions = PhaseFourRequirementReachability
                 .prestigeDefinitions(active.phaseFour().configuration(), phaseThree);
         Set<RequirementDefinition> boundaryDefinitions = PhaseFourRequirementReachability
-                .postPrestigeDefinitions(active.phaseFour().configuration(), phaseThree, stages).stream()
+                .postPrestigeDefinitions(active.phaseFour().configuration(), phaseThree,
+                        active.priorPhases().stages().configuration()).stream()
                 .filter(definition -> definition.scope()
                         == net.maddkraft.maddprestige.core.requirement.MeasurementScope.SINCE_PRESTIGE_START)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -243,9 +237,6 @@ public final class PrestigeAuthorizationService {
         costs.forEach(cost -> requiredProviders.add(cost.providerId()));
         rewards.stream().filter(reward -> reward.failurePolicy() == RewardFailurePolicy.REQUIRED)
                 .forEach(reward -> requiredProviders.add(reward.providerId()));
-        if (resetStage.projection().policy() != ProjectionPolicy.NONE) {
-            resetStage.projection().providerId().ifPresent(requiredProviders::add);
-        }
         Map<ProviderId, Long> configuredPins = active.phaseFour().providerGenerations();
         if (!bindingsMatch(configuredPins, requiredProviders)) {
             List<AuthorizationBlocker> missing = requiredProviders.stream()
@@ -284,7 +275,7 @@ public final class PrestigeAuthorizationService {
             return boundaryStage
                     .thenCompose(boundary -> actions.preflight(operationId, intent.playerId(),
                             active.phaseFour().revisionId(), pins, costs, rewards)
-                            .thenApply(preflight -> assemble(intent, active, stageState, prestigeState, resetStage,
+                            .thenApply(preflight -> assemble(intent, active, prestigeState,
                                     evaluation, boundary, milestoneConsequences, season, operationId, pins, preflight,
                                     now)));
         });
@@ -301,9 +292,7 @@ public final class PrestigeAuthorizationService {
     private PrestigeAuthorizationResult assemble(
             PrestigeIntent intent,
             ActivePhaseFourConfiguration active,
-            PlayerStageState stageState,
             PlayerPrestigeState prestigeState,
-            StageDefinition resetStage,
             net.maddkraft.maddprestige.core.requirement.BoundRequirementEvaluation evaluation,
             PrestigeBoundaryCollection boundary,
             List<MilestoneConsequence> milestones,
@@ -321,10 +310,8 @@ public final class PrestigeAuthorizationService {
                     configuration.requirementTreeId().map(value -> value.value()).orElse("prestige"),
                     "status", evaluation.result().status()));
         }
-        Optional<RankProjectionRequest> projection = projection(
-                operationId, intent.playerId(), active, resetStage, blockers);
-        Optional<ProviderId> rankProviderId = resetStage.projection().providerId()
-                .filter(ignored -> projection.isPresent());
+        Optional<RankProjectionRequest> projection = Optional.empty();
+        Optional<ProviderId> rankProviderId = Optional.empty();
         boolean resetScopedState = resetsScopedRequirementState(configuration);
         ScopeId nextScope = resetScopedState ? new ScopeId("prestige-" + operationId)
                 : prestigeState.prestigeScope();
@@ -333,10 +320,10 @@ public final class PrestigeAuthorizationService {
         List<ProviderActionConsequence> providerActions = providerActions(preflight, projection, rankProviderId);
         List<String> uncertain = providerActions.stream().filter(ProviderActionConsequence::uncertaintyPossible)
                 .map(ProviderActionConsequence::description).toList();
-        PrestigeSimulation simulation = new PrestigeSimulation(intent.playerId(), stageState.stageId(),
-                resetStage.id(), prestigeState.currentPrestige(), Math.addExact(prestigeState.currentPrestige(),
-                        configuration.currentCountIncrement()), prestigeState.lifetimePrestige(),
-                Math.addExact(prestigeState.lifetimePrestige(), configuration.lifetimeCountIncrement()), evaluation,
+        PrestigeSimulation simulation = new PrestigeSimulation(intent.playerId(), NUMERIC_COMPATIBILITY_MARKER,
+                NUMERIC_COMPATIBILITY_MARKER, prestigeState.currentPrestige(), Math.addExact(prestigeState.currentPrestige(),
+                        1), prestigeState.lifetimePrestige(),
+                Math.addExact(prestigeState.lifetimePrestige(), 1), evaluation,
                 preflight.costs(), preflight.rewards(), currencies, components, prestigeState.prestigeScope(),
                 nextScope, boundary.baselines(),
                 new ScopedRequirementStateConsequence(
@@ -346,50 +333,28 @@ public final class PrestigeAuthorizationService {
                         resetScopedState, !resetScopedState, boundary.baselines().size()), milestones,
                 new SeasonConsequence(season.seasonId(), season.scopeId(),
                         "PRESERVE: player season progress and the external season scope are unchanged"),
-                providerActions, uncertain, stageState.configRevision(), prestigeState.configRevision(),
-                active.phaseFour().revisionId(), stageState.stateRevision(), prestigeState.stateRevision(),
+                providerActions, uncertain, prestigeState.configRevision(), prestigeState.configRevision(),
+                active.phaseFour().revisionId(), 0, prestigeState.stateRevision(),
                 operationPins, now);
         List<OperationActionPlan> actionPlans = operationActions(preflight, projection, rankProviderId, currencies,
-                milestones, stageState, resetStage);
+                milestones, prestigeState.currentPrestige(), simulation.currentPrestigeAfter());
         OperationPlan operationPlan = new OperationPlan(operationId, "prestige", intent.actor(), intent.playerId(),
-                stageState.stateRevision(), active.phaseFour().revisionId(),
+                prestigeState.stateRevision(), active.phaseFour().revisionId(),
                 operationPins, intent.idempotencyKey(), actionPlans,
-                "prestige " + stageState.stageId().value() + " -> " + resetStage.id().value());
+                "prestige " + prestigeState.currentPrestige() + " -> " + simulation.currentPrestigeAfter());
         List<String> blockerDiagnostics = AuthorizationBlocker.diagnostics(blockers);
         boolean allowed = blockers.isEmpty();
         PrestigeAuthorization authority = allowed ? new PrestigeAuthorization(operationId, intent.playerId(),
-                stageState.stateRevision(), prestigeState.stateRevision(), active.phaseFour().revisionId(),
+                0, prestigeState.stateRevision(), active.phaseFour().revisionId(),
                 operationPins, simulation, preflight.costs(), preflight.rewards(),
                 rankProviderId, projection, operationPlan) : PrestigeAuthorization.denied();
         PrestigePlan plan = new PrestigePlan(operationId, intent.requestId(), intent.playerId(),
-                stageState.stateRevision(),
+                0,
                 prestigeState.stateRevision(), active.phaseFour().revisionId(),
                 operationPins, simulation, preflight.costs(), preflight.rewards(),
                 rankProviderId, projection, preflight.unavailableProviders(), blockerDiagnostics, allowed,
                 operationPlan, authority, blockers);
         return PrestigeAuthorizationResult.planned(plan);
-    }
-
-    private Optional<RankProjectionRequest> projection(
-            OperationId operationId,
-            java.util.UUID playerId,
-            ActivePhaseFourConfiguration active,
-            StageDefinition resetStage,
-            List<AuthorizationBlocker> blockers) {
-        if (resetStage.projection().policy() == ProjectionPolicy.NONE) {
-            return Optional.empty();
-        }
-        ProviderId id = resetStage.projection().providerId().orElse(null);
-        Long generation = id == null ? null : active.phaseFour().providerGenerations().get(id);
-        if (id == null || generation == null || providers.provider(id).filter(RankAdapter.class::isInstance).isEmpty()) {
-            blockers.add(b(AuthorizationBlockerKind.PRESTIGE_RANK_PROJECTION_UNAVAILABLE,
-                    "Reset-stage rank projection lacks a pinned healthy RankAdapter", "provider",
-                    id == null ? "unconfigured" : id.value(), "intended_target", resetStage.id().value()));
-            return Optional.empty();
-        }
-        var stages = active.priorPhases().stages().configuration();
-        return Optional.of(new RankProjectionRequest(playerId, operationId, active.phaseFour().revisionId(),
-                generation, stages.managedGroups(id), resetStage.projection().groupName()));
     }
 
     private List<CurrencyConsequence> currencyConsequences(
@@ -412,7 +377,7 @@ public final class PrestigeAuthorizationService {
     private static List<ComponentConsequence> componentConsequences(PrestigeConfiguration configuration) {
         return java.util.Arrays.stream(ResetComponent.values()).map(component -> new ComponentConsequence(component,
                 configuration.resetPolicy().disposition(component), switch (component) {
-                    case PROGRESSION_STAGE -> "set to configured reset stage " + configuration.resetStage().value();
+                    case PROGRESSION_STAGE -> "legacy compatibility component; numeric Prestige changes no stage";
                     case ACTIVE_REQUIREMENT_PROGRESS -> configuration.resetPolicy().disposition(component)
                             == ResetDisposition.RESET
                                     ? "establish a new Prestige scope; prior progress remains historical/inaccessible"
@@ -438,10 +403,8 @@ public final class PrestigeAuthorizationService {
             ActivePhaseFourConfiguration active,
             PlayerPrestigeState state,
             ActiveSeasonContext season) {
-        long currentAfter = Math.addExact(state.currentPrestige(),
-                active.phaseFour().configuration().prestige().currentCountIncrement());
-        long lifetimeAfter = Math.addExact(state.lifetimePrestige(),
-                active.phaseFour().configuration().prestige().lifetimeCountIncrement());
+        long currentAfter = Math.addExact(state.currentPrestige(), 1);
+        long lifetimeAfter = Math.addExact(state.lifetimePrestige(), 1);
         ArrayList<MilestoneConsequence> result = new ArrayList<>();
         active.phaseFour().configuration().milestones().values().stream()
                 .filter(MilestoneDefinition::enabled)
@@ -510,8 +473,8 @@ public final class PrestigeAuthorizationService {
             Optional<ProviderId> rankProviderId,
             List<CurrencyConsequence> currencies,
             List<MilestoneConsequence> milestones,
-            PlayerStageState source,
-            StageDefinition reset) {
+            long sourceLevel,
+            long targetLevel) {
         ArrayList<OperationActionPlan> result = new ArrayList<>();
         preflight.costs().forEach(cost -> result.add(new OperationActionPlan(cost.actionId(),
                 cost.definition().providerId(), "cost", cost.redactedPreview(),
@@ -520,7 +483,7 @@ public final class PrestigeAuthorizationService {
                 rankProviderId.orElseThrow(),
                 "managed-direct-membership", "project configured reset-stage membership", false, true)));
         result.add(new OperationActionPlan("prestige-state-commit", INTERNAL_PROVIDER, "prestige-state",
-                source.stageId().value() + " -> " + reset.id().value(), false, true));
+                sourceLevel + " -> " + targetLevel, false, true));
         currencies.forEach(currency -> result.add(new OperationActionPlan("currency-reset-"
                 + currency.currencyId().value(), INTERNAL_PROVIDER, "currency-reset", currency.reason(), false, true)));
         milestones.forEach(milestone -> result.add(new OperationActionPlan("milestone-"

@@ -5,10 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import net.maddkraft.maddprestige.api.id.CostId;
 import net.maddkraft.maddprestige.api.id.CurrencyId;
 import net.maddkraft.maddprestige.api.id.EntitlementId;
 import net.maddkraft.maddprestige.api.id.MilestoneId;
 import net.maddkraft.maddprestige.api.id.SeasonId;
+import net.maddkraft.maddprestige.api.id.RewardId;
+import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.config.CompiledConfiguration;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
 import net.maddkraft.maddprestige.core.entitlement.EntitlementMergeStrategy;
@@ -23,6 +26,10 @@ class PhaseFourConfigurationCompilerTest {
 
         assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
         assertTrue(compilation.configuration().prestige().enabled());
+        assertEquals(ExactDecimal.parse("3"), compilation.configuration().valueScaling().costs()
+                .get(new CostId("prestige_cost")).valueAt(3));
+        assertEquals(ExactDecimal.parse("2"), compilation.configuration().valueScaling().rewards()
+                .get(new RewardId("prestige_reward")).valueAt(3));
         assertEquals(2, compilation.configuration().prestige().requiredStages().size());
         assertEquals(2, compilation.configuration().currencies().get(new CurrencyId("credits")).scale());
         assertEquals(EntitlementMergeStrategy.MAX, compilation.configuration().entitlements()
@@ -120,6 +127,21 @@ class PhaseFourConfigurationCompilerTest {
                   requirement-tree: prestige_gate
                   costs: [prestige_cost]
                   rewards: [prestige_reward]
+                  cost-scaling:
+                    prestige_cost:
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: unlimited
+                          mode: LINEAR
+                          base: 1
+                          rate: 1
+                  reward-scaling:
+                    prestige_reward:
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: unlimited
+                          mode: FLAT
+                          base: 2
                   external-resets:
                     enabled: false
                   reset-policy:

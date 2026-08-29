@@ -35,20 +35,6 @@ public final class PhaseFourConfigurationValidator {
         ArrayList<ValidationFinding> findings = new ArrayList<>();
         PrestigeConfiguration prestige = configuration.prestige();
         if (prestige.enabled()) {
-            for (var stageId : prestige.requiredStages()) {
-                var stage = stages.stages().get(stageId);
-                if (stage == null || !stage.enabled()) {
-                    findings.add(error("phase4.prestige.required_stage", "prestige.required-stages",
-                            "Prestige references an unknown or disabled required stage " + stageId.value(),
-                            "Reference an enabled immutable stage ID."));
-                }
-            }
-            var reset = stages.stages().get(prestige.resetStage());
-            if (reset == null || !reset.enabled()) {
-                findings.add(error("phase4.prestige.reset_stage", "prestige.reset-stage",
-                        "Prestige reset stage is unknown or disabled.",
-                        "Reference an enabled immutable reset stage ID."));
-            }
             prestige.requirementTreeId().filter(id -> !phaseThree.trees().containsKey(id)).ifPresent(id ->
                     findings.add(error("phase4.prestige.requirements", "prestige.requirement-tree",
                             "Prestige references unknown requirement tree " + id.value(),
@@ -62,6 +48,33 @@ public final class PhaseFourConfigurationValidator {
                             "Prestige references unknown reward " + id.value(),
                             "Define the reward before applying.")));
         }
+        configuration.valueScaling().costs().forEach((id, profile) -> {
+            var definition = phaseThree.costs().get(id);
+            if (definition == null) {
+                findings.add(error("phase9b.cost_scaling.unknown", "prestige.cost-scaling." + id.value(),
+                        "Cost scaling references an unknown cost.", "Define the cost before applying."));
+            } else if (!definition.amount().type().isNumeric()) {
+                findings.add(error("phase9b.cost_scaling.non_numeric", "prestige.cost-scaling." + id.value(),
+                        "Only numeric provider costs may be scaled.", "Remove scaling or use a numeric amount."));
+            }
+            validateCoverage(profile, prestige.limit(), "prestige.cost-scaling." + id.value(), findings);
+        });
+        configuration.valueScaling().rewards().forEach((id, profile) -> {
+            var definition = phaseThree.rewards().get(id);
+            if (definition == null) {
+                findings.add(error("phase9b.reward_scaling.unknown", "prestige.reward-scaling." + id.value(),
+                        "Reward scaling references an unknown reward.", "Define the reward before applying."));
+            } else if (!definition.value().type().isNumeric()) {
+                findings.add(error("phase9b.reward_scaling.non_numeric", "prestige.reward-scaling." + id.value(),
+                        "Only numeric provider rewards may be scaled.", "Remove scaling or use a numeric value."));
+            }
+            validateCoverage(profile, prestige.limit(), "prestige.reward-scaling." + id.value(), findings);
+        });
+        phaseThree.requirements().values().stream().filter(value -> !value.scaling().segments().isEmpty())
+                .forEach(requirement -> validateCoverage(
+                        new net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile(
+                                requirement.scaling().segments()), prestige.limit(),
+                        "requirements.requirements." + requirement.id().value() + ".scaling", findings));
         if (prestige.externalResetsEnabled()) {
             findings.add(error("phase4.prestige.external_reset", "prestige.external-resets",
                     "No safe external-reset capability is configured in Phase 4.",
@@ -70,7 +83,7 @@ public final class PhaseFourConfigurationValidator {
         if (prestige.scalingProfileId().isPresent() || prestige.catchUpProfileId().isPresent()) {
             findings.add(error("phase4.prestige.profile.unsupported", "prestige",
                     "Prestige scaling-profile and catch-up-profile have no Phase 4 runtime semantics.",
-                    "Remove both profile references until the owning later phase implements them."));
+                    "Use per-requirement scaling and prestige.cost-scaling/prestige.reward-scaling instead."));
         }
         validatePrestigeResetPolicy(prestige, findings);
         for (var milestone : configuration.milestones().values()) {
@@ -258,6 +271,20 @@ public final class PhaseFourConfigurationValidator {
                             .replace('_', '-'),
                     reason + "; RESET is unsupported in Phase 4.",
                     "Use PRESERVE for this component."));
+        }
+    }
+
+    private static void validateCoverage(
+            net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile profile,
+            PrestigeLimit limit,
+            String path,
+            List<ValidationFinding> findings) {
+        if (!profile.covers(limit)) {
+            findings.add(error("phase9b.scaling.coverage", path,
+                    limit.maximum().isPresent()
+                            ? "Scaling does not cover the configured finite Prestige maximum."
+                            : "Unlimited Prestige requires an open-ended final scaling segment.",
+                    "Extend the final segment through the maximum or use end-prestige: unlimited."));
         }
     }
 

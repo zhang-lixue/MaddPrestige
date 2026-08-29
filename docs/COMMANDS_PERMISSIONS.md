@@ -10,7 +10,7 @@ required and square brackets are optional.
 | `/maddprestige help [topic]` | `maddprestige.use` as applicable | Schema/provider help |
 | `/maddprestige status` | `maddprestige.use` | Active revision status |
 | `/maddprestige player [player-uuid]` | self; `maddprestige.admin.players.view` for staff | Canonical progress preview |
-| `/maddprestige rankup` | `maddprestige.rankup` | Prepare a rank-up confirmation |
+| `/maddprestige rankup` | `maddprestige.rankup` | Retained compatibility command; production execution is blocked |
 | `/maddprestige prestige` | `maddprestige.prestige` | Prepare a Prestige confirmation |
 | `/maddprestige confirm <confirmation-id>` | matching operation permission | Execute the exact fresh preview |
 | `/maddprestige why <rankup\|prestige> [player-uuid]` | operation permission; staff simulation for another UUID | Exact blockers |
@@ -36,3 +36,6 @@ for consequential GUI execution. A view-only subject cannot obtain or consume ap
 
 Use tab completion and `/maddprestige help`. Stable result/error codes in logs and API results are intentionally not
 localized even when rendered prose is.
+
+Numeric Prestige is the only active progression operation. Rank-up options remain in stable command/help surfaces for
+compatibility and return an explicit compatibility-only blocker; they do not mutate stage, rank, or Prestige state.

@@ -15,12 +15,49 @@ import net.maddkraft.maddprestige.core.requirement.RequirementBaseline;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;
 
-/** Explicit post-PRE lifecycle that atomically establishes initial stage and Prestige rows. */
+/** Establishes authoritative numeric Prestige state; paired stage initialization is compatibility-only. */
 public final class SqlitePlayerInitializationStore {
     private final ConnectionProvider connections;
 
     public SqlitePlayerInitializationStore(ConnectionProvider connections) {
         this.connections = Objects.requireNonNull(connections, "connection provider");
+    }
+
+    /** Atomically establishes fresh V2 numeric state at level zero without creating a progression stage. */
+    public void initializePrestige(
+            UUID playerId,
+            ConfigRevisionId revision,
+            ScopeId prestigeScope,
+            Instant now,
+            List<RequirementBaseline> baselines) {
+        Objects.requireNonNull(playerId, "player ID");
+        Objects.requireNonNull(revision, "configuration revision");
+        Objects.requireNonNull(prestigeScope, "Prestige scope");
+        Objects.requireNonNull(now, "initialization time");
+        List<RequirementBaseline> pinnedBaselines = List.copyOf(Objects.requireNonNull(baselines, "baselines"));
+        try (Connection connection = connections.open()) {
+            SqliteStageTransitionGuard.beginImmediate(connection);
+            try {
+                insertPrestige(connection, playerId, revision, prestigeScope, now);
+                for (RequirementBaseline baseline : pinnedBaselines) {
+                    if (!baseline.key().playerId().equals(playerId)
+                            || !baseline.key().scopeInstance().equals(prestigeScope)) {
+                        throw new PersistenceException("Initial baseline does not belong to numeric Prestige state");
+                    }
+                    insertBaseline(connection, baseline);
+                }
+                verifyPrestige(connection, playerId, revision, prestigeScope);
+                for (RequirementBaseline baseline : pinnedBaselines) {
+                    verifyBaseline(connection, baseline);
+                }
+                SqliteStageTransitionGuard.commit(connection);
+            } catch (SQLException | RuntimeException failure) {
+                SqliteStageTransitionGuard.rollback(connection, failure);
+                throw failure;
+            }
+        } catch (SQLException failure) {
+            throw new PersistenceException("Could not atomically initialize numeric Prestige state", failure);
+        }
     }
 
     public void initialize(
@@ -169,6 +206,25 @@ public final class SqlitePlayerInitializationStore {
                         || row.getLong(6) != 0 || !revision.value().equals(row.getString(7))
                         || !prestigeScope.value().equals(row.getString(8))) {
                     throw new PersistenceException("Player initialization raced with different durable state");
+                }
+            }
+        }
+    }
+
+    private static void verifyPrestige(
+            Connection connection,
+            UUID playerId,
+            ConfigRevisionId revision,
+            ScopeId prestigeScope) throws SQLException {
+        String sql = "SELECT current_prestige, lifetime_prestige, state_revision, config_revision_id, "
+                + "prestige_scope_id FROM mp_player_prestige_state WHERE player_uuid = ?";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, playerId.toString());
+            try (ResultSet row = statement.executeQuery()) {
+                if (!row.next() || row.getLong(1) != 0 || row.getLong(2) != 0 || row.getLong(3) != 0
+                        || !revision.value().equals(row.getString(4))
+                        || !prestigeScope.value().equals(row.getString(5))) {
+                    throw new PersistenceException("Numeric Prestige initialization raced with different state");
                 }
             }
         }

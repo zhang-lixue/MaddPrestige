@@ -223,7 +223,7 @@ public final class RequirementEvaluator {
                         status = RequirementEvaluationStatus.UNSATISFIED;
                     }
                 }
-                case ANY_X_OF_Y -> {
+                case X_OF_N, ANY_X_OF_Y -> {
                     progress = satisfiedCount;
                     if (satisfiedCount.compareTo(threshold) >= 0) {
                         status = RequirementEvaluationStatus.SATISFIED;

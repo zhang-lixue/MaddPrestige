@@ -1,16 +1,18 @@
-# Prestige lifecycle
+# Numeric Prestige lifecycle
 
-Prestige eligibility is explicit: enabled state, allowed source stages, reset stage, increments, maximum, cooldown,
-costs/rewards, and reset policies compile with the same active revision.
+The authoritative V2 state is a durable non-negative integer. A successful confirmed operation changes Prestige
+`P → P + 1`. `maximum` may be a configured integer or `unlimited`; there is no prerequisite rank, stage, LuckPerms
+group, or world lifecycle event.
 
-The generic profile permits Prestige only from `veteran`. Success increments current and lifetime Prestige exactly once,
-sets the stage to `member`, projects LuckPerms Member, and resets MaddPrestige-owned active requirement/baseline state.
-It preserves Paper's lifetime statistic and unrelated player/server state.
+The active revision selects one optional requirement tree, independent cost IDs, every-Prestige reward IDs, optional
+milestones, cooldown, maximum, segmented scaling maps, and reset/preserve behavior for MaddPrestige-owned scoped data.
+Provider-owned current values are read during authorization and preflight. Check-only requirements consume nothing.
 
-The operation uses prepare/confirm semantics. PRE events occur after authorization but before durable initialization or
-journal insertion; cancellation and listener failure are zero-effect. Authority is revalidated before journaling. POST
-follows a durable terminal state. Interrupted external effects are reported as uncertain/reconcilable rather than
-silently replayed.
+PRE occurs after authorization but before durable initialization or journaling; cancellation/listener failure is
+zero-effect. Exact configuration, provider generations, and Prestige state are revalidated. Internal commit uses a
+journaled SQLite transaction and compare-and-set; uncertain external effects remain explicitly reconcilable. POST
+observes a durable terminal outcome. Restart reloads the acknowledged numeric level and never derives it from worlds
+or external plugins.
 
-After restart, run `/maddprestige player` and `/maddprestige doctor`. A repeated Prestige request from the reset baseline
-stage is blocked and cannot add another count/history row.
+LuckPerms is optional. Configured permission/group rewards are additive; missing groups fail without creation. See
+[the Phase 9B policy](V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md) for configuration and compatibility details.

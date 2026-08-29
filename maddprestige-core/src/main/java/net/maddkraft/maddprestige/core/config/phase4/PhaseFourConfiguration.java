@@ -19,6 +19,7 @@ public record PhaseFourConfiguration(
         Map<EntitlementId, EntitlementDefinition> entitlements,
         Map<MilestoneId, MilestoneDefinition> milestones,
         Map<SeasonId, SeasonDefinition> seasons,
+        PrestigeValueScalingConfiguration valueScaling,
         CompetitionConfiguration competition) {
     public PhaseFourConfiguration {
         if (schemaVersion != 4) {
@@ -29,6 +30,7 @@ public record PhaseFourConfiguration(
         entitlements = Map.copyOf(Objects.requireNonNull(entitlements, "entitlements"));
         milestones = Map.copyOf(Objects.requireNonNull(milestones, "milestones"));
         seasons = Map.copyOf(Objects.requireNonNull(seasons, "seasons"));
+        valueScaling = Objects.requireNonNull(valueScaling, "Prestige value scaling");
         competition = Objects.requireNonNull(competition, "competition");
         currencies.forEach((id, value) -> requireMatching(id, value.id(), "currency"));
         entitlements.forEach((id, value) -> requireMatching(id, value.id(), "entitlement"));
@@ -39,6 +41,18 @@ public record PhaseFourConfiguration(
         }
     }
 
+    public PhaseFourConfiguration(
+            int schemaVersion,
+            PrestigeConfiguration prestige,
+            Map<CurrencyId, CurrencyDefinition> currencies,
+            Map<EntitlementId, EntitlementDefinition> entitlements,
+            Map<MilestoneId, MilestoneDefinition> milestones,
+            Map<SeasonId, SeasonDefinition> seasons,
+            CompetitionConfiguration competition) {
+        this(schemaVersion, prestige, currencies, entitlements, milestones, seasons,
+                PrestigeValueScalingConfiguration.empty(), competition);
+    }
+
     private static void requireMatching(Object key, Object id, String type) {
         if (!key.equals(id)) {
             throw new IllegalArgumentException("Configured " + type + " map key differs from immutable ID");
@@ -47,6 +61,6 @@ public record PhaseFourConfiguration(
 
     public static PhaseFourConfiguration empty() {
         return new PhaseFourConfiguration(4, PrestigeConfiguration.disabled(), Map.of(), Map.of(), Map.of(),
-                Map.of(), CompetitionConfiguration.disabled());
+                Map.of(), PrestigeValueScalingConfiguration.empty(), CompetitionConfiguration.disabled());
     }
 }

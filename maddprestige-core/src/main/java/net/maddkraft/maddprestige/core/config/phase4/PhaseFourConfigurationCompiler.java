@@ -31,6 +31,7 @@ import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.competition.CompetitionConfiguration;
 import net.maddkraft.maddprestige.core.config.CompiledConfiguration;
+import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationCompiler;
 import net.maddkraft.maddprestige.core.currency.CurrencyDefinition;
 import net.maddkraft.maddprestige.core.entitlement.EntitlementDefinition;
 import net.maddkraft.maddprestige.core.entitlement.EntitlementMergeStrategy;
@@ -66,6 +67,7 @@ public final class PhaseFourConfigurationCompiler {
                     "Phase 4 lifecycle schema version must be 4.", "Use schema-version: 4."));
         }
         PrestigeConfiguration prestige = prestige(root.get("prestige"), findings);
+        PrestigeValueScalingConfiguration valueScaling = valueScaling(root.get("prestige"), findings);
         Map<CurrencyId, CurrencyDefinition> currencies = currencies(root.get("currencies"), findings);
         Map<EntitlementId, EntitlementDefinition> entitlements = entitlements(root.get("entitlements"), findings);
         Map<MilestoneId, MilestoneDefinition> milestones = milestones(root.get("milestones"), findings);
@@ -74,7 +76,7 @@ public final class PhaseFourConfigurationCompiler {
         PhaseFourConfiguration configuration;
         try {
             configuration = new PhaseFourConfiguration(4, prestige, currencies, entitlements, milestones, seasons,
-                    competition);
+                    valueScaling, competition);
         } catch (IllegalArgumentException exception) {
             findings.add(error("phase4.configuration.invalid", "lifecycle", exception.getMessage(),
                     "Correct the lifecycle configuration before apply."));
@@ -83,13 +85,52 @@ public final class PhaseFourConfigurationCompiler {
         return new PhaseFourConfigurationCompilation(configuration, ValidationReport.of(findings));
     }
 
+    private static PrestigeValueScalingConfiguration valueScaling(
+            Object value,
+            List<ValidationFinding> findings) {
+        Map<?, ?> prestige = mapping(value, "prestige", findings);
+        LinkedHashMap<CostId, net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile> costs =
+                scalingMap(prestige.get("cost-scaling"), CostId::new, "prestige.cost-scaling", findings);
+        LinkedHashMap<RewardId, net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile> rewards =
+                scalingMap(prestige.get("reward-scaling"), RewardId::new, "prestige.reward-scaling", findings);
+        return new PrestigeValueScalingConfiguration(costs, rewards);
+    }
+
+    private static <T> LinkedHashMap<T, net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile> scalingMap(
+            Object value,
+            Function<String, T> idFactory,
+            String path,
+            List<ValidationFinding> findings) {
+        LinkedHashMap<T, net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile> result =
+                new LinkedHashMap<>();
+        for (var entry : mapping(value, path, findings).entrySet()) {
+            T id = id(entry.getKey(), idFactory, path, findings, null);
+            if (id == null || !(entry.getValue() instanceof Map<?, ?> fields)
+                    || !fields.containsKey("segments")) {
+                findings.add(error("phase4.scaling.invalid", path,
+                        "Each scaling profile requires a segments list.",
+                        "Configure contiguous segments beginning at Prestige 1."));
+                continue;
+            }
+            try {
+                result.put(id, PhaseThreeConfigurationCompiler.segmentedScaling(fields.get("segments")));
+            } catch (IllegalArgumentException exception) {
+                findings.add(error("phase4.scaling.invalid", path + "." + id,
+                        exception.getMessage(), "Use bounded contiguous segment formulas and overrides."));
+            }
+        }
+        return result;
+    }
+
     private static PrestigeConfiguration prestige(Object value, List<ValidationFinding> findings) {
         Map<?, ?> fields = mapping(value, "prestige", findings);
         boolean enabled = bool(fields.get("enabled"), false, "prestige.enabled", findings);
         Set<StageId> requiredStages = idSet(fields.get("required-stages"), StageId::new,
                 "prestige.required-stages", findings);
-        StageId resetStage = id(fields.get("reset-stage"), StageId::new, "prestige.reset-stage", findings,
-                new StageId("disabled"));
+        StageId resetStage = fields.containsKey("reset-stage")
+                ? id(fields.get("reset-stage"), StageId::new, "prestige.reset-stage", findings,
+                        new StageId("disabled"))
+                : new StageId("disabled");
         long currentIncrement = longValue(fields.get("current-count-increment"), 1,
                 "prestige.current-count-increment", findings);
         long lifetimeIncrement = longValue(fields.get("lifetime-count-increment"), 1,
@@ -287,8 +328,11 @@ public final class PhaseFourConfigurationCompiler {
         for (ResetComponent component : ResetComponent.values()) {
             String key = component.name().toLowerCase(Locale.ROOT).replace('_', '-');
             if (!fields.containsKey(key)) {
-                findings.add(error("phase4.reset_policy.missing", path + "." + key,
-                        "Every reset/preserve component must be explicit.", "Set the component to RESET or PRESERVE."));
+                if (component != ResetComponent.PROGRESSION_STAGE) {
+                    findings.add(error("phase4.reset_policy.missing", path + "." + key,
+                            "Every active reset/preserve component must be explicit.",
+                            "Set the component to RESET or PRESERVE."));
+                }
                 dispositions.put(component, ResetPreservePolicy.safeDefaults().disposition(component));
             } else {
                 dispositions.put(component, enumValue(fields.get(key), ResetDisposition.class,

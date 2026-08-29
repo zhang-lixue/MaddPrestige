@@ -316,6 +316,7 @@ class PaperMessageServiceTest {
                 "confirmation.unknown", "gui.action.forged", "gui.action.stale",
                 "gui.mutation.context_missing", "gui.mutation.kind_invalid", "gui.session.actor_mismatch",
                 "gui.session.expired", "gui.target.missing", "operation.preview.blocked", "permission.denied",
+                "rankup.compatibility_only",
                 "setup.acknowledgement.unknown", "setup.already_active", "setup.baseline.unknown",
                 "setup.draft.invalid", "setup.group.missing", "setup.incomplete",
                 "setup.integration.unconfigurable",
@@ -330,7 +331,7 @@ class PaperMessageServiceTest {
                 "stage.change.remap_snapshot_stale", "stage.change.remap_source_missing",
                 "stage.change.remap_source_present", "stage.change.remap_target_missing",
                 "stage.change.transition_reconciliation_pending", "stage.change.transition_stale",
-                "stage.remove.rejected");
+                "stage.compatibility_only", "stage.remove.rejected");
         assertEquals(expected,
                 net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                         .knownAdministrationCodes());
@@ -342,8 +343,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(89, identities.size());
-        assertEquals(89, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(91, identities.size());
+        assertEquals(91, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -413,8 +414,10 @@ class PaperMessageServiceTest {
                 Map.entry("config.preview.stale", 2),
                 Map.entry("config.revision.stale", 2),
                 Map.entry("config.validation.blocked", 2),
+                Map.entry("rankup.compatibility_only", 4),
                 Map.entry("setup.preview.required", 2),
-                Map.entry("stage.change.remap_invalid", 2));
+                Map.entry("stage.change.remap_invalid", 2),
+                Map.entry("stage.compatibility_only", 3));
         assertEquals(expected, counts);
 
         Set<String> compatible = Set.of(
@@ -423,7 +426,8 @@ class PaperMessageServiceTest {
                 "config.document.missing", "config.draft.apply_in_progress", "config.draft.cancelled",
                 "config.draft.changed_during_apply", "config.draft.concurrent_edit", "config.path.not_listable",
                 "config.path.unknown", "config.preview.required", "config.preview.stale", "config.revision.stale",
-                "setup.preview.required", "stage.change.remap_invalid");
+                "rankup.compatibility_only", "setup.preview.required", "stage.change.remap_invalid",
+                "stage.compatibility_only");
         Set<String> discriminated = Set.of("config.apply.failed", "config.validation.blocked");
         java.util.HashSet<String> reviewed = new java.util.HashSet<>(compatible);
         reviewed.addAll(discriminated);
@@ -475,7 +479,7 @@ class PaperMessageServiceTest {
         }
 
         assertEquals(70, singleSource.size());
-        assertEquals(19, multiSource.size());
+        assertEquals(21, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
         java.util.HashSet<String> accounted = new java.util.HashSet<>(audited);

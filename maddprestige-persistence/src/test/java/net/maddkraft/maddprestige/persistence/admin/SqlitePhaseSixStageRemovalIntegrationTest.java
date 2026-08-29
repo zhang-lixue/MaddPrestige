@@ -78,7 +78,7 @@ class SqlitePhaseSixStageRemovalIntegrationTest {
         ConfigurationService canonical = new ConfigurationService();
         ConfigurationAdministrationService administration = new ConfigurationAdministrationService(canonical,
                 new PhaseSixConfigurationWorkflow(canonical, new ProviderRegistry(), remaps, java.util.List.of()),
-                PhaseSixSchema.create(), history, (revisionId, configuration) -> {
+                compatibilitySchema(), history, (revisionId, configuration) -> {
                     PreparedConfigurationSnapshot prepared = snapshots.prepare(revisionId, configuration);
                     return new PreparedConfigurationSnapshot() {
                         @Override
@@ -194,7 +194,7 @@ class SqlitePhaseSixStageRemovalIntegrationTest {
         ConfigurationService canonical = new ConfigurationService();
         ConfigurationAdministrationService administration = new ConfigurationAdministrationService(canonical,
                 new PhaseSixConfigurationWorkflow(canonical, new ProviderRegistry(), remaps, java.util.List.of()),
-                PhaseSixSchema.create(), history, (revisionId, configuration) -> {
+                compatibilitySchema(), history, (revisionId, configuration) -> {
                     PreparedConfigurationSnapshot prepared = snapshots.prepare(revisionId, configuration);
                     return new PreparedConfigurationSnapshot() {
                         @Override
@@ -277,7 +277,7 @@ class SqlitePhaseSixStageRemovalIntegrationTest {
             ConfigurationAdministrationService administration = new ConfigurationAdministrationService(canonical,
                     new PhaseSixConfigurationWorkflow(canonical, new ProviderRegistry(), transitions,
                             java.util.List.of()),
-                    PhaseSixSchema.create(), history, (revisionId, configuration) -> {
+                    compatibilitySchema(), history, (revisionId, configuration) -> {
                         PreparedConfigurationSnapshot prepared = snapshots.prepare(revisionId, configuration);
                         return new PreparedConfigurationSnapshot() {
                             @Override
@@ -352,7 +352,7 @@ class SqlitePhaseSixStageRemovalIntegrationTest {
         PhaseSixConfigurationWorkflow workflow = new PhaseSixConfigurationWorkflow(canonical,
                 new ProviderRegistry(), remaps, java.util.List.of());
         ConfigurationAdministrationService administration = new ConfigurationAdministrationService(canonical,
-                workflow, PhaseSixSchema.create(), history, snapshots, CLOCK);
+                workflow, compatibilitySchema(), history, snapshots, CLOCK);
 
         UUID setupDraft = administration.beginInitialDraft(OWNER, documents(), "setup-wizard");
         var setupPreview = administration.preview(OWNER, setupDraft).toCompletableFuture().join();
@@ -412,7 +412,7 @@ class SqlitePhaseSixStageRemovalIntegrationTest {
         ConfigurationService canonical = new ConfigurationService();
         ConfigurationAdministrationService administration = new ConfigurationAdministrationService(canonical,
                 new PhaseSixConfigurationWorkflow(canonical, new ProviderRegistry(), remaps, java.util.List.of()),
-                PhaseSixSchema.create(), history, snapshots, CLOCK);
+                compatibilitySchema(), history, snapshots, CLOCK);
 
         UUID setupDraft = administration.beginInitialDraft(OWNER, multiDocuments(), "setup-wizard");
         administration.preview(OWNER, setupDraft).toCompletableFuture().join();
@@ -655,7 +655,13 @@ class SqlitePhaseSixStageRemovalIntegrationTest {
             AtomicConfigurationFileStore snapshots) {
         return new ConfigurationAdministrationService(canonical,
                 new PhaseSixConfigurationWorkflow(canonical, new ProviderRegistry(), transitions, java.util.List.of()),
-                PhaseSixSchema.create(), history, snapshots, CLOCK);
+                compatibilitySchema(), history, snapshots, CLOCK);
+    }
+
+    private static net.maddkraft.maddprestige.core.schema.SchemaRegistry compatibilitySchema() {
+        var schema = net.maddkraft.maddprestige.core.schema.PhaseFourSchema.create();
+        PhaseSixSchema.extend(schema);
+        return schema;
     }
 
     private static StoredConfigurationRevision setup(

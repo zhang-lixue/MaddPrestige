@@ -62,7 +62,8 @@ class PhaseEightDPublicDocumentationTest {
             "docs/MIGRATIONS_BACKUPS_RECOVERY.md", "docs/UPGRADE_ROLLBACK_V2.md",
             "docs/DIAGNOSTICS_TROUBLESHOOTING.md",
             "docs/API_SDK.md", "docs/EVENTS.md", "examples/member-adventurer-veteran/README.md",
-            "examples/provider-sdk/README.md");
+            "examples/provider-sdk/README.md", "docs/V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md",
+            "docs/V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md", "examples/numeric-prestige/README.md");
     private static final Set<String> COMMAND_ROOTS = Set.of("help", "status", "rankup", "prestige", "confirm",
             "simulate", "why", "player", "gui", "config", "setup", "doctor", "locale", "staff");
     private static final Pattern LINK = Pattern.compile("\\[[^]]+]\\((?!https?://|#)([^)]+)\\)");
@@ -133,7 +134,7 @@ class PhaseEightDPublicDocumentationTest {
     }
 
     @Test
-    @DisplayName("[A02][A70][D-F01..05] Exact public example compiles, validates external targets, and applies")
+    @DisplayName("[A02][A70][D-F01..05] Historical stage example remains valid compatibility evidence")
     void exactExampleCompilesAndApplies() throws IOException {
         Path example = repositoryRoot().resolve("examples/member-adventurer-veteran");
         LinkedHashMap<String, String> documents = new LinkedHashMap<>();
@@ -162,7 +163,34 @@ class PhaseEightDPublicDocumentationTest {
                 .order().stream().map(value -> value.value()).toList());
         assertEquals("member", active.priorPhases().stages().configuration().baselineStage().orElseThrow().value());
         assertTrue(active.phaseFour().configuration().prestige().enabled());
-        assertEquals("member", active.phaseFour().configuration().prestige().resetStage().value());
+        assertFalse(active.phaseFour().configuration().prestige().hasLegacyStagePolicy());
+    }
+
+    @Test
+    @DisplayName("[Phase 9B] Numeric example compiles and activates without stages or LuckPerms")
+    void numericExampleCompilesWithoutStageOrRankProvider() throws IOException {
+        Path example = repositoryRoot().resolve("examples/numeric-prestige");
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>();
+        for (String name : List.of("progression.yml", "requirements.yml", "rewards.yml", "lifecycle.yml",
+                "integrations.yml")) {
+            documents.put(name, Files.readString(example.resolve(name), StandardCharsets.UTF_8));
+        }
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("docs-test", new PaperPlayTimeProvider()));
+        PhaseSixConfigurationWorkflow workflow = new PhaseSixConfigurationWorkflow(
+                new ConfigurationService(), providers, Map::of, List.of());
+        ConfigDraft draft = new ConfigDraft(UUID.randomUUID(), Optional.empty(), documents,
+                new Actor("test", Optional.empty(), "Numeric documentation test"), Instant.now());
+
+        var candidate = workflow.prepare(draft, Optional.empty()).toCompletableFuture().join();
+
+        assertFalse(candidate.validation().hasErrors(), candidate.validation().toString());
+        assertFalse(candidate.stages().active());
+        assertTrue(candidate.stages().order().isEmpty());
+        assertTrue(candidate.phaseFour().prestige().enabled());
+        assertFalse(candidate.phaseFour().prestige().hasLegacyStagePolicy());
+        assertEquals("prestige_eligibility", candidate.phaseFour().prestige()
+                .requirementTreeId().orElseThrow().value());
     }
 
     @Test
@@ -206,21 +234,21 @@ class PhaseEightDPublicDocumentationTest {
         assertTrue(api.contains("net.maddkraft:maddprestige-api:2.0.0-rc.1"));
 
         String quickStart = Files.readString(root.resolve("docs/QUICK_START.md"), StandardCharsets.UTF_8);
-        assertTrue(quickStart.contains("/maddprestige setup playtime adventurer PT1M"));
-        assertTrue(quickStart.contains("/maddprestige setup playtime veteran PT3M"));
-        assertTrue(quickStart.contains("/maddprestige setup prestige enabled veteran member"));
-        assertTrue(quickStart.contains("/maddprestige setup preview\n/maddprestige setup acknowledge"));
-        assertTrue(quickStart.contains("paper_statistics play_one_minute GREATER_OR_EQUAL PT1M "
-                + "SINCE_PRESTIGE_START LIVE"));
+        assertTrue(quickStart.contains("/maddprestige setup prestige enabled"));
+        assertTrue(quickStart.contains("/maddprestige setup preview"));
+        assertTrue(quickStart.contains("requirements, costs, and rewards are independent")
+                || quickStart.contains("requirement threshold and cost amount are independent"));
+        assertFalse(quickStart.contains("required-stage"));
+        assertFalse(quickStart.contains("reset-stage"));
         String scopes = Files.readString(root.resolve("docs/REQUIREMENTS_SCOPES.md"), StandardCharsets.UTF_8);
-        assertTrue(scopes.contains("canonicalize the target as `DURATION` when entered"));
+        assertTrue(scopes.contains("target is canonicalized as `DURATION`"));
 
         List<Path> schemaDocuments = List.of(
-                root.resolve("examples/member-adventurer-veteran/progression.yml"),
-                root.resolve("examples/member-adventurer-veteran/requirements.yml"),
-                root.resolve("examples/member-adventurer-veteran/rewards.yml"),
-                root.resolve("examples/member-adventurer-veteran/lifecycle.yml"),
-                root.resolve("examples/member-adventurer-veteran/integrations.yml"));
+                root.resolve("examples/numeric-prestige/progression.yml"),
+                root.resolve("examples/numeric-prestige/requirements.yml"),
+                root.resolve("examples/numeric-prestige/rewards.yml"),
+                root.resolve("examples/numeric-prestige/lifecycle.yml"),
+                root.resolve("examples/numeric-prestige/integrations.yml"));
         assertEquals(List.of("3", "3", "3", "4", "7"), schemaDocuments.stream().map(document -> {
             try {
                 return Files.readAllLines(document, StandardCharsets.UTF_8).stream()

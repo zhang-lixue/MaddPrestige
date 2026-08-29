@@ -66,7 +66,7 @@ class RequirementEngineTest {
                 ExactDecimal.parse("1"), CatchUpProfile.disabled(), "Any");
         assertEquals(RequirementEvaluationStatus.SATISFIED, evaluator.evaluate(any, context(samples)).status());
 
-        var anyTwo = new RequirementGroup(new RequirementId("any_two"), RequirementGroupMode.ANY_X_OF_Y,
+        var anyTwo = new RequirementGroup(new RequirementId("any_two"), RequirementGroupMode.X_OF_N,
                 List.of(RequirementChild.unweighted(passedOne), RequirementChild.unweighted(passedTwo),
                         RequirementChild.unweighted(failed), RequirementChild.unweighted(unavailable)),
                 ExactDecimal.parse("2"), CatchUpProfile.disabled(), "Any two");

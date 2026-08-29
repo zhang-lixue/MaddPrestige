@@ -17,12 +17,12 @@ class MaddPrestigePlaceholderExpansionTest {
     void repeatedRendersAreCacheOnly() {
         UUID playerId = UUID.randomUUID();
         MaddPrestigePlaceholderCache cache = new MaddPrestigePlaceholderCache(10);
-        cache.publish(playerId, new MaddPrestigePlaceholderSnapshot("veteran", "7", "12", "READY",
+        cache.publish(playerId, new MaddPrestigePlaceholderSnapshot("7", "12", "READY",
                 Map.of("season", "summer")));
         MaddPrestigePlaceholderExpansion expansion = new MaddPrestigePlaceholderExpansion(cache, "2.0.0");
         OfflinePlayer player = player(playerId);
         for (int index = 0; index < 10_000; index++) {
-            assertEquals("veteran", expansion.onRequest(player, "stage"));
+            assertNull(expansion.onRequest(player, "stage"));
             assertEquals("7", expansion.onRequest(player, "current_prestige"));
         }
         assertEquals(1, cache.size());
@@ -40,8 +40,8 @@ class MaddPrestigePlaceholderExpansionTest {
         cache.publish(first, snapshot("first"));
         cache.publish(second, snapshot("second"));
         assertEquals(1, cache.size());
-        assertNull(expansion.onRequest(player(first), "stage"));
-        assertEquals("second", expansion.onRequest(player(second), "stage"));
+        assertNull(expansion.onRequest(player(first), "current_prestige"));
+        assertEquals("0", expansion.onRequest(player(second), "current_prestige"));
         assertNull(expansion.onRequest(player(second), "unknown"));
     }
 
@@ -55,8 +55,8 @@ class MaddPrestigePlaceholderExpansionTest {
         assertEquals(true, expansion.canRegister());
     }
 
-    private static MaddPrestigePlaceholderSnapshot snapshot(String stage) {
-        return new MaddPrestigePlaceholderSnapshot(stage, "0", "0", "UNAVAILABLE", Map.of());
+    private static MaddPrestigePlaceholderSnapshot snapshot(String ignored) {
+        return new MaddPrestigePlaceholderSnapshot("0", "0", "UNAVAILABLE", Map.of());
     }
 
     private static OfflinePlayer player(UUID id) {

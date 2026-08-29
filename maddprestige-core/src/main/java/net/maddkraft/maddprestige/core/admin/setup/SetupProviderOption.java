@@ -8,7 +8,6 @@ public record SetupProviderOption(
         ProviderId providerId,
         boolean active,
         boolean healthy,
-        boolean rankCapable,
         List<String> metricIds,
         String healthReason) {
     public SetupProviderOption {

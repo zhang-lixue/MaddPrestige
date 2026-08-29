@@ -70,7 +70,6 @@ import net.maddkraft.maddprestige.core.requirement.ScalingProfile;
 import net.maddkraft.maddprestige.core.requirement.ScopeContext;
 import net.maddkraft.maddprestige.core.season.ActiveSeasonContext;
 import net.maddkraft.maddprestige.core.stage.ActiveStageConfiguration;
-import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 import net.maddkraft.maddprestige.core.stage.StageConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.stage.StageDefinition;
@@ -86,7 +85,7 @@ class PrestigeProviderHealthTest {
     private static final MetricId METRIC = new MetricId("count");
 
     @Test
-    void unhealthyResetRankAdapterBlocksCanonicalAuthorization() {
+    void unhealthyRankAdapterIsIrrelevantWithoutConfiguredLuckPermsReward() {
         ProviderRegistry providers = new ProviderRegistry();
         ProviderId id = new ProviderId("unhealthy_rank");
         UnhealthyRankAdapter adapter = new UnhealthyRankAdapter(id);
@@ -97,8 +96,8 @@ class PrestigeProviderHealthTest {
                 StageProjection.group(id, "origin"), Optional.empty(), false).authorize(intent())
                 .toCompletableFuture().join();
 
-        assertTrue(result.plan().isEmpty());
-        assertTrue(result.rejection().orElseThrow().contains("required"));
+        assertTrue(result.plan().orElseThrow().executionAllowed());
+        assertTrue(result.plan().orElseThrow().rankProjectionRequest().isEmpty());
     }
 
     @Test
@@ -109,7 +108,8 @@ class PrestigeProviderHealthTest {
         var registration = providers.register("test", metric);
         providers.activate(registration);
         assertTrue(service(providers, Map.of(id, registration.generation()), StageProjection.none(),
-                Optional.of(id), true).authorize(intent()).toCompletableFuture().join().plan().isEmpty());
+                Optional.of(id), true).authorize(intent()).toCompletableFuture().join()
+                .plan().orElseThrow().executionAllowed());
 
         PrestigeAuthorizationResult dormant = service(new ProviderRegistry(), Map.of(), StageProjection.none(),
                 Optional.of(new ProviderId("missing_dormant")), false).authorize(intent())
@@ -165,12 +165,10 @@ class PrestigeProviderHealthTest {
                 new PhaseThreeConfigurationSnapshot(REVISION, phaseThree, pins));
         ActivePhaseFourConfiguration active = new ActivePhaseFourConfiguration(prior,
                 new PhaseFourConfigurationSnapshot(REVISION, phaseFour, pins));
-        PlayerStageState stage = new PlayerStageState(player, SUMMIT, 0, REVISION, NOW, NOW, NOW, Optional.empty(),
-                Optional.empty(), Optional.empty());
         PlayerPrestigeState prestigeState = new PlayerPrestigeState(player, 0, 0, 0, REVISION,
                 new ScopeId("prestige-current"), Optional.empty(), NOW, NOW);
-        return new PrestigeAuthorizationService(() -> Optional.of(active), ignored -> Optional.of(stage),
-                ignored -> Optional.of(prestigeState), (ignored, stageState, state, configuration) ->
+        return new PrestigeAuthorizationService(() -> Optional.of(active),
+                ignored -> Optional.of(prestigeState), (ignored, state, configuration) ->
                         new PrestigeProgressContext(player, REVISION, 0, ExactDecimal.ZERO,
                                 new ScopeContext(Map.of(MeasurementScope.SINCE_PRESTIGE_START,
                                         state.prestigeScope()))),

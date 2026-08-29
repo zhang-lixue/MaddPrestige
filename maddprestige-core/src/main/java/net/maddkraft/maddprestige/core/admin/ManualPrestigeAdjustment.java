@@ -16,7 +16,7 @@ public record ManualPrestigeAdjustment(
         String reason) {
     public ManualPrestigeAdjustment {
         playerId = Objects.requireNonNull(playerId, "player ID");
-        if (expectedStateRevision < 0 || currentPrestige < 0 || lifetimePrestige < currentPrestige) {
+        if (expectedStateRevision < 0 || currentPrestige < 0 || lifetimePrestige != currentPrestige) {
             throw new IllegalArgumentException("Manual Prestige counters/revision are inconsistent");
         }
         configRevision = Objects.requireNonNull(configRevision, "configuration revision");

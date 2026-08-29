@@ -53,7 +53,7 @@ class McMmoAndPlaceholderProviderTest {
     }
 
     @Test
-    @DisplayName("[A48] mcMMO skill and power metrics map through generic MetricProvider queries")
+    @DisplayName("[A48][OR9B-03] total_level is advertised while power_level remains a readable hidden alias")
     void readsMcMmoMetrics() {
         McMmoExperienceAccess access = new McMmoExperienceAccess() {
             @Override
@@ -76,11 +76,17 @@ class McMmoAndPlaceholderProviderTest {
                 Clock.fixed(NOW, ZoneOffset.UTC), "2.2.053");
         MetricQuery skill = new MetricQuery(McMmoMetricProvider.SKILL_LEVEL, MetricReadMode.CURRENT,
                 Map.of("skill", "MINING"));
+        MetricQuery total = new MetricQuery(McMmoMetricProvider.TOTAL_LEVEL, MetricReadMode.CURRENT, Map.of());
         MetricQuery power = new MetricQuery(McMmoMetricProvider.POWER_LEVEL, MetricReadMode.CURRENT, Map.of());
-        var samples = provider.read(UUID.randomUUID(), List.of(skill, power), 7).toCompletableFuture().join();
+        var samples = provider.read(UUID.randomUUID(), List.of(skill, total, power), 7).toCompletableFuture().join();
         assertEquals("42", samples.get(skill).value().orElseThrow().canonical());
+        assertEquals("314", samples.get(total).value().orElseThrow().canonical());
         assertEquals("314", samples.get(power).value().orElseThrow().canonical());
         assertEquals(7, samples.get(power).providerGeneration());
+        assertTrue(provider.metrics().stream().anyMatch(metric -> metric.metricId().equals(
+                McMmoMetricProvider.TOTAL_LEVEL)));
+        assertTrue(provider.metrics().stream().noneMatch(metric -> metric.metricId().equals(
+                McMmoMetricProvider.POWER_LEVEL)));
     }
 
     @Test

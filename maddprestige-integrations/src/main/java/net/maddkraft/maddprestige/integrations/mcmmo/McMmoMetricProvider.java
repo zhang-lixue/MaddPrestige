@@ -30,10 +30,13 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import net.maddkraft.maddprestige.integrations.IntegrationTaskScheduler;
 import net.maddkraft.maddprestige.integrations.MutableProviderHealth;
 
-/** Authoritative read-only mcMMO skill-level and power-level metrics. */
+/** Authoritative read-only mcMMO metrics; total level is the canonical Prestige input. */
 public final class McMmoMetricProvider implements MetricProvider {
     public static final ProviderId PROVIDER_ID = new ProviderId("mcmmo");
     public static final MetricId SKILL_LEVEL = new MetricId("skill_level");
+    public static final MetricId TOTAL_LEVEL = new MetricId("total_level");
+    /** @deprecated Use {@link #TOTAL_LEVEL}; this alias remains readable for accepted configurations. */
+    @Deprecated
     public static final MetricId POWER_LEVEL = new MetricId("power_level");
     private final McMmoExperienceAccess access;
     private final IntegrationTaskScheduler scheduler;
@@ -58,7 +61,7 @@ public final class McMmoMetricProvider implements MetricProvider {
                         Map.of("thread", "server", "mutation", "none"))));
         metrics = List.of(metric(SKILL_LEVEL, Map.of("skill", new MetricDimension("skill", true, Set.of(),
                         "Official mcMMO skill name")), "mcMMO skill level"),
-                metric(POWER_LEVEL, Map.of(), "mcMMO power level"));
+                metric(TOTAL_LEVEL, Map.of(), "mcMMO total level"));
     }
 
     @Override
@@ -96,7 +99,8 @@ public final class McMmoMetricProvider implements MetricProvider {
         if (query.readMode() != MetricReadMode.CURRENT) {
             return unavailable(generation, now, "mcMMO levels support CURRENT reads only");
         }
-        if (POWER_LEVEL.equals(query.metricId()) && query.filters().isEmpty()) {
+        if ((TOTAL_LEVEL.equals(query.metricId()) || POWER_LEVEL.equals(query.metricId()))
+                && query.filters().isEmpty()) {
             return MetricSample.available(MetricValue.integer(access.powerLevel(playerId)), generation, now, "mcmmo");
         }
         String skill = query.filters().get("skill");

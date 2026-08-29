@@ -34,7 +34,7 @@ import net.maddkraft.maddprestige.integrations.IntegrationTaskScheduler;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompilation;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompiler;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration;
-import net.maddkraft.maddprestige.integrations.luckperms.LuckPermsRankAdapter;
+import net.maddkraft.maddprestige.integrations.luckperms.LuckPermsRewardProvider;
 import net.maddkraft.maddprestige.persistence.admin.AtomicConfigurationFileStore;
 import net.maddkraft.maddprestige.persistence.admin.SqliteConfigurationHistoryStore;
 import net.maddkraft.maddprestige.persistence.migration.MigrationRunner;
@@ -104,7 +104,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
                 Files.createFile(database);
             }
             SqliteFoundation foundation = new SqliteFoundation(database);
-            var migrations = SqliteMigrations.phaseEightC();
+            var migrations = SqliteMigrations.phaseNineB();
             new MigrationRunner(foundation,
                     new SqliteBackupService(foundation, dataDirectory.resolve("backups"), migrations, clock), clock)
                     .migrate(migrations);
@@ -190,16 +190,17 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     private void registerLuckPermsIfPresent() {
         org.bukkit.plugin.Plugin dependency = getServer().getPluginManager().getPlugin("LuckPerms");
         if (dependency == null || !dependency.isEnabled()) {
-            getLogger().info("LuckPerms plugin is absent; rank projection remains fail-closed when configured.");
+            getLogger().info("LuckPerms plugin is absent; optional LuckPerms rewards remain unavailable.");
             return;
         }
         var service = getServer().getServicesManager().getRegistration(LuckPerms.class);
         if (service == null || !service.getPlugin().isEnabled()) {
-            getLogger().info("LuckPerms service is absent; rank projection remains fail-closed when configured.");
+            getLogger().info("LuckPerms service is absent; optional LuckPerms rewards remain unavailable.");
             return;
         }
         LuckPerms api = service.getProvider();
-        LuckPermsRankAdapter adapter = new LuckPermsRankAdapter(api, service.getPlugin().getPluginMeta().getVersion(),
+        LuckPermsRewardProvider adapter = new LuckPermsRewardProvider(api,
+                service.getPlugin().getPluginMeta().getVersion(),
                 () -> {
                     var current = getServer().getServicesManager().getRegistration(LuckPerms.class);
                     return current != null && current.getProvider() == api && current.getPlugin().isEnabled();

@@ -61,7 +61,8 @@ public final class RequirementTreeValidator {
             findings.add(error("requirement.group.threshold", path,
                     "Group threshold must be positive.", "Use a positive threshold."));
         }
-        if (group.mode() == RequirementGroupMode.ANY_X_OF_Y) {
+        if (group.mode() == RequirementGroupMode.X_OF_N
+                || group.mode() == RequirementGroupMode.ANY_X_OF_Y) {
             try {
                 int threshold = group.threshold().asBigDecimal().intValueExact();
                 if (threshold < 1 || threshold > group.children().size()) {
@@ -84,6 +85,7 @@ public final class RequirementTreeValidator {
             }
         }
         if (group.catchUp().enabled()
+                && group.mode() != RequirementGroupMode.X_OF_N
                 && group.mode() != RequirementGroupMode.ANY_X_OF_Y
                 && group.mode() != RequirementGroupMode.WEIGHTED) {
             findings.add(error("requirement.group.catch_up.unsupported", path,

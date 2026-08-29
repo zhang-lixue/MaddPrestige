@@ -31,16 +31,68 @@ import net.luckperms.api.model.user.UserManager;
 import net.luckperms.api.context.ImmutableContextSet;
 import net.luckperms.api.node.Node;
 import net.luckperms.api.node.types.InheritanceNode;
+import net.luckperms.api.node.types.PermissionNode;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.OperationId;
+import net.maddkraft.maddprestige.api.id.RewardId;
+import net.maddkraft.maddprestige.api.metric.MetricValue;
+import net.maddkraft.maddprestige.api.metric.MetricValueType;
+import net.maddkraft.maddprestige.api.rank.RankAdapter;
 import net.maddkraft.maddprestige.api.rank.RankProjectionOutcome;
 import net.maddkraft.maddprestige.api.rank.RankProjectionRequest;
 import net.maddkraft.maddprestige.api.result.ErrorCategory;
+import net.maddkraft.maddprestige.api.reward.PlannedReward;
+import net.maddkraft.maddprestige.api.reward.RewardDefinition;
+import net.maddkraft.maddprestige.api.reward.RewardFailurePolicy;
+import net.maddkraft.maddprestige.api.reward.RewardRepeatability;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class LuckPermsRankAdapterTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-15T00:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    @DisplayName("[Phase 9B] Permission and existing-group rewards are additive and never create groups")
+    void additiveRewardsPreserveEveryUnrelatedNodeAndNeverCreateGroups() {
+        Node unrelatedPermission = permission("unrelated.permission");
+        Harness harness = new Harness(true, Set.of("configured_reward_group"),
+                List.of(group("supporter"), unrelatedPermission));
+        LuckPermsRewardProvider adapter = harness.rewardProvider(() -> true);
+
+        assertFalse((Object) adapter instanceof RankAdapter);
+        assertTrue(adapter.descriptor().capabilities().stream()
+                .allMatch(capability -> capability.category().equals("reward")));
+        assertTrue(adapter.descriptor().capabilities().stream()
+                .noneMatch(capability -> capability.id().equals("managed-direct-membership")));
+
+        PlannedReward permission = reward(harness.playerId, "permission", "maddprestige.reward.p5");
+        assertTrue(adapter.preflight(permission).toCompletableFuture().join().plannedReward().isPresent());
+        assertEquals(net.maddkraft.maddprestige.api.action.ActionExecutionStatus.APPLIED,
+                adapter.execute(permission).toCompletableFuture().join().status());
+
+        PlannedReward group = reward(harness.playerId, "group", "configured_reward_group");
+        assertTrue(adapter.preflight(group).toCompletableFuture().join().plannedReward().isPresent());
+        assertEquals(net.maddkraft.maddprestige.api.action.ActionExecutionStatus.APPLIED,
+                adapter.execute(group).toCompletableFuture().join().status());
+
+        assertTrue(harness.inheritanceGroups().containsAll(Set.of("supporter", "configured_reward_group")));
+        assertTrue(harness.nodes.contains(unrelatedPermission));
+        assertTrue(harness.nodes.stream().anyMatch(node -> "maddprestige.reward.p5".equals(node.getKey())));
+        assertEquals(0, harness.groupCreations.get());
+    }
+
+    @Test
+    @DisplayName("[Phase 9B] Missing configured group reward fails preflight and is never created")
+    void missingRewardGroupFailsClosedWithoutCreation() {
+        Harness harness = new Harness(false, Set.of(), List.of(group("supporter")));
+        var preflight = harness.rewardProvider(() -> true)
+                .preflight(reward(harness.playerId, "group", "missing_group"))
+                .toCompletableFuture().join();
+
+        assertTrue(preflight.plannedReward().isEmpty());
+        assertEquals(0, harness.groupCreations.get());
+        assertEquals(Set.of("supporter"), harness.inheritanceGroups());
+    }
 
     @Test
     @DisplayName("[A05] Missing configured group fails before user load/removal and is never created")
@@ -228,6 +280,17 @@ class LuckPermsRankAdapterTest {
                 1, managed, desired);
     }
 
+    private static PlannedReward reward(UUID playerId, String type, String value) {
+        RewardDefinition definition = new RewardDefinition(new RewardId("lp_" + type),
+                LuckPermsRankAdapter.PROVIDER_ID, type, MetricValue.parse(MetricValueType.STRING, value), Map.of(),
+                "Configured LuckPerms reward", RewardFailurePolicy.REQUIRED,
+                RewardRepeatability.ONCE_PER_OPERATION);
+        return new PlannedReward(OperationId.random(), "reward-lp-" + type, playerId, definition,
+                new ConfigRevisionId("revision_1"), 1,
+                new net.maddkraft.maddprestige.api.action.ActionCharacteristics(true, false, true, true),
+                "configured LuckPerms reward");
+    }
+
     private static InheritanceNode group(String groupName) {
         return inheritance(groupName, Map.of(), Optional.empty());
     }
@@ -266,8 +329,8 @@ class LuckPermsRankAdapterTest {
         });
     }
 
-    private static Node permission(String key) {
-        return Harness.proxy(Node.class, (method, args, returnType) -> switch (method) {
+    private static PermissionNode permission(String key) {
+        return Harness.proxy(PermissionNode.class, (method, args, returnType) -> switch (method) {
             case "getKey" -> key;
             case "getValue" -> true;
             case "hasExpiry", "hasExpired" -> false;
@@ -367,7 +430,12 @@ class LuckPermsRankAdapterTest {
 
         private LuckPermsRankAdapter adapter(BooleanSupplier available) {
             return new LuckPermsRankAdapter(luckPerms, "5.5-fixture", available, CLOCK,
-                    LuckPermsRankAdapterTest::group);
+                    LuckPermsRankAdapterTest::group, LuckPermsRankAdapterTest::permission);
+        }
+
+        private LuckPermsRewardProvider rewardProvider(BooleanSupplier available) {
+            return new LuckPermsRewardProvider(luckPerms, "5.5-fixture", available, CLOCK,
+                    LuckPermsRankAdapterTest::group, LuckPermsRankAdapterTest::permission);
         }
 
         private Set<String> inheritanceGroups() {

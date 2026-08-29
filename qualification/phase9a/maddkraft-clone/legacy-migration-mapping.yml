@@ -1,4 +1,6 @@
-# Phase 9A owner-review template. It is intentionally non-executable while any decision is unresolved.
+# HISTORICAL Phase 9A owner-review template.
+# SUPERSEDED by the owner-approved fresh-V2/no-V1-player-import policy.
+# NON-EXECUTABLE: retained only as fail-closed historical evidence; its unresolved values are not deployment gates.
 format-version: 1
 source-kind: maddprestige-v1
 source-schema-version: 1

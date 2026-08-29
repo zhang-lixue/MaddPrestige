@@ -24,7 +24,7 @@ plugin-data directory.
 4. Wait for `Done`. A supported schema prefix migrates forward only after history/checksum validation, coordinated
    backup, independent integrity/configuration checks, and disposable restore rehearsal.
 5. Run `/maddprestige status`, `/maddprestige doctor`, and `/maddprestige player`. Verify the exact active revision,
-   stage/Prestige state, provider health, and absence of unresolved operations/configuration transitions.
+   numeric Prestige state, provider health, and absence of unresolved operations/configuration transitions.
 6. Stop cleanly, start the unchanged directory again, and repeat the health/state checks before accepting the rehearsal.
 
 MaddPrestige fails closed on future/gapped/duplicate/mismatched schema history, corrupt/truncated data, incompatible
@@ -34,9 +34,9 @@ do not delete evidence to make startup continue.
 ## V1 and real-deployment boundary
 
 The historical 1.x runtime and V2 use materially different genericity, configuration, persistence, and operation
-contracts. Do not treat replacement of `MaddPrestige-1.2.0.jar` as an automatic live player/configuration migration.
-The exact legacy mapping and MaddKraft clone migration remain Phase 9. Keep the old artifact/data read-only until that
-separate plan is owner-approved and rehearsed.
+contracts. V1 player/configuration data is not imported: fresh V2 player state starts at Prestige 0 unless an
+administrator later uses an audited V2 function. Keep old artifacts/data read-only only for archive or rollback; a
+future clone qualification must prove isolation and durability, not execute a player mapping.
 
 ## Rollback and recovery
 

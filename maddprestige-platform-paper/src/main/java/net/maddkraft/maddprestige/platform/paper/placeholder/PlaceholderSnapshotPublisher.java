@@ -11,9 +11,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.logging.Level;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
-import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerPrestigeRepository;
-import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerStageRepository;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.HandlerList;
 import org.bukkit.event.Listener;
@@ -26,7 +24,6 @@ import org.bukkit.scheduler.BukkitTask;
 public final class PlaceholderSnapshotPublisher implements Listener, AutoCloseable {
     private final Plugin plugin;
     private final MaddPrestigePlaceholderCache cache;
-    private final SqlitePlayerStageRepository stages;
     private final SqlitePlayerPrestigeRepository prestiges;
     private final Function<UUID, InitializationResult> playerInitializer;
     private final ExecutorService worker;
@@ -36,12 +33,10 @@ public final class PlaceholderSnapshotPublisher implements Listener, AutoCloseab
     public PlaceholderSnapshotPublisher(
             Plugin plugin,
             MaddPrestigePlaceholderCache cache,
-            SqlitePlayerStageRepository stages,
             SqlitePlayerPrestigeRepository prestiges,
             Function<UUID, InitializationResult> playerInitializer) {
         this.plugin = Objects.requireNonNull(plugin, "plugin");
         this.cache = Objects.requireNonNull(cache, "placeholder cache");
-        this.stages = Objects.requireNonNull(stages, "stage repository");
         this.prestiges = Objects.requireNonNull(prestiges, "Prestige repository");
         this.playerInitializer = Objects.requireNonNull(playerInitializer, "player initializer");
         worker = Executors.newThreadPerTaskExecutor(Thread.ofVirtual()
@@ -73,16 +68,14 @@ public final class PlaceholderSnapshotPublisher implements Listener, AutoCloseab
                             + initialization.failure().orElseThrow());
                     return;
                 }
-                PlayerStageState stage = stages.find(playerId).orElse(null);
                 PlayerPrestigeState prestige = prestiges.find(playerId).orElse(null);
-                if (stage == null && prestige == null) {
+                if (prestige == null) {
                     cache.remove(playerId);
                     return;
                 }
                 cache.publish(playerId, new MaddPrestigePlaceholderSnapshot(
-                        stage == null ? "" : stage.stageId().value(),
-                        prestige == null ? "0" : Long.toString(prestige.currentPrestige()),
-                        prestige == null ? "0" : Long.toString(prestige.lifetimePrestige()),
+                        Long.toString(prestige.currentPrestige()),
+                        Long.toString(prestige.lifetimePrestige()),
                         "MATERIALIZED", Map.of()));
             } catch (RuntimeException failure) {
                 plugin.getLogger().log(Level.WARNING, "Placeholder snapshot refresh failed safely", failure);

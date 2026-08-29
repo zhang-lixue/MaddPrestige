@@ -3,7 +3,7 @@
 ## Current verdict
 
 **NOT READY FOR PRODUCTION.** Phase 9A prepared repository fixtures, audit evidence, and the clone runbook only. No
-MaddKraft clone migration or current real-provider/full-stack qualification was performed. A boot alone cannot change
+MaddKraft clone no-import or current real-provider/full-stack qualification was performed. A boot alone cannot change
 this verdict. A63 remains `Partial`; no acceptance-ledger row changed.
 
 Every box below requires an immutable current-clone evidence reference and owner sign-off. Historical Phase 7/8
@@ -19,24 +19,21 @@ evidence is prerequisite context, not a substitute for a current Phase 9 run.
 - [ ] V1 and V2 JARs are never co-loaded.
 - [ ] Complete stopped legacy MaddPrestige directory backup passes manifest/hash/integrity validation and disposable
   restore rehearsal.
-- [ ] LP export, plugin-local provider state, generated mapping/report, and the pristine server checkpoint are retained.
-- [ ] Rollback to the pristine clone has been rehearsed and verified before migration mutation.
+- [ ] LP export, plugin-local provider state, historical mapping evidence, and the pristine server checkpoint are retained.
+- [ ] Rollback to the pristine clone has been rehearsed and verified before any V2 qualification mutation.
 - [ ] Network endpoints, Discord, stores, RCON, backup schedules, and ports cannot affect production.
 
-## Migration gate
+## Fresh-V2 no-import gate
 
-- [ ] Real source schema/tables/counts/distinct values/pending records are inventoried read-only.
-- [ ] Every legacy stage value has one explicit owner-approved mapping or explicit reject/archive disposition.
-- [ ] Current/lifetime Prestige, Tea Leaves, entitlements, seasons, progress, transactions, patrons, preferences, audit,
-  and obsolete competition data each have an approved disposition.
-- [ ] No `OWNER_DECISION_REQUIRED`, missing, conflicting, or invalid target remains in the frozen manifest.
-- [ ] A reviewed V1-to-V2 executor and persistent per-row report exist; Phase 9A currently records this as missing.
-- [ ] Dry run covers every source row/category and reconciles expected destination/archive counts.
-- [ ] Apply uses the identical source/manifest/candidate hashes and a fresh restored clone checkpoint.
-- [ ] Repetition is proven idempotent for the same run identity or rejected before mutation.
-- [ ] Post-migration UUID-by-UUID and aggregate reconciliation passes before and after restart.
-- [ ] Pending/uncertain V1 transactions are manually resolved or affected players remain blocked; none are replayed.
-- [ ] A63 is changed from `Partial` only after the actual owner-approved clone migration evidence passes.
+- [ ] V1 data is preserved in a separate immutable path and its DB/config hashes are recorded before V2 boot.
+- [ ] V2 has no V1 player-data input, mapper, executor, or read path.
+- [ ] Representative UUIDs with conspicuous V1 rank, Prestige, Tea Leaves, perks, progress, pending operations,
+  seasons/history/competition data, and preferences initialize in V2 at Prestige 0.
+- [ ] Restart preserves exact V2 P0 state while V1 bytes/rows and external plugin state remain unchanged.
+- [ ] The historical mapping artifact remains HISTORICAL / SUPERSEDED / NON-EXECUTABLE; its eight markers are evidence,
+  not deployment requirements.
+- [ ] A36 changes only after the actual no-import evidence passes.
+- [ ] A63 changes only after the independent populated pre-Phase9B V2 SQLite upgrade/preservation/report/restart gate.
 
 ## MaddKraft profile and identity gate
 
@@ -113,7 +110,7 @@ evidence is prerequisite context, not a substitute for a current Phase 9 run.
 
 ## Owner policy gate
 
-- [ ] Owner approves all migration mappings and explicit data discard/archive decisions.
+- [ ] Owner no-import decision is recorded; no V1 player mapping or migration executor is authorized.
 - [ ] Owner approves current MaddKraft plugin/version deltas and the completed clone report.
 - [ ] Owner approves actual production requirements, rewards, costs, Prestige currency policy, scaling, milestones, and
   reset/preserve semantics using real economy/progression data.
@@ -125,8 +122,8 @@ evidence is prerequisite context, not a substitute for a current Phase 9 run.
 
 ## Current unresolved blockers
 
-1. No real production-like MaddKraft V1 data inventory or owner mapping decisions were supplied to Phase 9A.
-2. The safe legacy planner remains read-only; a reviewed mutation executor and persistent per-row report are absent.
+1. No real clone evidence yet proves fresh V2 ignores a separate populated V1 player-data source.
+2. No real populated pre-Phase9B V2 SQLite upgrade/preservation/report/restart evidence yet closes A63.
 3. No owner-designated clone/full current plugin artifact inventory was supplied or booted.
 4. Real LP, mcMMO, Vault/Essentials, shop/trade, restart/crash/outage, and manual-account scenarios are not run.
 5. Current resource-reset and future Court/PvP-plugin boundary evidence is not run.
