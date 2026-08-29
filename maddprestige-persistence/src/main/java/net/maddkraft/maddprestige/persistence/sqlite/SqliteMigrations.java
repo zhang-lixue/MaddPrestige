@@ -654,4 +654,28 @@ public final class SqliteMigrations {
                 """)));
         return List.copyOf(migrations);
     }
+
+    /** Phase 9B archives stage-era authority and initializes the independent numeric model at Prestige zero. */
+    public static List<Migration> phaseNineB() {
+        ArrayList<Migration> migrations = new ArrayList<>(phaseEightC());
+        migrations.add(Migration.of(12, "Phase 9B numeric Prestige progression authority", List.of(
+                "CREATE TABLE mp_legacy_stage_player_state AS SELECT * FROM mp_player_stage_state WHERE 0",
+                "CREATE UNIQUE INDEX mp_legacy_stage_player_state_player_idx "
+                        + "ON mp_legacy_stage_player_state(player_uuid)",
+                "INSERT INTO mp_legacy_stage_player_state SELECT * FROM mp_player_stage_state",
+                "CREATE TABLE mp_legacy_stage_prestige_state AS SELECT * FROM mp_player_prestige_state WHERE 0",
+                "CREATE UNIQUE INDEX mp_legacy_stage_prestige_state_player_idx "
+                        + "ON mp_legacy_stage_prestige_state(player_uuid)",
+                "INSERT INTO mp_legacy_stage_prestige_state SELECT * FROM mp_player_prestige_state",
+                "ALTER TABLE mp_prestige_operation_details ADD COLUMN progression_model TEXT NOT NULL "
+                        + "DEFAULT 'NUMERIC_LEVEL' CHECK (progression_model IN ('LEGACY_STAGE','NUMERIC_LEVEL'))",
+                "ALTER TABLE mp_prestige_history ADD COLUMN progression_model TEXT NOT NULL "
+                        + "DEFAULT 'NUMERIC_LEVEL' CHECK (progression_model IN ('LEGACY_STAGE','NUMERIC_LEVEL'))",
+                "UPDATE mp_prestige_operation_details SET progression_model='LEGACY_STAGE'",
+                "UPDATE mp_prestige_history SET progression_model='LEGACY_STAGE'",
+                "DELETE FROM mp_player_stage_state",
+                "UPDATE mp_player_prestige_state SET current_prestige=0, lifetime_prestige=0, state_revision=0, "
+                        + "prestige_scope_id='numeric-p0', last_prestiged_at=NULL")));
+        return List.copyOf(migrations);
+    }
 }

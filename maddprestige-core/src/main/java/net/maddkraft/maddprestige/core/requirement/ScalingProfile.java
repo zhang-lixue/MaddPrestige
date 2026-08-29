@@ -5,13 +5,16 @@ import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.TreeMap;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
+import net.maddkraft.maddprestige.core.scaling.PrestigeScalingSegment;
+import net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile;
 
 public record ScalingProfile(
         ScalingStrategy strategy,
         ExactDecimal parameter,
         NavigableMap<Long, ExactDecimal> stepMultipliers,
         TargetRounding rounding,
-        ExactDecimal roundingQuantum) {
+        ExactDecimal roundingQuantum,
+        java.util.List<PrestigeScalingSegment> segments) {
     public static final long MAX_INDEX = 10_000;
     public static final BigDecimal MAX_MAGNITUDE = BigDecimal.ONE.scaleByPowerOfTen(100);
     public static final int MAX_PARAMETER_PRECISION = 256;
@@ -24,16 +27,15 @@ public record ScalingProfile(
                 new TreeMap<>(Objects.requireNonNull(stepMultipliers, "step multipliers")));
         rounding = Objects.requireNonNull(rounding, "rounding");
         roundingQuantum = Objects.requireNonNull(roundingQuantum, "rounding quantum");
+        segments = java.util.List.copyOf(Objects.requireNonNull(segments, "segments"));
         if (parameter.asBigDecimal().signum() < 0 || roundingQuantum.asBigDecimal().signum() <= 0) {
             throw new IllegalArgumentException("Scaling parameter cannot be negative and quantum must be positive");
         }
         if (strategy == ScalingStrategy.EXPONENTIAL && parameter.asBigDecimal().signum() == 0) {
             throw new IllegalArgumentException("Exponential base must be positive");
         }
-        if (parameter.asBigDecimal().precision() > MAX_PARAMETER_PRECISION
-                || Math.abs((long) parameter.asBigDecimal().scale()) > MAX_PARAMETER_PRECISION) {
-            throw new IllegalArgumentException("Scaling parameter precision/scale exceeds the safe domain");
-        }
+        validateInput("parameter", parameter.asBigDecimal());
+        validateInput("rounding quantum", roundingQuantum.asBigDecimal());
         if (strategy == ScalingStrategy.STEPPED && stepMultipliers.isEmpty()) {
             throw new IllegalArgumentException("Stepped scaling requires at least one threshold");
         }
@@ -42,7 +44,20 @@ public record ScalingProfile(
                     || entry.getValue().asBigDecimal().signum() < 0) {
                 throw new IllegalArgumentException("Stepped thresholds and multipliers must be within the safe domain");
             }
+            validateInput("step multiplier", entry.getValue().asBigDecimal());
         }
+        if (!segments.isEmpty()) {
+            new SegmentedScalingProfile(segments);
+        }
+    }
+
+    public ScalingProfile(
+            ScalingStrategy strategy,
+            ExactDecimal parameter,
+            NavigableMap<Long, ExactDecimal> stepMultipliers,
+            TargetRounding rounding,
+            ExactDecimal roundingQuantum) {
+        this(strategy, parameter, stepMultipliers, rounding, roundingQuantum, java.util.List.of());
     }
 
     public static ScalingProfile none() {
@@ -60,9 +75,20 @@ public record ScalingProfile(
                 ExactDecimal.parse("1"));
     }
 
+    public static ScalingProfile segmented(java.util.List<PrestigeScalingSegment> segments) {
+        return new ScalingProfile(ScalingStrategy.NONE, ExactDecimal.ZERO, new TreeMap<>(),
+                TargetRounding.EXACT, ExactDecimal.parse("1"), segments);
+    }
+
     public BigDecimal multiplier(long index) {
-        if (index < 0 || index > MAX_INDEX) {
-            throw new IllegalArgumentException("Scaling index must be between 0 and " + MAX_INDEX);
+        if (index < 0) {
+            throw new IllegalArgumentException("Scaling index cannot be negative");
+        }
+        if (!segments.isEmpty()) {
+            return new SegmentedScalingProfile(segments).multiplierAt(Math.addExact(index, 1));
+        }
+        if (index > MAX_INDEX) {
+            throw new IllegalArgumentException("Legacy scaling index must be between 0 and " + MAX_INDEX);
         }
         return switch (strategy) {
             case NONE -> BigDecimal.ONE;
@@ -89,6 +115,13 @@ public record ScalingProfile(
         }
         if (factor > 1.0d && Math.log10(factor) * index > 110.0d) {
             throw new IllegalArgumentException("Exponential scaling exceeds the safe predicted magnitude");
+        }
+    }
+
+    private static void validateInput(String name, BigDecimal value) {
+        if (value.abs().compareTo(MAX_MAGNITUDE) > 0 || value.precision() > MAX_PARAMETER_PRECISION
+                || Math.abs((long) value.scale()) > MAX_PARAMETER_PRECISION) {
+            throw new IllegalArgumentException("Scaling " + name + " precision/scale/magnitude exceeds the safe domain");
         }
     }
 }

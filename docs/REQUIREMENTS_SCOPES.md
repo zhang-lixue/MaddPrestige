@@ -5,18 +5,15 @@ completion policy. Trees compose requirement IDs with bounded `all`, `any`, and 
 unknown providers/metrics, incompatible types/operators, invalid target literals, unsafe scope/metric combinations,
 and excessive tree depth.
 
-Use `/maddprestige help measurement`, `/maddprestige help providers`, and `/maddprestige why rankup` for the active
+Use `/maddprestige help measurement`, `/maddprestige help providers`, and `/maddprestige why prestige` for the active
 configuration. Why uses the same authorization as execution and reports the exact current/target value or provider
 failure without mutation.
 
 Important scopes include lifetime/absolute observations and boundary-based scopes such as `SINCE_PRESTIGE_START`.
-For the generic example, Paper's duration metric `paper_statistics/play_one_minute` is compared to `PT1M` and `PT3M`
-with `GREATER_OR_EQUAL`. The guided commands are `setup playtime adventurer PT1M` and
-`setup playtime veteran PT3M`; they generate immutable requirement IDs and select `SINCE_PRESTIGE_START` plus `LIVE`.
-The full canonical `setup requirement` form remains available for power users and automation. Both paths resolve and
-canonicalize the target as `DURATION` when entered, then preview independently validates the complete candidate.
-MaddPrestige snapshots the lifetime statistic at the Prestige boundary and subtracts it later; it does not reset
-Paper-owned statistics.
+The numeric guided path uses `setup requirement` without a target stage and attaches the resulting tree directly to
+Prestige. Paper's duration metric `paper_statistics/play_one_minute`, for example, may use
+`SINCE_PRESTIGE_START` plus `LIVE`; the target is canonicalized as `DURATION`. MaddPrestige snapshots a configured
+lifetime metric at the Prestige boundary and subtracts it later; it does not reset Paper-owned statistics.
 
 `LIVE` completion follows the current measured value. Latched completion is durable when configured and is governed by
 the lifecycle reset policy. Missing, stale, timed-out, malformed, or unhealthy provider data is unavailable and fails

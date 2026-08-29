@@ -54,14 +54,8 @@ public final class GuiSessionService {
         java.util.ArrayList<GuiAction> actions = new java.util.ArrayList<>();
         addIfPermitted(actions, subject, GuiActionKind.VIEW_PROGRESS, m("gui.action.view_progress"), self ? PhaseSixPermissions.USE
                 : PhaseSixPermissions.PLAYER_VIEW, false, revision, playerId, Optional.empty());
-        addIfPermitted(actions, subject, GuiActionKind.SIMULATE_RANK_UP, m("gui.action.simulate_rankup"),
-                self ? PhaseSixPermissions.RANK_UP : PhaseSixPermissions.SIMULATE, false, revision, playerId,
-                Optional.empty());
         addIfPermitted(actions, subject, GuiActionKind.SIMULATE_PRESTIGE, m("gui.action.simulate_prestige"),
                 self ? PhaseSixPermissions.PRESTIGE : PhaseSixPermissions.SIMULATE, false, revision, playerId,
-                Optional.empty());
-        addIfPermitted(actions, subject, GuiActionKind.PREPARE_RANK_UP, m("gui.action.prepare_rankup"),
-                self ? PhaseSixPermissions.RANK_UP : PhaseSixPermissions.EXECUTE, false, revision, playerId,
                 Optional.empty());
         addIfPermitted(actions, subject, GuiActionKind.PREPARE_PRESTIGE, m("gui.action.prepare_prestige"),
                 self ? PhaseSixPermissions.PRESTIGE : PhaseSixPermissions.EXECUTE, false, revision, playerId,
@@ -119,14 +113,7 @@ public final class GuiSessionService {
             String displayName,
             Optional<net.maddkraft.maddprestige.api.id.ProviderId> providerId,
             Optional<String> externalGroup) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
-        GuiMutationContext context = new GuiMutationContext(Optional.of(draftId), Optional.empty(),
-                Optional.of(displayName), providerId, externalGroup, Optional.empty(), Optional.empty(),
-                Optional.empty());
-        return mutationSession(subject, m("gui.title.add_stage"), GuiActionKind.ADD_STAGE,
-                m("gui.action.add_stage", "stage", stageId.value()),
-                PhaseSixPermissions.CONFIG_EDIT, context, stageId, null);
+        throw stageCompatibilityOnly();
     }
 
     public GuiSessionView openDraftPreview(PermissionSubject subject, UUID draftId) {
@@ -204,11 +191,7 @@ public final class GuiSessionService {
             UUID draftId,
             net.maddkraft.maddprestige.api.id.StageId stageId,
             Optional<net.maddkraft.maddprestige.api.id.StageId> replacement) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
-        return mutationSession(subject, m("gui.title.stage", "stage", stageId.value()), GuiActionKind.DELETE_STAGE,
-                m("gui.action.delete_stage", "stage", stageId.value()), PhaseSixPermissions.CONFIG_EDIT,
-                GuiMutationContext.draft(draftId), stageId, replacement.orElse(null));
+        throw stageCompatibilityOnly();
     }
 
     public GuiSessionView openStageRemapSelector(
@@ -216,26 +199,14 @@ public final class GuiSessionService {
             UUID draftId,
             net.maddkraft.maddprestige.api.id.StageId missingStage,
             net.maddkraft.maddprestige.api.id.StageId replacement) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
-        String permission = permission(kind);
-        subject.require(permission);
-        return mutationSession(subject, m("gui.title.remap_stage"), GuiActionKind.SELECT_STAGE_REMAP,
-                m("gui.action.remap_stage", "stage", missingStage.value(), "target", replacement.value()), permission,
-                GuiMutationContext.draft(draftId), missingStage, replacement);
+        throw stageCompatibilityOnly();
     }
 
     public GuiSessionView openStageRemapRemoval(
             PermissionSubject subject,
             UUID draftId,
             net.maddkraft.maddprestige.api.id.StageId missingStage) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
-        String permission = permission(kind);
-        subject.require(permission);
-        return mutationSession(subject, m("gui.title.remove_remap"), GuiActionKind.REMOVE_STAGE_REMAP,
-                m("gui.action.remove_remap", "stage", missingStage.value()), permission,
-                GuiMutationContext.draft(draftId), missingStage, null);
+        throw stageCompatibilityOnly();
     }
 
     public CompletionStage<MessageReference> click(
@@ -346,6 +317,12 @@ public final class GuiSessionService {
 
     private static MessageReference m(String key, Object... arguments) {
         return MessageReference.of(key, arguments);
+    }
+
+    private static AdministrationException stageCompatibilityOnly() {
+        return new AdministrationException("stage.compatibility_only",
+                "Stage mutation controls are retained only for compatibility and recovery evidence.",
+                "Configure numeric Prestige requirements, costs, rewards, and scaling instead.");
     }
 
     private void pruneExpired() {

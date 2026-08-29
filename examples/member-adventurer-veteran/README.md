@@ -1,12 +1,13 @@
-# Member → Adventurer → Veteran example
+# Historical stage-compatibility example
 
-This is the frozen generic MaddPrestige 2.0 public profile. It uses only Paper's persisted
+This Phase 8 example is retained as accepted compatibility evidence; it is not the authoritative Phase 9B Prestige
+model. Numeric Prestige does not require this ladder or LuckPerms. The profile uses Paper's persisted
 `PLAY_ONE_MINUTE` statistic and LuckPerms group projection. It has no costs, rewards, optional integrations, or
 external SDK provider requirements.
 
 The administrator must create the `Member`, `Adventurer`, and `Veteran` LuckPerms groups before preview or apply.
 MaddPrestige validates these names and never creates groups.
 
-Use [the public Quick Start](../../docs/QUICK_START.md) to build this exact profile through the canonical live setup
-commands. These files are the resulting canonical configuration vocabulary and may also be used for review or
-docs-as-tests; they are not a second activation path.
+For active product guidance use the [numeric example](../numeric-prestige/README.md) and
+[public Quick Start](../../docs/QUICK_START.md). These files remain docs-as-tests for the stable compatibility surface;
+they are not a recommended activation path.

@@ -120,19 +120,26 @@ class SqlitePhaseSixAdministrationTest {
         ConfigRevisionId revision = new ConfigRevisionId("active_revision");
         seedPrestige(sqlite, playerId, revision);
         SqlitePrestigeAdministrationStore store = new SqlitePrestigeAdministrationStore(sqlite, CLOCK);
-        ManualPrestigeAdjustment adjustment = new ManualPrestigeAdjustment(playerId, 7, 3, 9, revision,
+        assertThrows(IllegalArgumentException.class, () -> new ManualPrestigeAdjustment(
+                playerId, 7, 3, 9, revision,
+                new Actor("staff", Optional.of(actorId), "Moderator"), "staff-gui", "Invalid divergent counters"));
+        assertEquals("1:5:7", scalar(sqlite, "SELECT current_prestige || ':' || lifetime_prestige || ':' "
+                + "|| state_revision FROM mp_player_prestige_state"));
+        assertEquals("0", scalar(sqlite, "SELECT COUNT(*) FROM mp_audit_log"));
+
+        ManualPrestigeAdjustment adjustment = new ManualPrestigeAdjustment(playerId, 7, 3, 3, revision,
                 new Actor("staff", Optional.of(actorId), "Moderator"), "staff-gui", "Correct imported counters");
 
         var updated = store.adjust(adjustment);
 
         assertEquals(3, updated.currentPrestige());
-        assertEquals(9, updated.lifetimePrestige());
+        assertEquals(3, updated.lifetimePrestige());
         assertEquals(8, updated.stateRevision());
         assertEquals(actorId.toString(), scalar(sqlite, "SELECT actor_uuid FROM mp_audit_log"));
         assertEquals(playerId.toString(), scalar(sqlite, "SELECT target_uuid FROM mp_audit_log"));
         assertEquals("current=1,lifetime=5,state-revision=7",
                 scalar(sqlite, "SELECT old_value FROM mp_audit_log"));
-        assertEquals("current=3,lifetime=9,state-revision=8",
+        assertEquals("current=3,lifetime=3,state-revision=8",
                 scalar(sqlite, "SELECT new_value FROM mp_audit_log"));
         assertEquals(NOW.toString(), scalar(sqlite, "SELECT occurred_at FROM mp_audit_log"));
         assertEquals("staff-gui", scalar(sqlite, "SELECT source_surface FROM mp_audit_log"));

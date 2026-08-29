@@ -118,6 +118,6 @@ unrelated players/providers continue; restart cannot convert unavailable/unknown
 ## Evidence naming and completion
 
 Use a run ID such as `PH9-CLONE-YYYYMMDD-NN` and immutable evidence paths for environment manifest, preflight, backup,
-mapping, migration dry run/apply, provider cases, exploit cases, full-stack boot 1/2, role tests, boundary tests,
+historical V1 hashes, fresh-V2 no-import proof, provider cases, exploit cases, full-stack boot 1/2, role tests, boundary tests,
 regression verification, artifact hashes, and final gate. Each file records `PASS`, `FAIL`, `BLOCKED`, or `NOT RUN`.
 Blank/missing evidence is `NOT RUN`, never an inferred pass.

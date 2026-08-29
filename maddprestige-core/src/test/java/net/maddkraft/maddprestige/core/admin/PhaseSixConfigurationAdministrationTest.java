@@ -124,7 +124,7 @@ class PhaseSixConfigurationAdministrationTest {
         AdministrationException baseline = assertThrows(AdministrationException.class,
                 () -> wizard.selectBaseline(OWNER, session, new StageId("missing")));
         var introspection = new net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService(
-                PhaseSixSchema.create(), fixture.canonical::active, () -> ValidationReport.VALID);
+                compatibilitySchema(), fixture.canonical::active, () -> ValidationReport.VALID);
         AdministrationException path = assertThrows(AdministrationException.class,
                 () -> introspection.explain(OWNER, "prestige.unknown"));
         AdministrationException prestige = assertThrows(AdministrationException.class,
@@ -200,7 +200,7 @@ class PhaseSixConfigurationAdministrationTest {
     }
 
     @Test
-    @DisplayName("[A02] Setup wizard generates validated requirement, cost, reward, and Prestige reset semantics")
+    @DisplayName("[Phase 9B] Setup wizard generates numeric Prestige without a stage ladder")
     void setupWizardBuildsCompleteSimpleConfiguration() {
         ProviderRegistry providers = new ProviderRegistry();
         providers.activate(providers.register("test", new SetupProvider()));
@@ -209,8 +209,6 @@ class PhaseSixConfigurationAdministrationTest {
         Fixture fixture = new Fixture(providers);
         SetupWizardService wizard = new SetupWizardService(fixture.service, providers);
         UUID session = wizard.start(OWNER);
-        wizard.addStage(OWNER, session, new SetupStage(new StageId("member"), "Member", Optional.empty()));
-        wizard.addStage(OWNER, session, new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
         wizard.configureRequirement(OWNER, session, new SetupRequirement(new RequirementId("play"),
                 new ProviderId("setup_metric"), new MetricId("play_time"), "greater-or-equal", "10", "absolute",
                 "live"));
@@ -219,8 +217,7 @@ class PhaseSixConfigurationAdministrationTest {
         wizard.configureReward(OWNER, session, new SetupReward(new RewardId("grant"),
                 new ProviderId("setup_reward"),
                 "grant", "exact-decimal", "1", "Grant"));
-        wizard.configurePrestige(OWNER, session, new SetupPrestige(true, Optional.of(new StageId("veteran")),
-                Optional.of(new StageId("member"))));
+        wizard.configurePrestige(OWNER, session, SetupPrestige.numericEnabled());
 
         var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
 
@@ -228,17 +225,19 @@ class PhaseSixConfigurationAdministrationTest {
         assertTrue(experienceHas(preview, "command.setup.experience_requirement", "id", "play"));
         assertTrue(experienceHas(preview, "command.setup.experience_cost", "id", "payment"));
         assertTrue(experienceHas(preview, "command.setup.experience_reward", "id", "grant"));
-        assertTrue(experienceHas(preview, "command.setup.experience_prestige_enabled", "stage", "veteran"));
-        var authority = wizard.prepareAcknowledgement(OWNER, session);
-        wizard.confirmAcknowledgement(OWNER, authority.acknowledgementId(), "Complete simple setup")
+        assertTrue(preview.playerExperience().stream()
+                .anyMatch(line -> line.key().equals("command.setup.experience_prestige_enabled")));
+        wizard.apply(OWNER, session, Set.of(), "Complete simple setup")
                 .toCompletableFuture().join();
         Map<String, String> active = fixture.canonical.active().orElseThrow().compiled().documents();
-        assertTrue(active.get("progression.yml").contains("requirements: setup_eligibility"));
-        assertTrue(active.get("progression.yml").contains("costs: [payment]"));
-        assertTrue(active.get("progression.yml").contains("rewards: [grant]"));
+        assertTrue(active.get("progression.yml").contains("active: false"));
+        assertFalse(active.get("progression.yml").contains("stages:"));
         assertTrue(active.get("requirements.yml").contains("metric: play_time"));
-        assertTrue(active.get("lifecycle.yml").contains("required-stages: [veteran]"));
-        assertTrue(active.get("lifecycle.yml").contains("reset-stage: member"));
+        assertTrue(active.get("lifecycle.yml").contains("requirement-tree: setup_eligibility"));
+        assertTrue(active.get("lifecycle.yml").contains("costs: [payment]"));
+        assertTrue(active.get("lifecycle.yml").contains("rewards: [grant]"));
+        assertFalse(active.get("lifecycle.yml").contains("required-stages"));
+        assertFalse(active.get("lifecycle.yml").contains("reset-stage"));
     }
 
     @Test
@@ -393,7 +392,7 @@ class PhaseSixConfigurationAdministrationTest {
         assertSetupRequirementEnables("vault_balance", "balance", "vault");
         assertSetupCostEnables("vault_economy_cost", "vault");
         assertSetupRewardEnables("vault_economy_reward", "vault");
-        assertSetupRequirementEnables("mcmmo", "power_level", "mcmmo");
+        assertSetupRequirementEnables("mcmmo", "total_level", "mcmmo");
         assertSetupRequirementEnables("phase5_events", "mcmmo_adjusted_xp_total", "mcmmo");
         assertSetupRequirementEnables("griefprevention_claims", "owned_claim_count", "griefprevention");
         assertSetupRewardEnables("griefprevention_claim_blocks_reward", "griefprevention");
@@ -608,8 +607,8 @@ class PhaseSixConfigurationAdministrationTest {
                 PhaseSixPermissions.all());
         UUID draftA = fixture.service.beginDraft(adminA, "gui");
         UUID draftB = fixture.service.beginDraft(adminB, "command");
-        fixture.service.editScalar(adminA, draftA, "prestige.current-count-increment", "2");
-        fixture.service.editScalar(adminB, draftB, "prestige.current-count-increment", "3");
+        fixture.service.editScalar(adminA, draftA, "prestige.cooldown", "PT2S");
+        fixture.service.editScalar(adminB, draftB, "prestige.cooldown", "PT3S");
         var previewA = fixture.service.preview(adminA, draftA).toCompletableFuture().join();
         var previewB = fixture.service.preview(adminB, draftB).toCompletableFuture().join();
         StoredConfigurationRevision winner = fixture.service.applyDraft(adminA, draftA, Optional.of(first.id()),
@@ -622,7 +621,7 @@ class PhaseSixConfigurationAdministrationTest {
         assertEquals("config.revision.stale", ((AdministrationException) wrapped.getCause()).code());
         assertEquals(winner.id(), fixture.canonical.active().orElseThrow().revisionId());
         assertTrue(fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml")
-                .contains("current-count-increment: 2"));
+                .contains("cooldown: PT2S"));
     }
 
     @Test
@@ -633,10 +632,10 @@ class PhaseSixConfigurationAdministrationTest {
         String before = fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml");
         UUID draft = fixture.service.beginDraft(OWNER, "command");
 
-        var edited = fixture.service.editScalar(OWNER, draft, "prestige.current-count-increment", "2");
+        var edited = fixture.service.editScalar(OWNER, draft, "prestige.cooldown", "PT2S");
         String after = edited.documents().get("lifecycle.yml");
 
-        assertEquals(before.replace("current-count-increment: 1", "current-count-increment: 2"), after);
+        assertEquals(before.replace("cooldown: PT0S", "cooldown: PT2S"), after);
         assertEquals(before, fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml"));
         assertEquals(first.id(), fixture.canonical.active().orElseThrow().revisionId());
 
@@ -772,7 +771,7 @@ class PhaseSixConfigurationAdministrationTest {
                 new InMemoryStageReferenceMigrationStore());
         StoredConfigurationRevision active = fixture.applyInitial(defaultDocuments());
         UUID draft = fixture.service.beginDraft(OWNER, "snapshot-preparation-failure");
-        fixture.service.editScalar(OWNER, draft, "prestige.current-count-increment", "2");
+        fixture.service.editScalar(OWNER, draft, "prestige.cooldown", "PT2S");
         var preview = fixture.service.preview(OWNER, draft).toCompletableFuture().join();
         snapshots.failNextPrepare();
 
@@ -835,7 +834,7 @@ class PhaseSixConfigurationAdministrationTest {
         Fixture fixture = new Fixture();
         StoredConfigurationRevision first = fixture.applyInitial(defaultDocuments());
         UUID draft = fixture.service.beginDraft(OWNER, "command");
-        fixture.service.editScalar(OWNER, draft, "prestige.current-count-increment", "2");
+        fixture.service.editScalar(OWNER, draft, "prestige.cooldown", "PT2S");
         var secondPreview = fixture.service.preview(OWNER, draft).toCompletableFuture().join();
         StoredConfigurationRevision second = fixture.service.applyDraft(OWNER, draft, Optional.of(first.id()),
                 acknowledgements(secondPreview), "Second behavior").toCompletableFuture().join();
@@ -936,9 +935,9 @@ class PhaseSixConfigurationAdministrationTest {
         UUID guiDraft = gui.service.beginDraft(OWNER, "gui");
 
         var commandModel = command.service.editScalar(OWNER, commandDraft,
-                "prestige.current-count-increment", "2");
+                "prestige.cooldown", "PT2S");
         var guiModel = gui.service.editScalar(OWNER, guiDraft,
-                "prestige.current-count-increment", "2");
+                "prestige.cooldown", "PT2S");
 
         assertEquals(commandModel.documents(), guiModel.documents());
         PermissionSubject viewer = new PermissionSubject(new Actor("player", Optional.of(UUID.randomUUID()),
@@ -946,7 +945,7 @@ class PhaseSixConfigurationAdministrationTest {
         assertTrue(command.service.active(viewer).isPresent());
         assertThrows(AdministrationException.class, () -> command.service.beginDraft(viewer, "command"));
         assertThrows(AdministrationException.class, () -> command.service.editScalar(
-                viewer, commandDraft, "prestige.current-count-increment", "3"));
+                viewer, commandDraft, "prestige.cooldown", "PT3S"));
     }
 
     @Test
@@ -1184,10 +1183,13 @@ class PhaseSixConfigurationAdministrationTest {
 
     private static Map<String, String> defaultDocuments() {
         LinkedHashMap<String, String> result = new LinkedHashMap<>();
-        result.put("progression.yml", resource("/defaults/progression.yml"));
+        result.put("progression.yml", resource("/defaults/progression.yml") + "stages: {}\norder: []\n");
         result.put("requirements.yml", resource("/defaults/requirements.yml"));
         result.put("rewards.yml", resource("/defaults/rewards.yml"));
-        result.put("lifecycle.yml", resource("/defaults/lifecycle.yml"));
+        result.put("lifecycle.yml", resource("/defaults/lifecycle.yml")
+                .replace("  maximum: unlimited", "  current-count-increment: 1\n"
+                        + "  lifetime-count-increment: 1\n  maximum: unlimited")
+                .replace("  reset-policy:\n", "  reset-policy:\n    progression-stage: PRESERVE\n"));
         result.put("integrations.yml", """
                 schema-version: 5
                 vault: {enabled: false}
@@ -1325,7 +1327,7 @@ class PhaseSixConfigurationAdministrationTest {
             service = new ConfigurationAdministrationService(canonical,
                     new PhaseSixConfigurationWorkflow(canonical, providers,
                             stageReferences, List.of()),
-                    PhaseSixSchema.create(), history, snapshots, clock);
+                    compatibilitySchema(), history, snapshots, clock);
         }
 
         private StoredConfigurationRevision applyInitial(Map<String, String> documents) {
@@ -1340,6 +1342,12 @@ class PhaseSixConfigurationAdministrationTest {
             return service.confirmAcknowledgement(OWNER, acknowledgement.acknowledgementId(),
                     "Initial test revision").toCompletableFuture().join();
         }
+    }
+
+    private static net.maddkraft.maddprestige.core.schema.SchemaRegistry compatibilitySchema() {
+        var schema = net.maddkraft.maddprestige.core.schema.PhaseFourSchema.create();
+        PhaseSixSchema.extend(schema);
+        return schema;
     }
 
     private static final class MutableClock extends Clock {

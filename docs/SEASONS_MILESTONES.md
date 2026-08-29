@@ -1,8 +1,9 @@
 # Seasons, milestones, and competition boundary
 
 Seasons provide a stable active season identity that requirement scopes and lifecycle policies may reference.
-Milestones are durable first-crossing records tied to canonical player/configuration authority. Reset/archive behavior
-must be explicit; it is never inferred from a display name.
+Milestones are optional durable triggers at administrator-selected numeric Prestige values and may reference any
+configured reward. There are no intrinsic milestone numbers. Reset/archive behavior must be explicit; it is never
+inferred from a display name, a stage, or a world reset.
 
 The generic profile uses `milestones: {}`, `seasons: {}`, and `competition.enabled: false`. A first setup therefore has
 no hidden calendar, contest, or reward requirement.

@@ -31,11 +31,7 @@ public final class PhaseFourRequirementReachability {
             StageConfiguration stages) {
         LinkedHashSet<RequirementDefinition> result = new LinkedHashSet<>(
                 prestigeDefinitions(phaseFour, phaseThree));
-        if (stages.active()) {
-            stages.order().stream().map(stages.stages()::get).filter(java.util.Objects::nonNull)
-                    .filter(stage -> stage.enabled()).forEach(stage -> stage.requirementTreeId()
-                            .map(phaseThree.trees()::get).ifPresent(tree -> collect(tree, result)));
-        }
+        // Numeric Prestige establishes only its own next interval; stage ladders are a legacy compatibility surface.
         return Set.copyOf(result);
     }
 

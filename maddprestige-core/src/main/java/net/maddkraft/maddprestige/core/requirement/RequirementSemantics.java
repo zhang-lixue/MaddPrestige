@@ -54,6 +54,25 @@ public final class RequirementSemantics {
                     output.writeLong(step.getKey());
                     field(output, "scaling.step.multiplier", step.getValue().toString());
                 }
+                output.writeInt(scaling.segments().size());
+                for (var segment : scaling.segments()) {
+                    field(output, "scaling.segment.start", Long.toString(segment.startLevel()));
+                    field(output, "scaling.segment.end", segment.endLevel().isPresent()
+                            ? Long.toString(segment.endLevel().getAsLong()) : "unlimited");
+                    field(output, "scaling.segment.mode", segment.mode().name());
+                    field(output, "scaling.segment.transition", segment.transition().name());
+                    field(output, "scaling.segment.base", segment.base().toString());
+                    field(output, "scaling.segment.rate", segment.rate().toString());
+                    field(output, "scaling.segment.rounding", segment.rounding().name());
+                    field(output, "scaling.segment.quantum", segment.roundingQuantum().toString());
+                    field(output, "scaling.segment.floor", segment.floor().map(Object::toString).orElse(""));
+                    field(output, "scaling.segment.cap", segment.cap().map(Object::toString).orElse(""));
+                    output.writeInt(segment.overrides().size());
+                    for (var override : segment.overrides().entrySet()) {
+                        field(output, "scaling.segment.override.level", Long.toString(override.getKey()));
+                        field(output, "scaling.segment.override.value", override.getValue().toString());
+                    }
+                }
                 output.writeBoolean(catchUp.enabled());
                 field(output, "catchup.start", catchUp.startThreshold().toString());
                 field(output, "catchup.rate", catchUp.reductionRate().toString());

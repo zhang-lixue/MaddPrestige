@@ -1,18 +1,18 @@
 schema-version: 4
 prestige:
   enabled: true
-  required-stages: [veteran]
-  reset-stage: member
+  costs: []
+  rewards: []
   current-count-increment: 1
   lifetime-count-increment: 1
   maximum: unlimited
   cooldown: PT0S
-  costs: []
-  rewards: []
+  cost-scaling: {}
+  reward-scaling: {}
   external-resets:
     enabled: false
   reset-policy:
-    progression-stage: RESET
+    progression-stage: PRESERVE
     active-requirement-progress: RESET
     latched-completions: RESET
     baselines: RESET

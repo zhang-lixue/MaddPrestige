@@ -1,5 +1,6 @@
 # Maven output
 /target/
+/*/target/
 
 # Retained local Paper server (selected immutable evidence is tracked under baseline/)
 /runtime-test/
@@ -15,4 +16,3 @@ Thumbs.db
 *.tmp
 *.bak
 *.swp
-

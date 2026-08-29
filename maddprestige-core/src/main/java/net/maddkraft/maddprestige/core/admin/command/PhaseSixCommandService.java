@@ -107,7 +107,7 @@ public final class PhaseSixCommandService {
         return switch (arguments.getFirst().toLowerCase(java.util.Locale.ROOT)) {
             case "help" -> help(subject, arguments);
             case "status" -> status(subject);
-            case "rankup" -> prepare(subject, self(subject), false);
+            case "rankup" -> throw rankUpCompatibilityOnly();
             case "prestige" -> prepare(subject, self(subject), true);
             case "confirm" -> confirm(subject, arguments);
             case "simulate" -> simulate(subject, arguments);
@@ -159,13 +159,13 @@ public final class PhaseSixCommandService {
 
     private CompletionStage<CommandResponse> simulate(PermissionSubject subject, List<String> arguments) {
         if (arguments.size() < 2 || arguments.size() > 3) {
-            throw usage("simulate <rankup|prestige> [player-uuid]");
+            throw usage("simulate prestige [player-uuid]");
         }
         UUID target = arguments.size() == 3 ? uuid(arguments.get(2), "player UUID") : self(subject);
         CompletionStage<OperationPreview> stage = switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
-            case "rankup" -> previews.simulateRankUp(subject, target);
+            case "rankup" -> throw rankUpCompatibilityOnly();
             case "prestige" -> previews.simulatePrestige(subject, target);
-            default -> throw usage("simulate <rankup|prestige> [player-uuid]");
+            default -> throw usage("simulate prestige [player-uuid]");
         };
         return stage.thenApply(value -> CommandResponse.success("simulation",
                 SemanticPresentation.preview("command.simulation.summary", value)));
@@ -173,13 +173,13 @@ public final class PhaseSixCommandService {
 
     private CompletionStage<CommandResponse> why(PermissionSubject subject, List<String> arguments) {
         if (arguments.size() < 2 || arguments.size() > 3) {
-            throw usage("why <rankup|prestige> [player-uuid]");
+            throw usage("why prestige [player-uuid]");
         }
         UUID target = arguments.size() == 3 ? uuid(arguments.get(2), "player UUID") : self(subject);
         CompletionStage<WhyReport> stage = switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
-            case "rankup" -> why.rankUp(subject, target);
+            case "rankup" -> throw rankUpCompatibilityOnly();
             case "prestige" -> why.prestige(subject, target);
-            default -> throw usage("why <rankup|prestige> [player-uuid]");
+            default -> throw usage("why prestige [player-uuid]");
         };
         return stage.thenApply(value -> CommandResponse.success("why", SemanticPresentation.why(value)));
     }
@@ -191,8 +191,7 @@ public final class PhaseSixCommandService {
         UUID target = arguments.size() == 2 ? uuid(arguments.get(1), "player UUID") : self(subject);
         return playerViews.view(subject, target).thenApply(view -> {
             ArrayList<MessageReference> lines = new ArrayList<>(SemanticPresentation.preview(
-                    "command.player.rankup", view.rankUp()));
-            lines.addAll(SemanticPresentation.preview("command.player.prestige", view.prestige()));
+                    "command.player.prestige", view.prestige()));
             return CommandResponse.success("player.progress", lines);
         });
     }
@@ -207,7 +206,7 @@ public final class PhaseSixCommandService {
 
     private CompletionStage<CommandResponse> config(PermissionSubject subject, List<String> arguments) {
         if (arguments.size() < 2) {
-            throw usage("config <get|list|search|explain|draft|set|add|remove|remap|unmap|validate|diff|acknowledge|confirm|"
+            throw usage("config <get|list|search|explain|draft|set|add|remove|validate|diff|acknowledge|confirm|"
                     + "cancel|history|rollback|apply> ...");
         }
         return switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
@@ -218,8 +217,7 @@ public final class PhaseSixCommandService {
             case "set" -> configSet(subject, arguments);
             case "add" -> configAdd(subject, arguments);
             case "remove" -> configRemove(subject, arguments);
-            case "remap" -> configRemap(subject, arguments);
-            case "unmap" -> configUnmap(subject, arguments);
+            case "remap", "unmap" -> throw retiredStageSurface();
             case "validate", "diff" -> configPreview(subject, arguments);
             case "acknowledge" -> configAcknowledge(subject, arguments);
             case "confirm" -> configConfirm(subject, arguments);
@@ -228,7 +226,7 @@ public final class PhaseSixCommandService {
             case "rollback" -> configRollback(subject, arguments);
             case "apply" -> configApply(subject, arguments, false);
             case "rollback-apply" -> configApply(subject, arguments, true);
-            default -> throw usage("config <get|list|search|explain|draft|set|add|remove|remap|unmap|validate|diff|"
+            default -> throw usage("config <get|list|search|explain|draft|set|add|remove|validate|diff|"
                     + "acknowledge|"
                     + "confirm|cancel|history|rollback|apply> ...");
         };
@@ -294,14 +292,7 @@ public final class PhaseSixCommandService {
         UUID draft = uuid(arguments.get(2), "draft ID");
         String path = arguments.get(3);
         if (path.equals("progression.stages")) {
-            if (arguments.size() != 6 && arguments.size() != 8) {
-                throw usage("config add <draft-id> progression.stages <stage-id> <display-name> "
-                        + "[provider-id existing-group]");
-            }
-            Optional<ProviderId> provider = arguments.size() == 8
-                    ? Optional.of(new ProviderId(arguments.get(6))) : Optional.empty();
-            Optional<String> group = arguments.size() == 8 ? Optional.of(arguments.get(7)) : Optional.empty();
-            configuration.addStage(subject, draft, new StageId(arguments.get(4)), arguments.get(5), provider, group);
+            throw retiredStageSurface();
         } else {
             requireSize(arguments, 5, "config add <draft-id> <list-path> <value>");
             configuration.addListValue(subject, draft, path, arguments.get(4));
@@ -318,9 +309,7 @@ public final class PhaseSixCommandService {
         UUID draft = uuid(arguments.get(2), "draft ID");
         String path = arguments.get(3);
         if (path.matches("progression\\.stages\\.[a-z][a-z0-9_-]{0,63}")) {
-            String id = path.substring("progression.stages.".length());
-            configuration.removeStage(subject, draft, new StageId(id), arguments.size() == 5
-                    ? Optional.of(new StageId(arguments.get(4))) : Optional.empty());
+            throw retiredStageSurface();
         } else {
             requireSize(arguments, 5, "config remove <draft-id> <list-path> <value>");
             configuration.removeListValue(subject, draft, path, arguments.get(4));
@@ -429,16 +418,14 @@ public final class PhaseSixCommandService {
 
     private CompletionStage<CommandResponse> setup(PermissionSubject subject, List<String> arguments) {
         if (arguments.size() < 2) {
-            throw usage("setup <discover|start|provider|stage|baseline|playtime|requirement|cost|reward|prestige|"
+            throw usage("setup <discover|start|provider|requirement|cost|reward|prestige|"
                     + "preview|acknowledge|confirm|apply|cancel> ...");
         }
         return switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
             case "discover" -> setupDiscover(subject, arguments);
             case "start" -> setupStart(subject, arguments);
             case "provider" -> setupProvider(subject, arguments);
-            case "stage" -> setupStage(subject, arguments);
-            case "baseline" -> setupBaseline(subject, arguments);
-            case "playtime" -> setupPlaytime(subject, arguments);
+            case "stage", "baseline", "playtime" -> throw retiredStageSurface();
             case "requirement" -> setupRequirement(subject, arguments);
             case "cost" -> setupCost(subject, arguments);
             case "reward" -> setupReward(subject, arguments);
@@ -448,7 +435,7 @@ public final class PhaseSixCommandService {
             case "confirm" -> setupConfirm(subject, arguments);
             case "apply" -> setupApply(subject, arguments);
             case "cancel" -> setupCancel(subject, arguments);
-            default -> throw usage("setup <discover|start|provider|stage|baseline|playtime|requirement|cost|reward|"
+            default -> throw usage("setup <discover|start|provider|requirement|cost|reward|"
                     + "prestige|preview|acknowledge|confirm|apply|cancel> ...");
         };
     }
@@ -460,8 +447,7 @@ public final class PhaseSixCommandService {
         lines.add(m("command.setup.discovery_active", "active", discovery.activeConfigurationPresent()));
         discovery.providers().forEach(provider -> lines.add(m("command.setup.discovery_provider",
                 "provider", provider.providerId().value(), "active", provider.active(),
-                "healthy", provider.healthy(), "rank", provider.rankCapable(),
-                "metrics", provider.metricIds())));
+                "healthy", provider.healthy(), "metrics", provider.metricIds())));
         lines.add(m("command.setup.external_group_policy"));
         return completed(CommandResponse.success("setup.discovery", lines));
     }
@@ -526,21 +512,17 @@ public final class PhaseSixCommandService {
         boolean explicit = arguments.size() > 2 && looksLikeUuid(arguments.get(2));
         int first = explicit ? 3 : 2;
         int fields = arguments.size() - first;
-        if (fields != 7 && fields != 8) {
-            throw usage("setup requirement [session] [target-stage] <id> <provider> <metric> <operator> "
+        if (fields != 7) {
+            throw usage("setup requirement [session] <id> <provider> <metric> <operator> "
                     + "<target> <scope> <completion>");
         }
         UUID sessionId = setupSession(subject, arguments, explicit);
-        int requirement = fields == 8 ? first + 1 : first;
+        int requirement = first;
         SetupRequirement value = new SetupRequirement(new RequirementId(arguments.get(requirement)),
                 new ProviderId(arguments.get(requirement + 1)), new MetricId(arguments.get(requirement + 2)),
                 arguments.get(requirement + 3), arguments.get(requirement + 4), arguments.get(requirement + 5),
                 arguments.get(requirement + 6));
-        if (fields == 8) {
-            setup.configureRequirementForStage(subject, sessionId, new StageId(arguments.get(first)), value);
-        } else {
-            setup.configureRequirement(subject, sessionId, value);
-        }
+        setup.configureRequirement(subject, sessionId, value);
         return completed(CommandResponse.success("setup.requirement.configured",
                 List.of(m("command.setup.requirement_configured"))));
     }
@@ -569,18 +551,15 @@ public final class PhaseSixCommandService {
         boolean explicit = arguments.size() > 2 && looksLikeUuid(arguments.get(2));
         int mode = explicit ? 3 : 2;
         boolean disabled = arguments.size() == mode + 1 && arguments.get(mode).equalsIgnoreCase("disabled");
-        boolean enabled = arguments.size() == mode + 3 && arguments.get(mode).equalsIgnoreCase("enabled");
-        if (!disabled && !enabled) {
-            throw usage("setup prestige [session] disabled | setup prestige [session] enabled <required-stage> "
-                    + "<reset-stage>");
+        boolean numericEnabled = arguments.size() == mode + 1 && arguments.get(mode).equalsIgnoreCase("enabled");
+        if (!disabled && !numericEnabled) {
+            throw usage("setup prestige [session] disabled | setup prestige [session] enabled");
         }
         UUID sessionId = setupSession(subject, arguments, explicit);
         if (disabled) {
             setup.configurePrestige(subject, sessionId, SetupPrestige.disabled());
-        } else if (enabled) {
-            setup.configurePrestige(subject, sessionId, new SetupPrestige(true,
-                    Optional.of(new StageId(arguments.get(mode + 1))),
-                    Optional.of(new StageId(arguments.get(mode + 2)))));
+        } else {
+            setup.configurePrestige(subject, sessionId, SetupPrestige.numericEnabled());
         }
         return completed(CommandResponse.success("setup.prestige.configured",
                 List.of(m("command.setup.prestige_configured"))));
@@ -661,16 +640,15 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> staff(PermissionSubject subject, List<String> arguments) {
-        if (arguments.size() < 8 || !arguments.get(1).equalsIgnoreCase("prestige")
+        if (arguments.size() < 7 || !arguments.get(1).equalsIgnoreCase("prestige")
                 || !arguments.get(2).equalsIgnoreCase("set")) {
-            throw usage("staff prestige set <player> <expected-state-revision> <current> <lifetime> <reason>");
+            throw usage("staff prestige set <player> <expected-state-revision> <prestige> <reason>");
         }
         UUID playerId = uuid(arguments.get(3), "player UUID");
         long expected = nonNegativeLong(arguments.get(4), "expected state revision");
-        long current = nonNegativeLong(arguments.get(5), "current Prestige");
-        long lifetime = nonNegativeLong(arguments.get(6), "lifetime Prestige");
-        return prestigeAdministration.set(subject, playerId, expected, current, lifetime, "command",
-                join(arguments, 7)).thenApply(state -> CommandResponse.success("staff.prestige.adjusted", List.of(
+        long prestige = nonNegativeLong(arguments.get(5), "Prestige");
+        return prestigeAdministration.set(subject, playerId, expected, prestige, "command",
+                join(arguments, 6)).thenApply(state -> CommandResponse.success("staff.prestige.adjusted", List.of(
                         m("command.staff.prestige_adjusted", "player", playerId, "current", state.currentPrestige(),
                                 "lifetime", state.lifetimePrestige(), "revision", state.stateRevision()))));
     }
@@ -786,6 +764,18 @@ public final class PhaseSixCommandService {
 
     private static MessageReference m(String key, Object... arguments) {
         return MessageReference.of(key, arguments);
+    }
+
+    private static AdministrationException rankUpCompatibilityOnly() {
+        return new AdministrationException("rankup.compatibility_only",
+                "Rank-up is a compatibility-only surface and cannot be simulated or executed.",
+                "Use the numeric Prestige operation; active progression is Prestige N to N + 1.");
+    }
+
+    private static AdministrationException retiredStageSurface() {
+        return new AdministrationException("stage.compatibility_only",
+                "Stage configuration is preserved only for compatibility and recovery evidence.",
+                "Configure numeric Prestige requirements, costs, rewards, and scaling instead.");
     }
 
     private static CompletionStage<CommandResponse> completed(CommandResponse response) {

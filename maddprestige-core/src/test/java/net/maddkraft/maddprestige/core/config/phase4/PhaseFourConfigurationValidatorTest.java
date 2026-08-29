@@ -8,7 +8,9 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.EnumMap;
 import java.time.Instant;
 import net.maddkraft.maddprestige.api.id.RequirementId;
@@ -23,6 +25,11 @@ import net.maddkraft.maddprestige.core.competition.CompetitionConfiguration;
 import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.rank.ReconciliationPolicy;
+import net.maddkraft.maddprestige.core.requirement.TargetRounding;
+import net.maddkraft.maddprestige.core.scaling.PrestigeScalingSegment;
+import net.maddkraft.maddprestige.core.scaling.SegmentScalingMode;
+import net.maddkraft.maddprestige.core.scaling.SegmentTransition;
+import net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile;
 import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 import net.maddkraft.maddprestige.core.stage.StageDefinition;
 import net.maddkraft.maddprestige.core.stage.StageProjection;
@@ -32,7 +39,7 @@ import org.junit.jupiter.api.Test;
 
 class PhaseFourConfigurationValidatorTest {
     @Test
-    @DisplayName("[A28] Required/reset stages and active Phase 4 providers fail closed before apply")
+    @DisplayName("[Phase 9B] Legacy stages are ignored while active providers fail closed before apply")
     void rejectsMissingStageAndProviderReferences() {
         StageId originId = new StageId("origin");
         StageId summitId = new StageId("summit");
@@ -55,8 +62,8 @@ class PhaseFourConfigurationValidatorTest {
                 phaseFour, phaseThree, stages, new ProviderRegistry(), Map.of());
 
         assertTrue(validation.report().hasErrors());
-        assertTrue(validation.report().findings().stream()
-                .anyMatch(finding -> finding.code().equals("phase4.prestige.required_stage")));
+        assertFalse(validation.report().findings().stream()
+                .anyMatch(finding -> finding.code().contains("stage")));
         assertTrue(validation.report().findings().stream()
                 .anyMatch(finding -> finding.code().equals("phase4.provider.unavailable")));
         assertTrue(validation.providerGenerations().isEmpty());
@@ -96,8 +103,7 @@ class PhaseFourConfigurationValidatorTest {
 
         EnumMap<ResetComponent, ResetDisposition> preserveStage = values();
         preserveStage.put(ResetComponent.PROGRESSION_STAGE, ResetDisposition.PRESERVE);
-        assertThrows(IllegalArgumentException.class, () -> prestige(new ResetPreservePolicy(preserveStage),
-                Optional.empty(), Optional.empty()));
+        prestige(new ResetPreservePolicy(preserveStage), Optional.empty(), Optional.empty());
         EnumMap<ResetComponent, ResetDisposition> resetHistory = values();
         resetHistory.put(ResetComponent.HISTORICAL_STATISTICS, ResetDisposition.RESET);
         assertThrows(IllegalArgumentException.class, () -> prestige(new ResetPreservePolicy(resetHistory),
@@ -132,6 +138,47 @@ class PhaseFourConfigurationValidatorTest {
         assertTrue(new PhaseFourConfigurationValidator().validate(disabled, PhaseThreeConfiguration.empty(),
                 validStages()).findings().stream().anyMatch(finding ->
                         finding.code().equals("phase4.prestige.profile.unsupported")));
+    }
+
+    @Test
+    void finiteAndUnlimitedPrestigeRequireCompleteScalingCoverageAtPublication() {
+        CostId costId = new CostId("scaled_cost");
+        ProviderId providerId = new ProviderId("configured_provider");
+        PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16, Map.of(), Map.of(),
+                Map.of(costId, new CostDefinition(costId, providerId, "generic", MetricValue.count(1), Map.of(),
+                        "Scaled cost")), Map.of(), CommandActionPolicy.safeDefaults());
+        PhaseFourConfigurationValidator validator = new PhaseFourConfigurationValidator();
+
+        assertTrue(validator.validate(scaled(costId, PrestigeLimit.finite(10), profile(OptionalLong.of(9))),
+                phaseThree, validStages()).findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+        assertTrue(validator.validate(scaled(costId, PrestigeLimit.unlimited(), profile(OptionalLong.of(10))),
+                phaseThree, validStages()).findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+        assertFalse(validator.validate(scaled(costId, PrestigeLimit.finite(10), profile(OptionalLong.of(10))),
+                phaseThree, validStages()).findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+        assertFalse(validator.validate(scaled(costId, PrestigeLimit.unlimited(), profile(OptionalLong.empty())),
+                phaseThree, validStages()).findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+    }
+
+    private static PhaseFourConfiguration scaled(
+            CostId costId, PrestigeLimit limit, SegmentedScalingProfile profile) {
+        PrestigeConfiguration prestige = new PrestigeConfiguration(true, Set.of(), new StageId("compatibility"),
+                1, 1, limit, Duration.ZERO, Optional.empty(), List.of(costId), List.of(), Optional.empty(),
+                Optional.empty(), ResetPreservePolicy.safeDefaults(), false);
+        return new PhaseFourConfiguration(4, prestige, Map.of(), Map.of(), Map.of(), Map.of(),
+                new PrestigeValueScalingConfiguration(Map.of(costId, profile), Map.of()),
+                CompetitionConfiguration.disabled());
+    }
+
+    private static SegmentedScalingProfile profile(OptionalLong end) {
+        return new SegmentedScalingProfile(List.of(new PrestigeScalingSegment(1, end, SegmentScalingMode.FLAT,
+                SegmentTransition.EXPLICIT_BASE, net.maddkraft.maddprestige.api.value.ExactDecimal.parse("1"),
+                net.maddkraft.maddprestige.api.value.ExactDecimal.ZERO, TargetRounding.EXACT,
+                net.maddkraft.maddprestige.api.value.ExactDecimal.parse("1"), Optional.empty(), Optional.empty(),
+                new TreeMap<>())));
     }
 
     private static EnumMap<ResetComponent, ResetDisposition> values() {

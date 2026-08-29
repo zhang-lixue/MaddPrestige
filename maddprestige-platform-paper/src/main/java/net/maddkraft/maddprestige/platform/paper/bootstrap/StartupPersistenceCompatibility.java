@@ -5,13 +5,9 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
-import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
-import net.maddkraft.maddprestige.core.stage.StageConfigurationCompiler;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteFoundation;
 
@@ -71,27 +67,6 @@ final class StartupPersistenceCompatibility {
                 throw new PersistenceException("Active configuration pointer is stale relative to the latest "
                         + "APPLIED database configuration revision");
             }
-            var compilation = new StageConfigurationCompiler().compile(active.compiled());
-            if (compilation.configuration().isEmpty() || compilation.validation().hasErrors()) {
-                throw new PersistenceException("Active configuration has an unsupported or invalid progression schema: "
-                        + compilation.validation().findings().stream().map(finding -> finding.code())
-                                .sorted().toList());
-            }
-            Set<StageId> configured = compilation.configuration().orElseThrow().stages().keySet();
-            LinkedHashSet<StageId> persisted = new LinkedHashSet<>();
-            try (PreparedStatement statement = connection.prepareStatement(
-                    "SELECT DISTINCT stage_id FROM mp_player_stage_state ORDER BY stage_id");
-                    ResultSet rows = statement.executeQuery()) {
-                while (rows.next()) {
-                    persisted.add(new StageId(rows.getString(1)));
-                }
-            }
-            if (!configured.containsAll(persisted)) {
-                persisted.removeAll(configured);
-                throw new PersistenceException("Persisted player stages are absent from active configuration: "
-                        + persisted);
-            }
-            requireAtomicPlayerState(connection);
         } catch (SQLException exception) {
             throw new PersistenceException("Could not assess startup DB/config compatibility", exception);
         }
@@ -115,19 +90,6 @@ final class StartupPersistenceCompatibility {
                 + "WHERE application_status='APPLIED' ORDER BY applied_at DESC, created_at DESC, revision_id DESC LIMIT 1";
         try (PreparedStatement statement = connection.prepareStatement(sql); ResultSet row = statement.executeQuery()) {
             return row.next() ? Optional.of(row.getString(1)) : Optional.empty();
-        }
-    }
-
-    private static void requireAtomicPlayerState(Connection connection) throws SQLException {
-        String sql = "SELECT COUNT(*) FROM ("
-                + "SELECT stage.player_uuid FROM mp_player_stage_state stage "
-                + "LEFT JOIN mp_player_prestige_state prestige ON prestige.player_uuid=stage.player_uuid "
-                + "WHERE prestige.player_uuid IS NULL UNION ALL "
-                + "SELECT prestige.player_uuid FROM mp_player_prestige_state prestige "
-                + "LEFT JOIN mp_player_stage_state stage ON stage.player_uuid=prestige.player_uuid "
-                + "WHERE stage.player_uuid IS NULL)";
-        if (scalarLong(connection, sql) != 0) {
-            throw new PersistenceException("Persisted stage and Prestige state violate atomic player initialization");
         }
     }
 

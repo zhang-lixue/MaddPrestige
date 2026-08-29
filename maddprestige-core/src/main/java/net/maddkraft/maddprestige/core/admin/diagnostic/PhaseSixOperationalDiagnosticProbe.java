@@ -90,30 +90,7 @@ public final class PhaseSixOperationalDiagnosticProbe implements DiagnosticProbe
                 "Reconcile durable internal/external evidence before allowing a conflicting operation.")));
         if (snapshot.reconciliationOperations().isEmpty()) {
             findings.add(healthy("operation.reconciliation.none", "operation-reconciliation", "operations",
-                    "No operation or stage-remap reconciliation is pending."));
-        }
-        snapshot.stageTransitionLeases().forEach((operation, state) -> subsystem(findings,
-                "stage_transition." + operation, "operations.stage-transition." + operation, state));
-        if (snapshot.stageTransitionLeases().isEmpty()) {
-            findings.add(healthy("stage_transition.none", "stage-transition", "operations.stage-transition",
-                    "No durable stage-transition lease is active."));
-        }
-        snapshot.configurationStageTransitions().forEach((revision, state) -> subsystem(findings,
-                "configuration_transition." + revision, "configuration.transitions." + revision, state));
-        if (snapshot.configurationStageTransitions().isEmpty()) {
-            findings.add(healthy("configuration_transition.none", "configuration-transition",
-                    "configuration.transitions", "No destructive configuration-stage reservation is active."));
-        }
-        snapshot.playerStages().forEach((player, stage) -> {
-            if (!snapshot.configuredStages().contains(stage)) {
-                findings.add(blocked("player.stage.orphaned", "player-state", "players." + player + ".stage",
-                        "Player " + player + " references absent stage " + stage + ".",
-                        "Restore the referenced revision or perform an audited CAS stage migration."));
-            }
-        });
-        if (findings.stream().noneMatch(value -> value.code().equals("player.stage.orphaned"))) {
-            findings.add(healthy("player.stage.references_valid", "player-state", "players.stage",
-                    "Every inspected player stage reference exists in the active configuration."));
+                    "No operation reconciliation is pending."));
         }
         integrity(findings, snapshot.immutableIdIssues(), "config.immutable_id_duplicate", "immutable IDs");
         if (snapshot.immutableIdIssues().isEmpty()) {

@@ -113,33 +113,28 @@ class PhaseSixAdministrationUxTest {
         assertEquals(List.of("SINCE_PRESTIGE_START"), completion.suggest(setup,
                 List.of("setup", "requirement", session, "id", "metrics", "play_time", "GREATER_OR_EQUAL",
                         "10", "SINCE_P")));
-        assertEquals(List.of("first", "second"), completion.suggest(setup,
-                List.of("setup", "playtime", "")));
-        assertEquals(List.of("PT1M"), completion.suggest(setup,
-                List.of("setup", "playtime", "first", "PT1")));
-        assertEquals(List.of("first", "second"), completion.suggest(setup,
+        assertEquals(List.of(), completion.suggest(setup, List.of("setup", "playtime", "")));
+        assertEquals(List.of(), completion.suggest(setup,
                 List.of("setup", "prestige", "enabled", "")));
-        assertEquals(List.of("first", "second"), completion.suggest(setup,
-                List.of("setup", "prestige", "enabled", "first", "")));
         assertTrue(completion.suggest(subject(PhaseSixPermissions.USE), List.of("")).stream()
                 .noneMatch("requirement"::equals));
 
         PermissionSubject editor = subject(PhaseSixPermissions.CONFIG_EDIT);
         List<String> addPaths = completion.suggest(editor, List.of("config", "add", "draft", ""));
         List<String> removePaths = completion.suggest(editor, List.of("config", "remove", "draft", ""));
-        assertTrue(addPaths.contains("progression.stages"));
-        assertTrue(addPaths.contains("progression.order"));
+        assertFalse(addPaths.contains("progression.stages"));
+        assertFalse(addPaths.contains("progression.order"));
         assertFalse(addPaths.contains("requirements.requirements"),
                 "generic map mutation is not an executable command route");
-        assertFalse(removePaths.contains("progression.stages"),
-                "the map itself is not removable; only concrete stage paths are executable");
-        assertTrue(removePaths.contains("progression.order"));
+        assertFalse(removePaths.contains("progression.stages"));
+        assertFalse(removePaths.contains("progression.order"));
 
         completion.refreshAuthorities(Set.of(UUID.fromString("00000000-0000-0000-0000-000000000001")),
                 Set.of("revision-one"));
         PermissionSubject rollback = subject(PhaseSixPermissions.CONFIG_ROLLBACK);
         assertTrue(completion.suggest(rollback, List.of("config", "")).containsAll(
-                List.of("rollback", "rollback-apply", "remap", "validate", "diff", "cancel")));
+                List.of("rollback", "rollback-apply", "validate", "diff", "cancel")));
+        assertFalse(completion.suggest(rollback, List.of("config", "")).contains("remap"));
         assertEquals(List.of(), completion.suggest(rollback,
                 List.of("config", "acknowledge", "00000000-0000-0000-0000-000000000001", "")),
                 "acknowledgement kind is server-owned and must not be suggested as caller input");
@@ -155,11 +150,29 @@ class PhaseSixAdministrationUxTest {
                 "command.help.valid_values", "command.help.measurement.duration_targets",
                 "command.help.measurement.playtime_example", "command.help.measurement.baseline_safety"),
                 lines.stream().map(value -> value.key()).toList());
-        assertTrue(lines.get(2).argument("value").orElseThrow().contains("since-stage-start"));
+        assertTrue(lines.get(2).argument("value").orElseThrow().contains("since-prestige-start"));
+        assertFalse(lines.get(2).argument("value").orElseThrow().contains("since-stage-start"));
         assertEquals("command.help.setup.title", new ContextualHelpService(PhaseSixSchema.create())
                 .help(subject(PhaseSixPermissions.USE), "setup").getFirst().key());
         assertEquals("command.help.overview.title", new ContextualHelpService(PhaseSixSchema.create())
                 .help(subject(PhaseSixPermissions.USE), "overview").getFirst().key());
+    }
+
+    @Test
+    @DisplayName("[Phase 9B] Canonical discovery exposes numeric trees and hides retired stage controls")
+    void canonicalSchemaAdvertisesNumericPrestigeOnly() {
+        var schema = PhaseSixSchema.create();
+
+        assertTrue(schema.find("requirements.trees.*.mode").orElseThrow()
+                .allowedValues().staticValues().contains("X_OF_N"));
+        for (String retired : List.of("progression.stages.*.enabled", "progression.order",
+                "prestige.required-stages", "prestige.reset-stage", "prestige.current-count-increment",
+                "prestige.lifetime-count-increment")) {
+            assertTrue(schema.find(retired).isEmpty(), retired);
+        }
+        assertTrue(schema.find("prestige.maximum").isPresent());
+        assertTrue(schema.find("prestige.cost-scaling.*.segments.*.mode").orElseThrow()
+                .allowedValues().staticValues().containsAll(List.of("FLAT", "LINEAR", "EXPONENTIAL", "MANUAL")));
     }
 
     @Test
@@ -168,7 +181,6 @@ class PhaseSixAdministrationUxTest {
         ProviderRegistry providers = new ProviderRegistry();
         var registration = providers.register("test-owner", new TestMetricProvider());
         providers.activate(registration);
-        providers.register("test-owner", new TestRankAdapter(Set.of()));
         var active = new ActiveConfiguration(new ConfigRevisionId("healthy_revision"), compiled("ok: true\n"));
         var database = new DatabaseDiagnosticProbe(() -> CompletableFuture.completedFuture(
                 new DatabaseHealth(true, true, "SQLite", "migration 6")));
@@ -180,11 +192,10 @@ class PhaseSixAdministrationUxTest {
                                 List.of(), List.of(), healthySubsystem("disabled and checked"),
                                 healthySubsystem("scheduler and cache are current"),
                                 healthySubsystem("flush queue is empty"), Map.of())));
-        var rank = new RankTargetDiagnosticProbe(() -> Optional.of(StageConfiguration.inactive()), providers);
         var history = new net.maddkraft.maddprestige.core.admin.diagnostic.ConfigurationHistoryDiagnosticProbe(
                 emptyHistory(), Runnable::run);
         DoctorService doctor = new DoctorService(providers, () -> Optional.of(active),
-                List.of(database, operational, rank, history), CLOCK);
+                List.of(database, operational, history), CLOCK);
 
         var report = doctor.inspect(subject(PhaseSixPermissions.DOCTOR)).toCompletableFuture().join();
 
@@ -192,10 +203,13 @@ class PhaseSixAdministrationUxTest {
         assertTrue(report.findings().size() >= 10);
         assertTrue(report.findings().stream().anyMatch(value -> value.code().equals("config.active")));
         assertTrue(report.findings().stream().anyMatch(value -> value.code().equals("provider.available")));
-        assertTrue(report.findings().stream().anyMatch(value -> value.component().equals("provider")
-                && value.severity() == DiagnosticSeverity.DEFERRED));
+        assertTrue(report.findings().stream().noneMatch(value -> value.code().equals(
+                "doctor.not_checked.rank-targets")));
         assertTrue(report.findings().stream().anyMatch(value -> value.code().equals("database.healthy")));
         assertTrue(report.findings().stream().noneMatch(value -> value.code().startsWith("doctor.not_checked")));
+        assertTrue(report.findings().stream().map(value -> String.join(" ", value.code(), value.component(),
+                value.path(), value.summary(), value.remediation()).toLowerCase(java.util.Locale.ROOT))
+                .noneMatch(text -> text.contains("stage") || text.contains("rank")));
     }
 
     @Test
@@ -217,7 +231,7 @@ class PhaseSixAdministrationUxTest {
     }
 
     @Test
-    @DisplayName("[A45][A46] Operational Doctor reports pending, provider, orphan, schema, and Placeholder failures")
+    @DisplayName("[A45][A46] Numeric operational Doctor reports provider, operation, schema, and Placeholder failures")
     void doctorReportsExpandedOperationalFailuresAtExactPaths() {
         ProviderRegistry providers = new ProviderRegistry();
         UUID orphan = UUID.randomUUID();
@@ -258,11 +272,10 @@ class PhaseSixAdministrationUxTest {
                 && value.path().equals("costs.payment.provider")));
         assertTrue(findings.stream().anyMatch(value -> value.code().equals("reward.provider.unavailable")
                 && value.path().equals("rewards.grant.provider")));
-        assertTrue(findings.stream().anyMatch(value -> value.code().equals("player.stage.orphaned")
-                && value.path().equals("players." + orphan + ".stage")));
         assertTrue(findings.stream().anyMatch(value -> value.code().equals("config.schema_version_mismatch")));
-        assertTrue(findings.stream().anyMatch(value -> value.path().equals("configuration.transitions.revision-2")
-                && value.severity() == DiagnosticSeverity.BLOCKED));
+        assertTrue(findings.stream().noneMatch(value -> value.code().startsWith("stage_transition.")
+                || value.code().startsWith("configuration_transition.")
+                || value.code().startsWith("player.stage.")));
         assertTrue(findings.stream().anyMatch(value -> value.path().equals("integrations.placeholderapi")
                 && value.severity() == DiagnosticSeverity.WARNING));
     }
@@ -348,7 +361,7 @@ class PhaseSixAdministrationUxTest {
     }
 
     @Test
-    @DisplayName("[A56][A69] GUI actions are permission-scoped, server-owned, stale-safe, and require remap")
+    @DisplayName("[A56][A69][Phase 9B] GUI actions are stale-safe and stage editors are compatibility-only")
     void guiGuardsAuthorityStalenessAndStageReplacement() {
         AtomicReference<Optional<ConfigRevisionId>> revision = new AtomicReference<>(
                 Optional.of(new ConfigRevisionId("revision_one")));
@@ -382,17 +395,23 @@ class PhaseSixAdministrationUxTest {
 
         PermissionSubject editor = subject(PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_EDIT);
         UUID draft = UUID.randomUUID();
-        var blockedDelete = sessions.openStageEditor(editor, draft, new StageId("second"), Optional.empty());
-        AdministrationException remap = assertThrows(AdministrationException.class, () -> sessions.click(editor,
-                blockedDelete.sessionId(), blockedDelete.actions().getFirst().actionId()));
-        assertEquals("stage.change.remap_required", remap.code());
+        AdministrationException retired = assertThrows(AdministrationException.class,
+                () -> sessions.openStageEditor(editor, draft, new StageId("second"), Optional.empty()));
+        assertEquals("stage.compatibility_only", retired.code());
         assertEquals(0, executions.get());
+        var scalarEditor = sessions.openScalarEditor(editor, draft, "prestige.cooldown", "PT1S");
 
-        var staleDelete = sessions.openStageEditor(editor, draft, new StageId("second"),
-                Optional.of(new StageId("first")));
+        UUID playerId = UUID.randomUUID();
+        PermissionSubject player = new PermissionSubject(new Actor("player", Optional.of(playerId), "Player"),
+                Set.of(PhaseSixPermissions.USE, PhaseSixPermissions.RANK_UP, PhaseSixPermissions.PRESTIGE));
+        var playerView = sessions.openPlayer(player, playerId);
+        assertTrue(playerView.actions().stream().anyMatch(value -> value.kind() == GuiActionKind.PREPARE_PRESTIGE));
+        assertTrue(playerView.actions().stream().noneMatch(value ->
+                value.kind() == GuiActionKind.PREPARE_RANK_UP
+                        || value.kind() == GuiActionKind.SIMULATE_RANK_UP));
         revision.set(Optional.of(new ConfigRevisionId("revision_two")));
-        AdministrationException stale = assertThrows(AdministrationException.class, () -> sessions.click(editor,
-                staleDelete.sessionId(), staleDelete.actions().getFirst().actionId()));
+        AdministrationException stale = assertThrows(AdministrationException.class,
+                () -> sessions.click(editor, scalarEditor.sessionId(), scalarEditor.actions().getFirst().actionId()));
         assertEquals("gui.action.stale", stale.code());
         assertEquals(0, executions.get());
     }

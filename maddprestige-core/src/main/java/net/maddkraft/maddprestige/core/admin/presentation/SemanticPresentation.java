@@ -334,6 +334,7 @@ public final class SemanticPresentation {
         register(result, "gui_target_missing", "gui.target.missing");
         register(result, "operation_preview_blocked", "operation.preview.blocked");
         register(result, "permission_denied", "permission.denied");
+        register(result, "rankup_compatibility_only", "rankup.compatibility_only");
         register(result, "setup_acknowledgement_unknown", "setup.acknowledgement.unknown");
         register(result, "setup_already_active", "setup.already_active");
         register(result, "setup_baseline_unknown", "setup.baseline.unknown");
@@ -367,6 +368,7 @@ public final class SemanticPresentation {
         register(result, "stage_change_transition_reconciliation_pending",
                 "stage.change.transition_reconciliation_pending");
         register(result, "stage_change_transition_stale", "stage.change.transition_stale");
+        register(result, "stage_compatibility_only", "stage.compatibility_only");
         register(result, "stage_remove_rejected", "stage.remove.rejected");
         return Map.copyOf(result);
     }

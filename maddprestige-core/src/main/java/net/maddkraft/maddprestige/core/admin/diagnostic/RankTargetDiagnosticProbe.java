@@ -25,7 +25,7 @@ public final class RankTargetDiagnosticProbe implements DiagnosticProbe {
 
     @Override
     public Set<DiagnosticDomain> domains() {
-        return Set.of(DiagnosticDomain.RANK_TARGETS);
+        return Set.of();
     }
 
     @Override

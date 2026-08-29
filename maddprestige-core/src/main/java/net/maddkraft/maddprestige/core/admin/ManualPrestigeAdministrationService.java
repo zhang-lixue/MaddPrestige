@@ -39,6 +39,17 @@ public final class ManualPrestigeAdministrationService {
             PermissionSubject subject,
             UUID playerId,
             long expectedStateRevision,
+            long prestige,
+            String sourceSurface,
+            String reason) {
+        return set(subject, playerId, expectedStateRevision, prestige, prestige, sourceSurface, reason);
+    }
+
+    /** Compatibility overload: current and lifetime values must be identical. */
+    public CompletionStage<PlayerPrestigeState> set(
+            PermissionSubject subject,
+            UUID playerId,
+            long expectedStateRevision,
             long currentPrestige,
             long lifetimePrestige,
             String sourceSurface,

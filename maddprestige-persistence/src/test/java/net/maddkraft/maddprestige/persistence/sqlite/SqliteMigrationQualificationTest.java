@@ -25,6 +25,44 @@ class SqliteMigrationQualificationTest {
     Path temporaryDirectory;
 
     @Test
+    @DisplayName("[Phase 9B] Numeric authority migration preserves accepted history and restarts idempotently")
+    void upgradesPhaseEightCToNumericAuthority() {
+        Path database = temporaryDirectory.resolve("phase9b.sqlite");
+        SqliteFoundation foundation = SqlitePhase8cFixture.historical(database, 11);
+        List<Migration> current = SqliteMigrations.phaseNineB();
+        var runner = new MigrationRunner(foundation,
+                new SqliteBackupService(foundation, temporaryDirectory.resolve("phase9b-backups"), current,
+                        SqlitePhase8cFixture.CLOCK), SqlitePhase8cFixture.CLOCK);
+
+        var report = runner.migrate(current);
+
+        assertTrue(report.changed());
+        assertEquals("12", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT MAX(version) FROM mp_schema_migrations WHERE result='APPLIED'"));
+        assertEquals("'NUMERIC_LEVEL'", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT dflt_value FROM pragma_table_info('mp_prestige_operation_details') "
+                        + "WHERE name='progression_model'"));
+        assertEquals("'NUMERIC_LEVEL'", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT dflt_value FROM pragma_table_info('mp_prestige_history') "
+                        + "WHERE name='progression_model'"));
+        assertEquals("0:0:0:numeric-p0", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT current_prestige || ':' || lifetime_prestige || ':' || state_revision "
+                        + "|| ':' || prestige_scope_id FROM mp_player_prestige_state"));
+        assertEquals("3:5:9", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT current_prestige || ':' || lifetime_prestige || ':' || state_revision "
+                        + "FROM mp_legacy_stage_prestige_state"));
+        assertEquals("veteran", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT stage_id FROM mp_legacy_stage_player_state"));
+        assertEquals("0", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT COUNT(*) FROM mp_player_stage_state"));
+        assertEquals("LEGACY_STAGE", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT DISTINCT progression_model FROM mp_prestige_operation_details"));
+        assertEquals("LEGACY_STAGE", SqlitePhase8cFixture.scalar(foundation,
+                "SELECT DISTINCT progression_model FROM mp_prestige_history"));
+        assertFalse(runner.migrate(current).changed());
+    }
+
+    @Test
     @DisplayName("[A63] Fresh and every historical schema prefix upgrade through a verified populated rehearsal")
     void upgradesEverySupportedPrefixAndRestartsIdempotently() throws Exception {
         List<Migration> current = SqliteMigrations.phaseEightC();

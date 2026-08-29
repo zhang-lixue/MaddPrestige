@@ -1,10 +1,10 @@
 package net.maddkraft.maddprestige.api.service;
 
-/** A supported player progression mutation. */
+/** Stable operation identity for active and retained compatibility operations. */
 public enum OperationKind {
-    /** Advance from the current stage to its canonical next stage. */
+    /** Retired stage-era operation; production keeps it blocked for stable API compatibility. */
     RANK_UP,
 
-    /** Complete the configured terminal-stage Prestige transition. */
+    /** Active numeric progression from Prestige {@code N} to {@code N + 1}. */
     PRESTIGE
 }

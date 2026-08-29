@@ -24,7 +24,6 @@ import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
-import net.maddkraft.maddprestige.api.rank.RankAdapter;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
@@ -45,7 +44,7 @@ public final class SetupWizardService {
     private static final String CRAFT_ENGINE = "craftengine";
     private static final Map<SetupSelection, BuiltInSetupRule> BUILT_IN_SETUP_RULES = Map.ofEntries(
             requirement("vault_balance", "balance", VAULT),
-            requirement(MCMO, "power_level", MCMO),
+            requirement(MCMO, "total_level", MCMO),
             unsupportedRequirement(MCMO, "skill_level", MCMO, "skill filter"),
             requirement("phase5_events", "mcmmo_adjusted_xp_total", MCMO),
             requirement(GRIEF_PREVENTION_CLAIMS, "remaining_claim_blocks", GRIEF_PREVENTION),
@@ -120,8 +119,7 @@ public final class SetupWizardService {
                     boolean healthy = snapshot.health().state() == ProviderHealthState.AVAILABLE
                             || snapshot.health().state() == ProviderHealthState.ACTIVE;
                     return new SetupProviderOption(snapshot.descriptor().id(),
-                            snapshot.activation() == ActivationState.ACTIVE, healthy,
-                            provider.filter(RankAdapter.class::isInstance).isPresent(), metrics,
+                            snapshot.activation() == ActivationState.ACTIVE, healthy, metrics,
                             snapshot.health().reason());
                 })).sorted(java.util.Comparator.comparing(value -> value.providerId().value())).toList();
         return new SetupDiscovery(configuration.activeConfigurationPresentForSetup(subject), options,
@@ -287,7 +285,7 @@ public final class SetupWizardService {
 
     public CompletionStage<SetupPreview> preview(PermissionSubject subject, UUID sessionId) {
         Session session = require(subject, sessionId);
-        if (session.stages().size() < 2 || session.baseline().isEmpty()) {
+        if (!session.stages().isEmpty() && (session.stages().size() < 2 || session.baseline().isEmpty())) {
             throw new AdministrationException("setup.incomplete",
                     "A simple ladder needs at least two ordered stages and one baseline.",
                     "Add stages in progression order and select the baseline stage.");
@@ -425,6 +423,13 @@ public final class SetupWizardService {
     }
 
     private static String progression(Session session) {
+        if (session.stages().isEmpty()) {
+            return """
+                    schema-version: 3
+                    active: false
+                    reconciliation-policy: warn-only
+                    """;
+        }
         StringBuilder yaml = new StringBuilder("""
                 schema-version: 3
                 active: true
@@ -561,23 +566,28 @@ public final class SetupWizardService {
                 prestige:
                 """);
         yaml.append("  enabled: ").append(prestige.enabled()).append('\n');
-        if (prestige.enabled()) {
-            yaml.append("  required-stages: [").append(prestige.requiredStage().orElseThrow().value()).append("]\n")
-                    .append("  reset-stage: ").append(prestige.resetStage().orElseThrow().value()).append('\n');
-        } else {
-            yaml.append("  required-stages: []\n  reset-stage: disabled\n");
+        session.requirement().ifPresent(value -> yaml.append("  requirement-tree: setup_eligibility\n"));
+        yaml.append("  costs: ");
+        yaml.append(session.cost().map(value -> "[" + value.id().value() + "]").orElse("[]")).append('\n');
+        yaml.append("  rewards: ");
+        yaml.append(session.reward().map(value -> "[" + value.id().value() + "]").orElse("[]")).append('\n');
+        if (!session.stages().isEmpty()) {
+            yaml.append("  current-count-increment: 1\n")
+                    .append("  lifetime-count-increment: 1\n");
         }
         yaml.append("""
-                  current-count-increment: 1
-                  lifetime-count-increment: 1
                   maximum: unlimited
                   cooldown: PT0S
-                  costs: []
-                  rewards: []
+                  cost-scaling: {}
+                  reward-scaling: {}
                   external-resets:
                     enabled: false
                   reset-policy:
-                    progression-stage: RESET
+                """);
+        if (!session.stages().isEmpty()) {
+            yaml.append("    progression-stage: PRESERVE\n");
+        }
+        yaml.append("""
                     active-requirement-progress: RESET
                     latched-completions: RESET
                     baselines: RESET
@@ -862,9 +872,7 @@ public final class SetupWizardService {
         lines.add(MessageReference.of("command.setup.experience_reward", "id",
                 session.reward().map(value -> value.id().value()).orElse("NONE")));
         lines.add(session.prestige().enabled()
-                ? MessageReference.of("command.setup.experience_prestige_enabled", "stage",
-                        session.prestige().requiredStage().orElseThrow().value(), "target",
-                        session.prestige().resetStage().orElseThrow().value())
+                ? MessageReference.of("command.setup.experience_prestige_enabled")
                 : MessageReference.of("command.setup.experience_prestige_disabled"));
         return List.copyOf(lines);
     }

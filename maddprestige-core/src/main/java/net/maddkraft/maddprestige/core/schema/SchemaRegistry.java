@@ -52,6 +52,16 @@ public final class SchemaRegistry {
         return List.copyOf(byPath.values());
     }
 
+    /** Removes one inherited compatibility node from a later active schema composition. */
+    public synchronized void unregister(String canonicalPath) {
+        SchemaNode removed = byPath.remove(Objects.requireNonNull(canonicalPath, "canonical path"));
+        if (removed == null) {
+            return;
+        }
+        byId.remove(removed.id());
+        removed.deprecations().forEach(deprecation -> byAlias.remove(deprecation.alias()));
+    }
+
     private static boolean pathMatches(String schemaPath, String actualPath) {
         String[] schema = schemaPath.split("\\.");
         String[] actual = actualPath.split("\\.");

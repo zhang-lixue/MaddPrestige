@@ -5,13 +5,11 @@ import java.util.Objects;
 
 /** Immutable values produced by canonical runtime projections outside the placeholder render path. */
 public record MaddPrestigePlaceholderSnapshot(
-        String stage,
         String currentPrestige,
         String lifetimePrestige,
         String requirementStatus,
         Map<String, String> extras) {
     public MaddPrestigePlaceholderSnapshot {
-        stage = Objects.requireNonNull(stage, "stage");
         currentPrestige = Objects.requireNonNull(currentPrestige, "current prestige");
         lifetimePrestige = Objects.requireNonNull(lifetimePrestige, "lifetime prestige");
         requirementStatus = Objects.requireNonNull(requirementStatus, "requirement status");
@@ -20,7 +18,6 @@ public record MaddPrestigePlaceholderSnapshot(
 
     public String resolve(String identifier) {
         return switch (identifier) {
-            case "stage" -> stage;
             case "current_prestige" -> currentPrestige;
             case "lifetime_prestige" -> lifetimePrestige;
             case "requirement_status" -> requirementStatus;

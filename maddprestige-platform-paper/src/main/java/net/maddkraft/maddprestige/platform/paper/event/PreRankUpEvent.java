@@ -9,9 +9,9 @@ import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Cancellable Paper-server-thread event fired after rank-up authorization and before post-PRE revalidation,
- * unknown-player materialization, leases, journaling, or any consequential effect. The immutable snapshot remains
- * valid after callback return; this event object is owned by the dispatch and only its cancellation flag is mutable.
+ * Stage-era event retained for stable source and binary compatibility. Active numeric Prestige never fires this event:
+ * rank-up is blocked before confirmation, dispatch, journaling, projection, or mutation. The immutable snapshot remains
+ * valid if a compatibility caller constructs an event directly.
  */
 @Stable
 public final class PreRankUpEvent extends Event implements Cancellable {

@@ -1,9 +1,13 @@
 # MaddPrestige V2 acceptance traceability
 
 **Imported matrix:** master specification A01–A76
-**Current classification:** Phase 8E is owner-accepted and merged. Owner Review 2 froze compatibility baseline `2.x-stable-1`; targeted Owner Review 3 accepted the final correction candidate; the owner-operated real-player fresh-RC run passed. OR8F-A76-01 and OR8F-A76-02 are closed, A76 is Satisfied, and Phase 8F plus the Phase 8 work phase meet their exit criteria. Phase 9 has not started and 2.0 production readiness is not claimed.
+**Current classification:** Phase 8 and Phase 9A are owner-accepted and merged. Phase 9B is an uncommitted owner-review candidate that supersedes the old stage-driven product interpretation with numeric Prestige while preserving accepted evidence and stable compatibility surfaces. Real clone qualification and production readiness are not claimed.
 **Legend:** `Satisfied` means the acceptance criterion itself is demonstrably satisfied at its authorized engine/provider boundary; `Partial` means a required contract or focused implementation exists but a named later lifecycle/integration/qualification surface remains; `Later` means the criterion belongs wholly to a later phase or explicitly deferred post-release scope.
 **Current totals:** 63 Satisfied, 12 Partial, 1 Later.
+
+Phase 9B does not silently rewrite the historical A01-A76 rows below. The exact proposed reinterpretations for A02,
+A28, A36/A37, A46-A48, A58-A63, A70-A72, and A76 are in
+`V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md`. New code evidence is summarized at the end of this file.
 
 | ID | Acceptance criterion (condensed from master specification) | Phase relationship | Current evidence / owner |
 |---|---|---|---|
@@ -131,3 +135,12 @@
 | Semantic state keys are structurally unambiguous | `RequirementSemanticsTest` version/shape/scaling/catch-up/type cases |
 | Manual progress authority is capability-bound and race-safe | `ManualProgressProviderTest` forged/foreign/stale/close/final-slot cases |
 | Command recursion uses runtime context | `CommandActionValidatorTest.propagatesActualNestedExecutionDepth` |
+| Numeric Prestige is stage/rank independent and advances exactly one | `PrestigeAuthorizationServiceTest`, stage-free production composition, `SqlitePlayerInitializationStoreTest` |
+| Finite/unlimited numeric maximum | `PrestigeAuthorizationServiceTest.finiteCapBoundaryAndUnlimitedModeWork` |
+| Provider-owned values and missing required providers fail closed | `RequirementMetricCollectorTest`, `PrestigeProviderHealthTest` |
+| ALL/ANY/X_OF_N requirement combinations | `RequirementEngineTest` |
+| Independent requirement/cost/reward segmented scaling | `PhaseNineBSegmentedScalingTest` |
+| Optional additive LuckPerms rewards preserve unrelated nodes and never create groups | `LuckPermsRankAdapterTest` |
+| Numeric migration marker and restart durability | `SqliteMigrationQualificationTest`, `SqlitePlayerInitializationStoreTest`, `PhaseFourLifecycleTest` |
+| Fresh V2 does not import V1 player/stage state | `SqlitePlayerInitializationStoreTest.initializesNumericPrestigeWithoutImportingStageState` |
+| Phase 9B policy/audit and matrix proposal | `V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md`, `V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md` |

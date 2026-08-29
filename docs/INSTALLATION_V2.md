@@ -4,7 +4,7 @@
 
 - Java 25
 - Paper 26.1.2 build 74 stable
-- LuckPerms 5.5.71
+- LuckPerms 5.5.71 only when the active configuration references its optional rewards/conditions
 - the MaddPrestige `2.0.0-rc.1` candidate and its published checksum
 
 These are the qualified versions, not a promise of compatibility with every later build. SQLite is embedded in the
@@ -13,9 +13,10 @@ MaddPrestige distribution. Do not add an external JDBC plugin or configure MySQL
 ## Fresh installation
 
 1. Create an empty Paper server directory and accept Paper's EULA.
-2. Put the exact LuckPerms JAR and `MaddPrestige-2.0.0-rc.1.jar` in `plugins/`.
-3. Verify both artifacts against the checksums supplied with the candidate.
-4. Start Paper. Wait for `Done`, then confirm both plugins are enabled.
+2. Put `MaddPrestige-2.0.0-rc.1.jar` in `plugins/`; add the exact LuckPerms JAR only if the candidate configuration
+   explicitly references it.
+3. Verify every installed artifact against the checksums supplied with the candidate.
+4. Start Paper. Wait for `Done`, then confirm MaddPrestige and every configured optional provider are enabled.
 5. Run `/maddprestige status` and `/maddprestige setup discover` as an operator.
 6. Continue with [Quick Start](QUICK_START.md). The first boot is intentionally dormant until a validated revision is
    applied.

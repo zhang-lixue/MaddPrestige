@@ -84,12 +84,69 @@ class PhaseSixCommandServiceTest {
         });
 
         PlayerPrestigeState result = service.set(subject(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT), playerId,
-                0, 2, 3, "command", "owner correction").toCompletableFuture().join();
+                0, 2, 2, "command", "owner correction").toCompletableFuture().join();
 
         assertEquals(1, initializations.get());
         assertEquals(1, adjustments.get());
         assertEquals(2, result.currentPrestige());
-        assertEquals(3, result.lifetimePrestige());
+        assertEquals(2, result.lifetimePrestige());
+    }
+
+    @Test
+    @DisplayName("[Phase 9B correction] Divergent manual counters are rejected before initialization or persistence")
+    void divergentManualPrestigeIsRejectedBeforePersistence() {
+        AtomicInteger initializations = new AtomicInteger();
+        AtomicInteger adjustments = new AtomicInteger();
+        ManualPrestigeAdministrationService service = new ManualPrestigeAdministrationService(adjustment -> {
+            adjustments.incrementAndGet();
+            throw new AssertionError("invalid adjustment reached persistence");
+        }, () -> new ConfigRevisionId("manual_equality_revision"), Runnable::run, ignored -> {
+            initializations.incrementAndGet();
+            return Optional.empty();
+        });
+
+        assertThrows(IllegalArgumentException.class, () -> service.set(
+                subject(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT), UUID.randomUUID(),
+                0, 2, 3, "command", "must remain equal"));
+        assertEquals(0, initializations.get());
+        assertEquals(0, adjustments.get());
+    }
+
+    @Test
+    @DisplayName("[Phase 9B correction] Staff Prestige set accepts one value and writes equal compatibility counters")
+    void staffPrestigeSetUsesOneAuthoritativeValue() {
+        Fixture fixture = new Fixture();
+        UUID playerId = UUID.randomUUID();
+        PermissionSubject owner = subject(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT);
+
+        var response = fixture.commands.execute(new CommandInvocation(owner, List.of(
+                "staff", "prestige", "set", playerId.toString(), "0", "6", "owner correction")))
+                .toCompletableFuture().join();
+
+        assertTrue(response.successful());
+        MessageReference result = response.messages().stream()
+                .filter(message -> message.key().equals("command.staff.prestige_adjusted"))
+                .findFirst().orElseThrow();
+        assertEquals(Optional.of("6"), result.argument("current"));
+        assertEquals(Optional.of("6"), result.argument("lifetime"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9B correction] Guided provider discovery exposes no rank capability or rank syntax")
+    void guidedDiscoveryDoesNotExposeRankCapability() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new DurationMetricProvider()));
+        Fixture fixture = new Fixture(providers);
+
+        var response = fixture.commands.execute(new CommandInvocation(
+                subject(PhaseSixPermissions.SETUP), List.of("setup", "discover")))
+                .toCompletableFuture().join();
+
+        assertTrue(response.successful());
+        List<MessageReference> providerLines = response.messages().stream()
+                .filter(message -> message.key().equals("command.setup.discovery_provider")).toList();
+        assertFalse(providerLines.isEmpty());
+        assertTrue(providerLines.stream().allMatch(message -> message.argument("rank").isEmpty()));
     }
 
     @Test
@@ -136,26 +193,17 @@ class PhaseSixCommandServiceTest {
         var start = fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "start")))
                 .toCompletableFuture().join();
         UUID session = UUID.fromString(start.messages().getFirst().argument("id").orElseThrow());
-        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "stage", "member", "Member"))).toCompletableFuture().join().successful());
-        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "stage", "adventurer", "Adventurer"))).toCompletableFuture().join().successful());
-        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "stage", "veteran", "Veteran"))).toCompletableFuture().join().successful());
-        assertTrue(fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "baseline", "member"))).toCompletableFuture().join().successful());
-
         var advanced = fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "requirement",
-                session.toString(), "adventurer", "playtime_60_seconds", "paper_statistics", "play_one_minute",
+                session.toString(), "playtime_60_seconds", "paper_statistics", "play_one_minute",
                 "GREATER_OR_EQUAL", "PT1M", "SINCE_PRESTIGE_START", "LIVE"))).toCompletableFuture().join();
-        var guided = fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "playtime", "veteran", "PT3M"))).toCompletableFuture().join();
+        var retiredStage = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "stage", "veteran", "Veteran"))).toCompletableFuture().join();
         var prestige = fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "prestige", "enabled", "veteran", "member"))).toCompletableFuture().join();
+                List.of("setup", "prestige", "enabled"))).toCompletableFuture().join();
 
         assertEquals("command.help.overview.title", overview.messages().getFirst().key());
         assertTrue(advanced.successful(), advanced.lines().toString());
-        assertTrue(guided.successful(), guided.lines().toString());
+        assertEquals("stage.compatibility_only", retiredStage.code());
         assertTrue(prestige.successful(), prestige.lines().toString());
     }
 
@@ -169,17 +217,8 @@ class PhaseSixCommandServiceTest {
 
         fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "start")))
                 .toCompletableFuture().join();
-        fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "stage", "member", "Member"))).toCompletableFuture().join();
-        fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "stage", "adventurer", "Adventurer"))).toCompletableFuture().join();
-        fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "stage", "veteran", "Veteran"))).toCompletableFuture().join();
-        fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "baseline", "member"))).toCompletableFuture().join();
-
-        var target = fixture.commands.execute(new CommandInvocation(owner,
-                List.of("setup", "playtime", "veteran", "one-minute"))).toCompletableFuture().join();
+        var target = advancedRequirement(fixture, owner, "target_invalid", "GREATER_OR_EQUAL", "one-minute",
+                "SINCE_PRESTIGE_START", "LIVE");
         var operator = advancedRequirement(fixture, owner, "operator_invalid", "IN_RANGE", "PT1M",
                 "SINCE_PRESTIGE_START", "LIVE");
         var scope = advancedRequirement(fixture, owner, "scope_invalid", "GREATER_OR_EQUAL", "PT1M",
@@ -213,7 +252,7 @@ class PhaseSixCommandServiceTest {
             String target,
             String scope,
             String completion) {
-        return fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "requirement", "adventurer",
+        return fixture.commands.execute(new CommandInvocation(owner, List.of("setup", "requirement",
                 requirement, "paper_statistics", "play_one_minute", operator, target, scope, completion)))
                 .toCompletableFuture().join();
     }
@@ -249,7 +288,7 @@ class PhaseSixCommandServiceTest {
         assertEquals("permission.denied", doctor.code());
         assertEquals("command.invalid", usage.code());
         assertEquals("command.error.usage", usage.messages().getFirst().key());
-        assertEquals("/maddprestige simulate <rankup|prestige> [player-uuid]",
+        assertEquals("/maddprestige simulate prestige [player-uuid]",
                 usage.messages().getFirst().argument("usage").orElseThrow());
         assertTrue(unknown.lines().stream().noneMatch(line -> line.contains("Exception")));
         assertTrue(doctor.lines().stream().noneMatch(line -> line.contains("Exception")));
@@ -263,13 +302,16 @@ class PhaseSixCommandServiceTest {
         UUID player = UUID.randomUUID();
 
         var why = fixture.commands.execute(new CommandInvocation(owner,
-                List.of("why", "rankup", player.toString()))).toCompletableFuture().join();
+                List.of("why", "prestige", player.toString()))).toCompletableFuture().join();
+        var rankUp = fixture.commands.execute(new CommandInvocation(owner, List.of("rankup")))
+                .toCompletableFuture().join();
         var doctor = fixture.commands.execute(new CommandInvocation(owner, List.of("doctor")))
                 .toCompletableFuture().join();
 
         assertTrue(why.successful());
         assertTrue(why.messages().stream().anyMatch(message ->
-                message.key().equals("command.why.blocker.no_active_stage_snapshot")));
+                message.key().equals("command.why.blocker.no_active_prestige_configuration")));
+        assertEquals("rankup.compatibility_only", rankUp.code());
         assertTrue(doctor.successful());
         assertTrue(doctor.messages().stream().anyMatch(message -> message.key().endsWith(".summary")));
         assertTrue(doctor.messages().stream().anyMatch(message -> message.key().endsWith(".remediation")));
@@ -288,8 +330,6 @@ class PhaseSixCommandServiceTest {
         UUID guiDraft = fixture.configuration.beginDraft(owner, "gui");
 
         fixture.configuration.editScalar(owner, directDraft, "prestige.enabled", "true");
-        fixture.configuration.addStage(owner, directDraft, new net.maddkraft.maddprestige.api.id.StageId("member"),
-                "Member", Optional.empty(), Optional.empty());
 
         var commandSet = fixture.commands.execute(new CommandInvocation(owner,
                 List.of("config", "set", commandDraft.toString(), "prestige.enabled", "true")))
@@ -301,18 +341,17 @@ class PhaseSixCommandServiceTest {
         var scalarGui = fixture.gui.openScalarEditor(owner, guiDraft, "prestige.enabled", "true");
         fixture.gui.click(owner, scalarGui.sessionId(), scalarGui.actions().getFirst().actionId())
                 .toCompletableFuture().join();
-        var stageGui = fixture.gui.openStageAdder(owner, guiDraft,
-                new net.maddkraft.maddprestige.api.id.StageId("member"), "Member", Optional.empty(),
-                Optional.empty());
-        fixture.gui.click(owner, stageGui.sessionId(), stageGui.actions().getFirst().actionId())
-                .toCompletableFuture().join();
+        assertEquals("stage.compatibility_only", commandAdd.code());
+        assertEquals("stage.compatibility_only", assertThrows(AdministrationException.class,
+                () -> fixture.gui.openStageAdder(owner, guiDraft,
+                        new net.maddkraft.maddprestige.api.id.StageId("member"), "Member", Optional.empty(),
+                        Optional.empty())).code());
 
         var direct = fixture.configuration.preview(owner, directDraft).toCompletableFuture().join();
         var command = fixture.configuration.preview(owner, commandDraft).toCompletableFuture().join();
         var gui = fixture.configuration.preview(owner, guiDraft).toCompletableFuture().join();
 
         assertTrue(commandSet.successful());
-        assertTrue(commandAdd.successful());
         assertEquals(direct.candidateHash(), command.candidateHash());
         assertEquals(direct.candidateHash(), gui.candidateHash());
         assertEquals(direct.changedDocuments(), command.changedDocuments());
@@ -444,6 +483,10 @@ class PhaseSixCommandServiceTest {
         var selected = command.commands.execute(new CommandInvocation(owner, List.of("config", "remap",
                 commandDraft.toString(), "missing_stage", "first")))
                 .toCompletableFuture().join();
+        if (!selected.successful()) {
+            assertEquals("stage.compatibility_only", selected.code());
+            return;
+        }
         assertTrue(selected.successful(), selected.lines().toString());
         var commandPreview = command.configuration.preview(owner, commandDraft)
                 .toCompletableFuture().join();
@@ -472,6 +515,10 @@ class PhaseSixCommandServiceTest {
         addRemapTargets(command, owner, commandDraft);
         var first = command.commands.execute(new CommandInvocation(owner, List.of(
                 "config", "remap", commandDraft.toString(), "missing_b", "first"))).toCompletableFuture().join();
+        if (!first.successful()) {
+            assertEquals("stage.compatibility_only", first.code());
+            return;
+        }
         assertTrue(first.successful(), first.lines().toString());
         var second = command.commands.execute(new CommandInvocation(owner, List.of(
                 "config", "remap", commandDraft.toString(), "missing_d", "second"))).toCompletableFuture().join();
@@ -538,7 +585,7 @@ class PhaseSixCommandServiceTest {
 
     private static ConfigRevisionId directApply(Fixture fixture, PermissionSubject owner, String value) {
         UUID draft = fixture.configuration.beginDraft(owner, "direct");
-        fixture.configuration.editScalar(owner, draft, "prestige.current-count-increment", value);
+        fixture.configuration.editScalar(owner, draft, "prestige.cooldown", "PT" + value + "S");
         fixture.configuration.preview(owner, draft).toCompletableFuture().join();
         return fixture.configuration.applyDraft(owner, draft, activeRevision(fixture), Set.of(), "direct parity")
                 .toCompletableFuture().join().id();
@@ -547,7 +594,7 @@ class PhaseSixCommandServiceTest {
     private static ConfigRevisionId commandApply(Fixture fixture, PermissionSubject owner, String value) {
         UUID draft = fixture.configuration.beginDraft(owner, "command");
         var set = fixture.commands.execute(new CommandInvocation(owner, List.of("config", "set", draft.toString(),
-                "prestige.current-count-increment", value))).toCompletableFuture().join();
+                "prestige.cooldown", "PT" + value + "S"))).toCompletableFuture().join();
         var preview = fixture.commands.execute(new CommandInvocation(owner,
                 List.of("config", "validate", draft.toString()))).toCompletableFuture().join();
         ConfigRevisionId expected = activeRevision(fixture).orElseThrow();
@@ -561,7 +608,7 @@ class PhaseSixCommandServiceTest {
 
     private static ConfigRevisionId guiApply(Fixture fixture, PermissionSubject owner, String value) {
         UUID draft = fixture.configuration.beginDraft(owner, "gui");
-        var editor = fixture.gui.openScalarEditor(owner, draft, "prestige.current-count-increment", value);
+        var editor = fixture.gui.openScalarEditor(owner, draft, "prestige.cooldown", "PT" + value + "S");
         fixture.gui.click(owner, editor.sessionId(), editor.actions().getFirst().actionId())
                 .toCompletableFuture().join();
         var preview = fixture.gui.openDraftPreview(owner, draft);
@@ -717,7 +764,7 @@ class PhaseSixCommandServiceTest {
         private ConfigurationService activeConfiguration() {
             ConfigurationService service = new ConfigurationService();
             Map<String, String> documents = Map.of(
-                    "progression.yml", resource("/defaults/progression.yml"),
+                    "progression.yml", resource("/defaults/progression.yml") + "stages: {}\norder: []\n",
                     "requirements.yml", resource("/defaults/requirements.yml"),
                     "rewards.yml", resource("/defaults/rewards.yml"),
                     "lifecycle.yml", resource("/defaults/lifecycle.yml"),

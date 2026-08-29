@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationResult;
@@ -29,10 +30,7 @@ public final class OperationPreviewService {
 
     public CompletionStage<OperationPreview> simulateRankUp(PermissionSubject subject, UUID playerId) {
         requireSimulation(subject, playerId, PhaseSixPermissions.RANK_UP);
-        return rankUp.apply(new RankUpIntent(subject.actor(), playerId, Optional.empty(),
-                "simulate-rankup-" + UUID.randomUUID())).thenApply(result -> result.plan()
-                        .map(OperationPreviewService::rankUpPreview)
-                        .orElseThrow(() -> rejected("rank-up", result.authorizationBlockers())));
+        return CompletableFuture.failedFuture(rankUpCompatibilityOnly());
     }
 
     public CompletionStage<OperationPreview> simulatePrestige(PermissionSubject subject, UUID playerId) {
@@ -45,17 +43,7 @@ public final class OperationPreviewService {
 
     public CompletionStage<RankUpPlan> authorizeRankUp(PermissionSubject subject, UUID playerId) {
         requireExecution(subject, playerId, PhaseSixPermissions.RANK_UP);
-        return rankUp.apply(new RankUpIntent(subject.actor(), playerId, Optional.empty(),
-                "confirm-rankup-" + UUID.randomUUID())).thenApply(result -> {
-                    Optional<RankUpPlan> plan = result.plan();
-                    if (plan.isPresent() && plan.orElseThrow().executionAllowed()
-                            && plan.orElseThrow().blockers().isEmpty()) {
-                        return plan.orElseThrow();
-                    }
-                    List<AuthorizationBlocker> blockers = plan.map(RankUpPlan::authorizationBlockers)
-                            .filter(values -> !values.isEmpty()).orElse(result.authorizationBlockers());
-                    throw rejected("rank-up", blockers);
-                });
+        return CompletableFuture.failedFuture(rankUpCompatibilityOnly());
     }
 
     public CompletionStage<PrestigePlan> authorizePrestige(PermissionSubject subject, UUID playerId) {
@@ -100,8 +88,7 @@ public final class OperationPreviewService {
     public static OperationPreview prestigePreview(PrestigePlan plan) {
         var simulation = plan.simulation();
         ArrayList<MessageReference> details = new ArrayList<>();
-        details.add(m("command.preview.prestige_state_change", "current_stage", simulation.sourceStage().value(),
-                "target_stage", simulation.resetStage().value(), "current_prestige",
+        details.add(m("command.preview.prestige_state_change", "current_prestige",
                 simulation.currentPrestigeBefore(), "target_prestige", simulation.currentPrestigeAfter(),
                 "current_lifetime", simulation.lifetimePrestigeBefore(), "target_lifetime",
                 simulation.lifetimePrestigeAfter()));
@@ -121,14 +108,11 @@ public final class OperationPreviewService {
         simulation.providerActions().stream().filter(value -> value.uncertaintyPossible()).forEach(action ->
                 details.add(m("command.preview.external_uncertainty", "operation", action.actionId(),
                         "provider", action.providerId().value())));
-        plan.rankProjectionRequest().ifPresent(projection -> details.add(m("command.preview.rank_projection",
-                "rank", projection.desiredGroup().orElse("NONE"))));
         List<String> consequences = java.util.stream.Stream.concat(
                 simulation.componentConsequences().stream().map(Object::toString),
                 simulation.currencyChanges().stream().map(Object::toString)).toList();
         return new OperationPreview(OperationKind.PRESTIGE, plan.playerId(), plan.executionAllowed(),
-                simulation.sourceStage().value() + " → " + simulation.resetStage().value()
-                        + "; Prestige " + simulation.currentPrestigeBefore() + " → "
+                "Prestige " + simulation.currentPrestigeBefore() + " → "
                         + simulation.currentPrestigeAfter(),
                 Optional.of(simulation.requirements().result().explanation()),
                 plan.costs().stream().map(cost -> cost.redactedPreview()).toList(),
@@ -155,6 +139,12 @@ public final class OperationPreviewService {
 
     private static AdministrationException rejected(String operation, List<AuthorizationBlocker> blockers) {
         return AdministrationException.authorizationRejected(operation, blockers);
+    }
+
+    private static AdministrationException rankUpCompatibilityOnly() {
+        return new AdministrationException("rankup.compatibility_only",
+                "Rank-up is a compatibility-only API surface and cannot be simulated or executed.",
+                "Use the numeric Prestige operation; active progression is Prestige N to N + 1.");
     }
 
     private static MessageReference m(String key, Object... arguments) {

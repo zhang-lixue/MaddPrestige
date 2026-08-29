@@ -5,11 +5,12 @@ import java.util.Optional;
 import net.maddkraft.maddprestige.api.id.StageId;
 
 /**
- * Immutable in-memory stage catalog entry without rendered display text or mutable implementation state.
+ * Immutable stage-era catalog entry retained for stable source and binary compatibility. Active numeric Prestige has
+ * no stage catalog, and production does not expose or execute these entries.
  *
  * @param id canonical stage identity
- * @param enabled whether the stage participates in canonical progression
- * @param ordinal non-negative canonical catalog position
+ * @param enabled historical compatibility participation flag
+ * @param ordinal non-negative historical catalog position
  * @param requirementTreeId configured machine identity, or empty when the stage has no requirement tree
  */
 public record StageView(StageId id, boolean enabled, int ordinal, Optional<String> requirementTreeId) {

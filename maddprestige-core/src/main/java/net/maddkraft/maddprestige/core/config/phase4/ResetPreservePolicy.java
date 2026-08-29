@@ -26,7 +26,6 @@ public record ResetPreservePolicy(Map<ResetComponent, ResetDisposition> disposit
         for (ResetComponent component : ResetComponent.values()) {
             values.put(component, ResetDisposition.PRESERVE);
         }
-        values.put(ResetComponent.PROGRESSION_STAGE, ResetDisposition.RESET);
         values.put(ResetComponent.ACTIVE_REQUIREMENT_PROGRESS, ResetDisposition.RESET);
         values.put(ResetComponent.LATCHED_COMPLETIONS, ResetDisposition.RESET);
         values.put(ResetComponent.BASELINES, ResetDisposition.RESET);

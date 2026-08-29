@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Function;
@@ -47,6 +48,9 @@ import net.maddkraft.maddprestige.core.requirement.RequirementTreeValidator;
 import net.maddkraft.maddprestige.core.requirement.ScalingProfile;
 import net.maddkraft.maddprestige.core.requirement.ScalingStrategy;
 import net.maddkraft.maddprestige.core.requirement.TargetRounding;
+import net.maddkraft.maddprestige.core.scaling.PrestigeScalingSegment;
+import net.maddkraft.maddprestige.core.scaling.SegmentScalingMode;
+import net.maddkraft.maddprestige.core.scaling.SegmentTransition;
 import org.snakeyaml.engine.v2.api.Load;
 import org.snakeyaml.engine.v2.api.LoadSettings;
 
@@ -386,6 +390,15 @@ public final class PhaseThreeConfigurationCompiler {
                     "Configure strategy and exact parameters."));
             return ScalingProfile.none();
         }
+        if (fields.containsKey("segments")) {
+            try {
+                return ScalingProfile.segmented(segmentedScaling(fields.get("segments")).segments());
+            } catch (IllegalArgumentException exception) {
+                findings.add(error("scaling.segment.invalid", path + ".segments", exception.getMessage(),
+                        "Use contiguous positive Prestige ranges with explicit safe formulas or manual values."));
+                return ScalingProfile.none();
+            }
+        }
         ScalingStrategy strategy = enumValue(fields.get("strategy"), ScalingStrategy.class,
                 ScalingStrategy.NONE, path + ".strategy", findings);
         TargetRounding rounding = enumValue(fields.get("rounding"), TargetRounding.class,
@@ -415,6 +428,61 @@ public final class PhaseThreeConfigurationCompiler {
                     "Correct the scaling domain and bounds."));
             return ScalingProfile.none();
         }
+    }
+
+    /** Shared strict parser for Phase 9B cost/reward and requirement segment lists. */
+    public static net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile segmentedScaling(Object value) {
+        return new net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile(
+                scalingSegments(value, "segments"));
+    }
+
+    private static List<PrestigeScalingSegment> scalingSegments(Object value, String path) {
+        if (!(value instanceof List<?> configured) || configured.isEmpty()) {
+            throw new IllegalArgumentException("Segmented scaling requires a non-empty segment list");
+        }
+        ArrayList<PrestigeScalingSegment> result = new ArrayList<>();
+        for (int index = 0; index < configured.size(); index++) {
+            if (!(configured.get(index) instanceof Map<?, ?> fields)) {
+                throw new IllegalArgumentException("Scaling segment " + index + " must be a mapping");
+            }
+            String itemPath = path + "[" + index + "]";
+            long start = Long.parseLong(scalarRequired(fields.get("start-prestige")));
+            String endText = fields.containsKey("end-prestige")
+                    ? scalarRequired(fields.get("end-prestige")) : "unlimited";
+            OptionalLong end = "unlimited".equalsIgnoreCase(endText)
+                    ? OptionalLong.empty() : OptionalLong.of(Long.parseLong(endText));
+            SegmentScalingMode mode = Enum.valueOf(SegmentScalingMode.class,
+                    scalarRequired(fields.containsKey("mode") ? fields.get("mode") : "FLAT").toUpperCase(Locale.ROOT)
+                            .replace('-', '_'));
+            SegmentTransition transition = Enum.valueOf(SegmentTransition.class,
+                    scalarRequired(fields.containsKey("transition") ? fields.get("transition") : "EXPLICIT_BASE")
+                            .toUpperCase(Locale.ROOT)
+                            .replace('-', '_'));
+            ExactDecimal base = ExactDecimal.parse(scalarRequired(
+                    fields.containsKey("base") ? fields.get("base") : "1"));
+            ExactDecimal rate = ExactDecimal.parse(scalarRequired(
+                    fields.containsKey("rate") ? fields.get("rate") : "0"));
+            TargetRounding rounding = Enum.valueOf(TargetRounding.class,
+                    scalarRequired(fields.containsKey("rounding") ? fields.get("rounding") : "EXACT")
+                            .toUpperCase(Locale.ROOT)
+                            .replace('-', '_'));
+            ExactDecimal quantum = ExactDecimal.parse(scalarRequired(
+                    fields.containsKey("quantum") ? fields.get("quantum") : "1"));
+            Optional<ExactDecimal> floor = fields.containsKey("floor")
+                    ? Optional.of(ExactDecimal.parse(scalarRequired(fields.get("floor")))) : Optional.empty();
+            Optional<ExactDecimal> cap = fields.containsKey("cap")
+                    ? Optional.of(ExactDecimal.parse(scalarRequired(fields.get("cap")))) : Optional.empty();
+            TreeMap<Long, ExactDecimal> overrides = new TreeMap<>();
+            if (fields.get("overrides") instanceof Map<?, ?> values) {
+                values.forEach((level, amount) -> overrides.put(Long.parseLong(scalarRequired(level)),
+                        ExactDecimal.parse(scalarRequired(amount))));
+            } else if (fields.containsKey("overrides")) {
+                throw new IllegalArgumentException(itemPath + ".overrides must be a level-to-value mapping");
+            }
+            result.add(new PrestigeScalingSegment(start, end, mode, transition, base, rate, rounding, quantum,
+                    floor, cap, overrides));
+        }
+        return List.copyOf(result);
     }
 
     private static CatchUpProfile catchUp(Object value, String path, List<ValidationFinding> findings) {

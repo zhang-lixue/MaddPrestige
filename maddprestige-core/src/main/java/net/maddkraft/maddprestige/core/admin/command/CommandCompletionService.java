@@ -85,14 +85,14 @@ public final class CommandCompletionService {
             return configCandidates(subject, tokens);
         }
         if (root.equals("simulate") && subject.has(PhaseSixPermissions.SIMULATE)) {
-            return tokens.size() == 2 ? List.of("rankup", "prestige") : List.of();
+            return tokens.size() == 2 ? List.of("prestige") : List.of();
         }
         if (root.equals("why") && (subject.has(PhaseSixPermissions.USE)
                 || subject.has(PhaseSixPermissions.PLAYER_VIEW))) {
-            return tokens.size() == 2 ? List.of("rankup", "prestige") : List.of();
+            return tokens.size() == 2 ? List.of("prestige") : List.of();
         }
         if (root.equals("help")) {
-            return List.of("overview", "setup", "measurement", "requirements", "scaling", "stages", "providers");
+            return List.of("overview", "setup", "measurement", "requirements", "scaling", "providers");
         }
         if (root.equals("setup") && subject.has(PhaseSixPermissions.SETUP)) {
             return setupCandidates(subject, tokens);
@@ -118,10 +118,10 @@ public final class CommandCompletionService {
                 subcommands.addAll(List.of("draft", "set", "add", "remove", "cancel"));
             }
             if (subject.has(PhaseSixPermissions.CONFIG_APPLY)) {
-                subcommands.addAll(List.of("apply", "acknowledge", "confirm", "remap", "unmap"));
+                subcommands.addAll(List.of("apply", "acknowledge", "confirm"));
             }
             if (subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)) {
-                subcommands.addAll(List.of("rollback", "rollback-apply", "acknowledge", "confirm", "remap", "unmap",
+                subcommands.addAll(List.of("rollback", "rollback-apply", "acknowledge", "confirm",
                         "validate", "diff", "cancel"));
             }
             return subcommands;
@@ -145,54 +145,16 @@ public final class CommandCompletionService {
                     return catalog.get().schemaPaths().stream()
                             .filter(path -> !catalog.get().structuralPaths().contains(path)).toList();
                 }
-                if (operation.equals("remove")) {
-                    ArrayList<String> paths = new ArrayList<>(catalog.get().listPaths());
-                    catalog.get().stageIds().forEach(stage -> paths.add("progression.stages." + stage));
-                    return paths;
-                }
-                ArrayList<String> paths = new ArrayList<>(catalog.get().listPaths());
-                paths.add("progression.stages");
-                return paths;
+                return new ArrayList<>(catalog.get().listPaths());
             }
             if (tokens.size() == 5) {
                 String path = tokens.get(3);
-                if (operation.equals("remove") && path.startsWith("progression.stages.")) {
-                    String removed = path.substring("progression.stages.".length());
-                    return catalog.get().stageIds().stream().filter(stage -> !stage.equals(removed)).toList();
-                }
                 return valuesForPath(path);
-            }
-            if (operation.equals("add") && tokens.size() == 7
-                    && tokens.get(3).equals("progression.stages")) {
-                return catalog.get().providerIds();
             }
         }
         if (Set.of("validate", "diff", "cancel", "acknowledge").contains(operation)
                 && tokens.size() == 3) {
             return catalog.get().draftIds();
-        }
-        if (operation.equals("remap")
-                && (subject.has(PhaseSixPermissions.CONFIG_APPLY)
-                        || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
-            if (tokens.size() == 3) {
-                return catalog.get().draftIds();
-            }
-            if (tokens.size() == 4) {
-                return catalog.get().stageIds();
-            }
-            if (tokens.size() == 5) {
-                return catalog.get().stageIds().stream().filter(stage -> !stage.equals(tokens.get(3))).toList();
-            }
-        }
-        if (operation.equals("unmap")
-                && (subject.has(PhaseSixPermissions.CONFIG_APPLY)
-                        || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
-            if (tokens.size() == 3) {
-                return catalog.get().draftIds();
-            }
-            if (tokens.size() == 4) {
-                return catalog.get().stageIds();
-            }
         }
         if (Set.of("apply", "rollback-apply").contains(operation)) {
             if (tokens.size() == 3) {
@@ -212,13 +174,10 @@ public final class CommandCompletionService {
 
     private List<String> setupCandidates(PermissionSubject subject, List<String> tokens) {
         if (tokens.size() == 2) {
-            return List.of("discover", "start", "provider", "stage", "baseline", "playtime", "requirement", "cost",
+            return List.of("discover", "start", "provider", "requirement", "cost",
                     "reward", "prestige", "preview", "acknowledge", "confirm", "apply", "cancel");
         }
         String operation = tokens.get(1).toLowerCase(Locale.ROOT);
-        List<String> stages = setup == null ? catalog.get().stageIds()
-                : setup.currentCompletion(subject).map(SetupWizardService.SetupCompletion::stageIds)
-                        .orElse(catalog.get().stageIds());
         boolean explicit = tokens.size() > 2 && looksLikeUuid(tokens.get(2));
         int first = explicit ? 3 : 2;
         if (operation.equals("provider") && tokens.size() == first + 1) {
@@ -226,24 +185,8 @@ public final class CommandCompletionService {
             values.add("internal");
             return values;
         }
-        if (operation.equals("baseline") && tokens.size() == first + 1) {
-            return stages;
-        }
-        if (operation.equals("playtime")) {
-            if (tokens.size() == first + 1) {
-                return stages;
-            }
-            if (tokens.size() == first + 2) {
-                return List.of("PT1M", "PT3M", "1m", "3m");
-            }
-        }
         if (operation.equals("requirement")) {
-            if (tokens.size() == first + 1) {
-                return stages;
-            }
-            boolean targeted = tokens.size() > first
-                    && stages.stream().anyMatch(stage -> stage.equalsIgnoreCase(tokens.get(first)));
-            int provider = first + (targeted ? 2 : 1);
+            int provider = first + 1;
             if (tokens.size() == provider + 1) {
                 return catalog.get().providerIds();
             }
@@ -258,7 +201,7 @@ public final class CommandCompletionService {
                 return List.of("PT1M", "PT3M", "1m", "3m");
             }
             if (tokens.size() == provider + 5) {
-                return List.of("ABSOLUTE", "LIFETIME", "SINCE_STAGE_START", "SINCE_PRESTIGE_START",
+                return List.of("ABSOLUTE", "LIFETIME", "SINCE_PRESTIGE_START",
                         "SINCE_SEASON_START");
             }
             if (tokens.size() == provider + 6) {
@@ -271,10 +214,6 @@ public final class CommandCompletionService {
         if (operation.equals("prestige")) {
             if (tokens.size() == first + 1) {
                 return List.of("disabled", "enabled");
-            }
-            if (tokens.size() > first && tokens.get(first).equalsIgnoreCase("enabled")
-                    && (tokens.size() == first + 2 || tokens.size() == first + 3)) {
-                return stages;
             }
         }
         return List.of();
@@ -297,10 +236,6 @@ public final class CommandCompletionService {
         if (path.endsWith(".metric")) {
             return current.metricsByProvider().values().stream().flatMap(List::stream).distinct().sorted().toList();
         }
-        if (path.equals("progression.baseline") || path.equals("prestige.reset-stage")
-                || path.equals("prestige.required-stages") || path.equals("progression.order")) {
-            return current.stageIds();
-        }
         return current.valuesByPath().getOrDefault(path, List.of());
     }
 
@@ -309,9 +244,6 @@ public final class CommandCompletionService {
         boolean player = subject.actor().uuid().isPresent();
         if (subject.has(PhaseSixPermissions.USE)) {
             commands.addAll(List.of("help", "status", "why"));
-        }
-        if (player && subject.has(PhaseSixPermissions.RANK_UP)) {
-            commands.add("rankup");
         }
         if (player && subject.has(PhaseSixPermissions.PRESTIGE)) {
             commands.add("prestige");

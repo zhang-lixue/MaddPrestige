@@ -22,17 +22,21 @@ public interface MaddPrestigeService {
     CompletionStage<ServiceResult<PlayerProgressSnapshot>> playerProgress(UUID playerId);
 
     /**
-     * Returns the immutable in-memory stage catalog synchronously without I/O or mutation.
+     * Returns the retired stage catalog compatibility view. Numeric Prestige has no active stage catalog, so the
+     * production implementation returns an empty list. This method performs no I/O or mutation.
      *
-     * @return non-null structured result in canonical stage order
+     * @return non-null structured compatibility result; empty for the active numeric model
+     * @deprecated stage catalogs are not part of active V2 numeric Prestige progression
      */
     ServiceResult<List<StageView>> stages();
 
     /**
-     * Evaluates canonical rank-up authorization without PRE events, journaling, costs, rewards, or state writes.
+     * Evaluates the retained rank-up compatibility operation. Production always returns a blocked evaluation without
+     * PRE events, journaling, costs, rewards, stage changes, projection, or any other state write.
      *
      * @param playerId non-null player identity
-     * @return non-null asynchronous structured evaluation result
+     * @return non-null asynchronous blocked compatibility result
+     * @deprecated use {@link #evaluatePrestige(UUID)} for active numeric Prestige progression
      */
     CompletionStage<ServiceResult<OperationEvaluation>> evaluateRankUp(UUID playerId);
 
@@ -69,15 +73,18 @@ public interface MaddPrestigeService {
     CompletionStage<ServiceResult<Optional<SeasonView>>> activeSeason(UUID playerId);
 
     /**
-     * Requests one authorized rank-up through the canonical operation engine.
+     * Requests the retained rank-up compatibility operation. Production always returns a blocked terminal result and
+     * never invokes confirmation, stage mutation, provider projection, or the numeric Prestige operation engine.
      *
      * @param playerId non-null player identity
-     * @return non-null asynchronous structured terminal result; its request ID exists even when PRE blocks durability
+     * @return non-null asynchronous blocked compatibility result with a request ID
+     * @deprecated use {@link #prestige(UUID)} for active numeric Prestige progression
      */
     CompletionStage<ServiceResult<OperationResult>> rankUp(UUID playerId);
 
     /**
-     * Requests one authorized Prestige through the canonical operation engine.
+     * Requests the active numeric transition from Prestige {@code N} to {@code N + 1} through the canonical operation
+     * engine.
      *
      * @param playerId non-null player identity
      * @return non-null asynchronous structured terminal result; its request ID exists even when PRE blocks durability

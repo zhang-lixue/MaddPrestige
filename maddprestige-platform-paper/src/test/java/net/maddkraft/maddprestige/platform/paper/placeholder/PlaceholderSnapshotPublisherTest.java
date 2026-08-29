@@ -25,11 +25,8 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.ScopeId;
-import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
-import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerPrestigeRepository;
-import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerStageRepository;
 import org.bukkit.Server;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.Plugin;
@@ -54,7 +51,6 @@ class PlaceholderSnapshotPublisherTest {
 
             assertEquals(0, fixture.cache.size());
             assertEquals(0, fixture.warnings().size());
-            verify(fixture.stages, never()).find(fixture.playerId);
             verify(fixture.prestiges, never()).find(fixture.playerId);
 
             fixture.initialization.set(PlaceholderSnapshotPublisher.InitializationResult.ready());
@@ -62,7 +58,7 @@ class PlaceholderSnapshotPublisherTest {
             fixture.tick();
             await(() -> fixture.cache.size() == 1);
 
-            assertEquals("member", fixture.cache.resolve(fixture.playerId, "stage").orElseThrow());
+            assertTrue(fixture.cache.resolve(fixture.playerId, "stage").isEmpty());
             assertEquals("0", fixture.cache.resolve(fixture.playerId, "current_prestige").orElseThrow());
             assertEquals(0, fixture.warnings().size());
         } finally {
@@ -76,7 +72,7 @@ class PlaceholderSnapshotPublisherTest {
         Fixture fixture = new Fixture();
         try {
             fixture.cache.publish(fixture.playerId,
-                    new MaddPrestigePlaceholderSnapshot("stale", "7", "9", "STALE", java.util.Map.of()));
+                    new MaddPrestigePlaceholderSnapshot("7", "9", "STALE", java.util.Map.of()));
             fixture.initialization.set(PlaceholderSnapshotPublisher.InitializationResult.failed(
                     "Player initialization rank provider is unavailable: luckperms"));
             fixture.publisher.refresh(fixture.playerId);
@@ -105,7 +101,6 @@ class PlaceholderSnapshotPublisherTest {
         private final BukkitScheduler scheduler = mock(BukkitScheduler.class);
         private final BukkitTask task = mock(BukkitTask.class);
         private final Player player = mock(Player.class);
-        private final SqlitePlayerStageRepository stages = mock(SqlitePlayerStageRepository.class);
         private final SqlitePlayerPrestigeRepository prestiges = mock(SqlitePlayerPrestigeRepository.class);
         private final MaddPrestigePlaceholderCache cache = new MaddPrestigePlaceholderCache(10);
         private final AtomicReference<PlaceholderSnapshotPublisher.InitializationResult> initialization =
@@ -143,7 +138,7 @@ class PlaceholderSnapshotPublisherTest {
                         scheduledTick = invocation.getArgument(1);
                         return task;
                     });
-            publisher = new PlaceholderSnapshotPublisher(plugin, cache, stages, prestiges, ignored -> {
+            publisher = new PlaceholderSnapshotPublisher(plugin, cache, prestiges, ignored -> {
                 initializations.incrementAndGet();
                 return initialization.get();
             });
@@ -162,9 +157,6 @@ class PlaceholderSnapshotPublisherTest {
         private void publishableState() {
             Instant now = Instant.parse("2026-08-28T00:00:00Z");
             ConfigRevisionId revision = new ConfigRevisionId("r_placeholder_active");
-            when(stages.find(playerId)).thenReturn(Optional.of(new PlayerStageState(playerId,
-                    new StageId("member"), 0, revision, now, now, now, Optional.empty(), Optional.empty(),
-                    Optional.empty())));
             when(prestiges.find(playerId)).thenReturn(Optional.of(new PlayerPrestigeState(playerId,
                     0, 0, 0, revision, new ScopeId("p0"), Optional.empty(), now, now)));
         }

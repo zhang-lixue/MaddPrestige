@@ -3,7 +3,8 @@ package net.maddkraft.maddprestige.api.id;
 import net.maddkraft.maddprestige.api.annotation.Stable;
 
 /**
- * Immutable canonical progression-stage identity.
+ * Immutable stage-era identity retained for stable source and binary compatibility. Active numeric Prestige does not
+ * use stage identities for progression authority.
  *
  * @param value canonical non-null stage value
  */

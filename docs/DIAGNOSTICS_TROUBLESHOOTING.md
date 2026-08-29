@@ -5,7 +5,7 @@ Start with:
 ```text
 /maddprestige status
 /maddprestige doctor
-/maddprestige why rankup
+/maddprestige why prestige
 ```
 
 Doctor aggregates configuration, providers, external groups, requirements, costs/rewards, database, history,
@@ -15,9 +15,9 @@ effects.
 
 ## Common blocked states
 
-- **LuckPerms absent/unhealthy:** install/enable the exact supported artifact, then restart. A rank-projected revision is
-  not healthy without it.
-- **Group missing:** create the exact external group named by Doctor with LuckPerms, then preview/apply again.
+- **LuckPerms absent/unhealthy:** this matters only when the active operation references an LP condition/reward. Restore
+  the provider or remove the reference through a validated draft.
+- **Group missing:** create the exact configured reward group named by Doctor with LuckPerms, then preview/apply again.
   MaddPrestige will not create it.
 - **Provider/metric unavailable:** restore the named plugin/service or remove its reference in a validated draft.
 - **Insufficient play time:** Why reports the current-Prestige deficit; do not edit the database or Paper statistic.

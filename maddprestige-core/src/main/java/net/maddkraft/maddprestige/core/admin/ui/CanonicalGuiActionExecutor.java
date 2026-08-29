@@ -43,14 +43,10 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
         return switch (action.kind()) {
             case VIEW_PROGRESS -> playerViews.view(subject, target(action)).thenApply(value ->
                     m("gui.result.progress", "player", value.playerId(),
-                            "rankup_status", status(value.rankUp()), "prestige_status", status(value.prestige())));
-            case SIMULATE_RANK_UP -> previews.simulateRankUp(subject, target(action))
-                    .thenApply(value -> preview("gui.result.simulate_rankup", value));
+                            "prestige_status", status(value.prestige())));
+            case SIMULATE_RANK_UP, PREPARE_RANK_UP -> throw rankUpCompatibilityOnly();
             case SIMULATE_PRESTIGE -> previews.simulatePrestige(subject, target(action))
                     .thenApply(value -> preview("gui.result.simulate_prestige", value));
-            case PREPARE_RANK_UP -> confirmations.prepareRankUp(subject, target(action))
-                    .thenApply(value -> m("gui.result.prepare_rankup", "status", status(value.preview()),
-                            "confirmation", value.confirmationId(), "expires", value.expiresAt()));
             case PREPARE_PRESTIGE -> confirmations.preparePrestige(subject, target(action))
                     .thenApply(value -> m("gui.result.prepare_prestige", "status", status(value.preview()),
                             "confirmation", value.confirmationId(), "expires", value.expiresAt()));
@@ -59,11 +55,12 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
             case VIEW_CONFIGURATION -> CompletableFuture.completedFuture(configuration.active(subject)
                     .map(value -> m("gui.result.configuration_active", "revision", value.revisionId().value()))
                     .orElseGet(() -> m("gui.result.configuration_inactive")));
-            case EDIT_CONFIGURATION, ADD_CONFIGURATION_VALUE, REMOVE_CONFIGURATION_VALUE, ADD_STAGE,
+            case EDIT_CONFIGURATION, ADD_CONFIGURATION_VALUE, REMOVE_CONFIGURATION_VALUE,
                     PREVIEW_CONFIGURATION, PREPARE_CONFIGURATION_ACKNOWLEDGEMENT,
-                    CONFIRM_CONFIGURATION_ACKNOWLEDGEMENT, APPLY_CONFIGURATION, ROLLBACK_CONFIGURATION,
-                    SELECT_STAGE_REMAP, REMOVE_STAGE_REMAP, DELETE_STAGE ->
+                    CONFIRM_CONFIGURATION_ACKNOWLEDGEMENT, APPLY_CONFIGURATION, ROLLBACK_CONFIGURATION ->
                     mutations.execute(subject, action);
+            case ADD_STAGE, SELECT_STAGE_REMAP, REMOVE_STAGE_REMAP, DELETE_STAGE ->
+                    throw stageCompatibilityOnly();
         };
     }
 
@@ -84,5 +81,17 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
 
     private static MessageReference m(String key, Object... arguments) {
         return MessageReference.of(key, arguments);
+    }
+
+    private static AdministrationException rankUpCompatibilityOnly() {
+        return new AdministrationException("rankup.compatibility_only",
+                "Rank-up controls are retained only for compatibility.",
+                "Use the numeric Prestige controls instead.");
+    }
+
+    private static AdministrationException stageCompatibilityOnly() {
+        return new AdministrationException("stage.compatibility_only",
+                "Stage mutation controls are retained only for compatibility and recovery evidence.",
+                "Configure numeric Prestige requirements, costs, rewards, and scaling instead.");
     }
 }

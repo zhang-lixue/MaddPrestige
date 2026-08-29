@@ -14,10 +14,11 @@ After startup migration, recovery, provider composition, and active-configuratio
 `net.maddkraft.maddprestige.api.service.MaddPrestigeService` through `ServicesManager`. It is absent while bootstrap is
 blocked and unregisters before shutdown rejects new work.
 
-The service exposes immutable structured reads for player progress, stage catalog, rank-up/Prestige evaluation,
-requirement progress, currencies, active season, and providers. `rankUp(UUID)` and `prestige(UUID)` enter the canonical
-operation engine. Potential I/O is asynchronous. Operational failures use `ServiceResult`/stable machine codes rather
-than exceptional localized prose.
+The service exposes immutable structured reads for numeric player progress, requirement progress, currencies, active
+season, providers, and retained compatibility stage/rank surfaces. `prestige(UUID)` enters the numeric operation
+engine. Production stage catalogs are empty and `rankUp(UUID)` returns a compatibility-only blocker. Those signatures
+remain to preserve `2.x-stable-1`; they are not an alternate progression model. Potential I/O is asynchronous.
+Operational failures use `ServiceResult`/stable machine codes rather than exceptional localized prose.
 
 The caller request/correlation UUID is not a durable operation UUID. A request may be blocked before a journal identity
 exists. Do not synthesize identities, inspect SQLite, or use internal recovery markers.

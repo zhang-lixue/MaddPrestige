@@ -11,9 +11,10 @@ public record SetupPrestige(
     public SetupPrestige {
         requiredStage = Objects.requireNonNull(requiredStage, "required stage");
         resetStage = Objects.requireNonNull(resetStage, "reset stage");
-        if (enabled && (requiredStage.isEmpty() || resetStage.isEmpty())) {
-            throw new IllegalArgumentException("Enabled setup Prestige requires eligibility and reset stages");
-        }
+    }
+
+    public static SetupPrestige numericEnabled() {
+        return new SetupPrestige(true, Optional.empty(), Optional.empty());
     }
 
     public static SetupPrestige disabled() {

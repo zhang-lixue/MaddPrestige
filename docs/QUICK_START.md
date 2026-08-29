@@ -1,117 +1,48 @@
-# Quick Start: Member → Adventurer → Veteran
+# Quick start: numeric Prestige
 
-This is the canonical guided command setup flow. It creates one active revision without editing YAML or SQLite. Allow
-about 10–15 minutes of active administrator time; downloads, server startup, and the three-minute play demonstration
-are excluded. The wizard remembers the current setup session for the administrator who started it. Only the
-short-lived acknowledgement `<token>` must be copied later.
+MaddPrestige starts dormant. The guided setup can create numeric Prestige without a stage ladder or LuckPerms.
+Server-specific thresholds and economic amounts below are placeholders chosen by the administrator; this guide does
+not define a MaddKraft production balance.
 
-## 1. Create the external ranks
-
-As a LuckPerms administrator, run:
-
-```text
-/lp creategroup Member
-/lp creategroup Adventurer
-/lp creategroup Veteran
-```
-
-If a command says the group already exists, verify that its exact name is the intended group. MaddPrestige never
-creates, deletes, or formats these groups.
-
-## 2. Discover and start
-
-Run as a Paper operator or subject with `maddprestige.admin.setup`:
+Run as an operator or a subject with `maddprestige.admin.setup`:
 
 ```text
 /maddprestige setup discover
 /maddprestige setup start
 ```
 
-The printed UUID is an audit/resume identifier; normal commands use your current session automatically. Run:
+Choose a provider-advertised metric and configure a typed requirement. The generic form is:
 
 ```text
-/maddprestige setup provider luckperms
-/maddprestige setup stage member Member Member
-/maddprestige setup stage adventurer Adventurer Adventurer
-/maddprestige setup stage veteran Veteran Veteran
-/maddprestige setup baseline member
-/maddprestige setup playtime adventurer PT1M
-/maddprestige setup playtime veteran PT3M
-/maddprestige setup prestige enabled veteran member
+/maddprestige setup requirement <id> <provider> <metric> <operator> <target> <scope> <completion>
 ```
 
-The playtime commands generate immutable requirement IDs and use the canonical
-`paper_statistics/play_one_minute`, `GREATER_OR_EQUAL`, `SINCE_PRESTIGE_START`, and `LIVE` settings. The first target
-is one minute and the second is three minutes of Paper's lifetime `PLAY_ONE_MINUTE` statistic measured against the
-current-Prestige baseline. Costs and rewards are left empty.
-
-Power users and automation may still use the explicit canonical form. The exact Adventurer equivalent is:
+For mcMMO Prestige, select the advertised `mcmmo total_level` metric rather than an individual skill. Add a cost only
+when something should actually be consumed; the requirement threshold and cost amount are independent:
 
 ```text
-/maddprestige setup requirement <session> adventurer playtime_60_seconds paper_statistics play_one_minute GREATER_OR_EQUAL PT1M SINCE_PRESTIGE_START LIVE
+/maddprestige setup cost <session> <id> <provider> <type> <value-type> <amount> <display-name>
 ```
 
-The Veteran form substitutes `veteran`, `playtime_180_seconds`, and `PT3M`. The target is resolved as `DURATION` and
-canonicalized when the command is entered; preview independently recompiles the complete candidate and remains
-fail-closed.
-
-## 3. Preview, acknowledge, and apply
+An optional every-Prestige reward uses:
 
 ```text
+/maddprestige setup reward <session> <id> <provider> <type> <value-type> <value> <display-name>
+```
+
+Enable the numeric lifecycle with no rank/reset arguments:
+
+```text
+/maddprestige setup prestige enabled
 /maddprestige setup preview
-/maddprestige setup acknowledge
 ```
 
-Preview must say `Validation: VALID`. Read every diff, warning, consequence, and remediation. Record the short-lived
-server acknowledgement UUID as `<token>`, then apply it:
+Preview must be valid. Read every consequence. If the preview requires a high-risk acknowledgement, use the emitted
+token and `setup confirm`; otherwise use the normal setup apply path. Then run `/maddprestige doctor`.
 
-```text
-/maddprestige setup confirm <token> Initial generic progression setup
-/maddprestige doctor
-```
+Players use `/maddprestige prestige` and confirm the returned ID. A successful transition changes only numeric
+Prestige plus explicitly configured MaddPrestige scopes/costs/rewards. Stop and restart the unchanged server, then run
+`/maddprestige player` and `/maddprestige doctor`; the numeric value must be unchanged.
 
-Do not use `setup apply` to bypass an acknowledgement requirement. Doctor must not report a blocked active
-configuration. If it names LuckPerms or one of the three groups, correct that external dependency and start a new
-preview/acknowledgement.
-
-## 4. Grant and use player permissions
-
-`maddprestige.use`, `maddprestige.rankup`, and `maddprestige.prestige` default to true. A least-privilege server may
-grant them explicitly through LuckPerms:
-
-```text
-/lp group default permission set maddprestige.use true
-/lp group default permission set maddprestige.rankup true
-/lp group default permission set maddprestige.prestige true
-```
-
-A new player resolves at `member`/Member. Before one minute, `/maddprestige why rankup` reports the exact deficit and
-`/maddprestige rankup` cannot change rank or history. After one minute:
-
-```text
-/maddprestige rankup
-/maddprestige confirm <confirmation-id>
-```
-
-The player advances exactly to Adventurer. At less than three minutes since the current Prestige baseline, Why blocks
-Veteran. At three minutes, repeat rank-up/confirm to reach Veteran. Then:
-
-```text
-/maddprestige prestige
-/maddprestige confirm <confirmation-id>
-```
-
-Prestige becomes 1 and stage/group returns to Member. Paper's lifetime statistic is not reset; MaddPrestige records a
-new baseline, so current-Prestige play-time progress starts at zero.
-
-## 5. Restart check
-
-Run `/maddprestige player`, stop Paper cleanly, start the unchanged directory, then run:
-
-```text
-/maddprestige player
-/maddprestige doctor
-```
-
-Stage Member, Prestige 1, the active revision, and LuckPerms projection must remain coherent. Use
-[Troubleshooting](DIAGNOSTICS_TROUBLESHOOTING.md) if any check differs.
+LuckPerms is not required unless a configured action targets it. An LP group reward references an already existing
+group. MaddPrestige never creates that group and never removes unrelated permissions or memberships.

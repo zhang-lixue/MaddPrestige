@@ -1,7 +1,14 @@
 # Costs and rewards
 
-Stages and Prestige may reference typed costs and rewards. The generic Quick Start intentionally defines none. Empty
-maps/lists are the canonical no-op representation; a demonstration reward is not required.
+Numeric Prestige may reference typed costs and rewards. Requirements answer whether the player may advance; costs are
+separate provider mutations and are never inferred from thresholds. Every-Prestige reward IDs and milestone reward IDs
+are independently optional. Empty maps/lists are the canonical no-cost/no-reward representation.
+
+Numeric definitions may select independent segmented multiplier profiles per cost or reward. FLAT, LINEAR,
+EXPONENTIAL, and MANUAL ranges support explicit/continued transitions, rounding, bounds, and per-level overrides.
+`CONTINUE` anchors at the preceding segment's value for the immediately previous Prestige level, including an override
+at that level; it does not reuse the preceding segment's unmodified formula base.
+All amounts and reward content belong to configuration; no deployment balance is a Java invariant.
 
 Execution pins one configuration revision and provider generation, validates the complete batch before side effects,
 and records an operation plan and per-action state. Internal recoverable actions use durable idempotency authority.

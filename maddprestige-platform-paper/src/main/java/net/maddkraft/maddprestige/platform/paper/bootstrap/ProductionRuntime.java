@@ -1,9 +1,6 @@
 package net.maddkraft.maddprestige.platform.paper.bootstrap;
 
 import java.nio.file.Path;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
@@ -38,7 +35,6 @@ import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.operation.OperationState;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
-import net.maddkraft.maddprestige.api.rank.RankAdapter;
 import net.maddkraft.maddprestige.api.service.CurrencyBalanceView;
 import net.maddkraft.maddprestige.api.service.OperationEvaluation;
 import net.maddkraft.maddprestige.api.service.OperationEvaluationStatus;
@@ -73,7 +69,6 @@ import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticProviderRefere
 import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticSubsystemState;
 import net.maddkraft.maddprestige.core.admin.diagnostic.PhaseSixOperationalDiagnosticProbe;
 import net.maddkraft.maddprestige.core.admin.diagnostic.PhaseSixOperationalSnapshot;
-import net.maddkraft.maddprestige.core.admin.diagnostic.RankTargetDiagnosticProbe;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
@@ -85,10 +80,6 @@ import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.ConfigurationService;
 import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationResult;
-import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationService;
-import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
-import net.maddkraft.maddprestige.core.plan.RankUpIntent;
-import net.maddkraft.maddprestige.core.plan.RankUpPlan;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
 import net.maddkraft.maddprestige.core.prestige.PrestigeAuthorizationResult;
 import net.maddkraft.maddprestige.core.prestige.PrestigeAuthorizationService;
@@ -100,11 +91,8 @@ import net.maddkraft.maddprestige.core.requirement.BaselineInitializationService
 import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
 import net.maddkraft.maddprestige.core.requirement.RequirementDefinition;
 import net.maddkraft.maddprestige.core.requirement.RequirementEvaluationResult;
-import net.maddkraft.maddprestige.core.rank.RankOperationExecutionStatus;
-import net.maddkraft.maddprestige.core.rank.RankProjectionOperationPlanner;
 import net.maddkraft.maddprestige.core.schema.PhaseSixSchema;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
-import net.maddkraft.maddprestige.core.stage.PlayerStageState;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompilation;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompiler;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationSchema;
@@ -113,10 +101,6 @@ import net.maddkraft.maddprestige.persistence.admin.SqliteConfigurationHistorySt
 import net.maddkraft.maddprestige.persistence.admin.SqlitePrestigeAdministrationStore;
 import net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore;
 import net.maddkraft.maddprestige.persistence.plan.PrestigeOperationExecutor;
-import net.maddkraft.maddprestige.persistence.plan.RankUpOperationExecutor;
-import net.maddkraft.maddprestige.persistence.plan.RepositoryStageTransitionCommitter;
-import net.maddkraft.maddprestige.persistence.rank.RankProjectionOperationExecutor;
-import net.maddkraft.maddprestige.persistence.sqlite.SqliteAuditRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteCurrencyLedgerStore;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteFoundation;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteDatabaseValidator;
@@ -124,7 +108,6 @@ import net.maddkraft.maddprestige.persistence.sqlite.SqliteMigrations;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteOperationRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerInitializationStore;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerPrestigeRepository;
-import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerStageRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePrestigeLifecycleRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteRequirementStateRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteSeasonStore;
@@ -147,7 +130,6 @@ public final class ProductionRuntime implements AutoCloseable {
     private final PaperTaskScheduler scheduler;
     private final ConfigurationService canonical = new ConfigurationService();
     private final PhaseSixConfigurationWorkflow configuration;
-    private final SqlitePlayerStageRepository stages;
     private final SqlitePlayerPrestigeRepository prestiges;
     private final SqliteSeasonStore seasons;
     private final SqliteCurrencyLedgerStore currencyLedger;
@@ -155,12 +137,8 @@ public final class ProductionRuntime implements AutoCloseable {
     private final SqlitePlayerInitializationStore playerInitialization;
     private final SqliteRequirementStateRepository requirementStates;
     private final SqliteStageReferenceMigrationStore transitions;
-    private final RankUpAuthorizationService rankAuthorization;
     private final PrestigeAuthorizationService prestigeAuthorization;
-    private final RankUpOperationExecutor rankExecutor;
     private final PrestigeOperationExecutor prestigeExecutor;
-    private final RankProjectionOperationExecutor initialRankProjectionExecutor;
-    private final RankProjectionOperationPlanner initialRankProjectionPlanner = new RankProjectionOperationPlanner();
     private final ReentrantLock[] playerInitializationLocks = initializationLocks();
     private final ExecutorService worker;
     private final PaperOperationLifecycle lifecycleEvents;
@@ -195,7 +173,6 @@ public final class ProductionRuntime implements AutoCloseable {
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.runtimeReconciler = Objects.requireNonNull(runtimeReconciler, "runtime reconciler");
         Objects.requireNonNull(startup, "startup configuration");
-        stages = new SqlitePlayerStageRepository(foundation);
         prestiges = new SqlitePlayerPrestigeRepository(foundation);
         seasons = new SqliteSeasonStore(foundation);
         operations = new SqliteOperationRepository(foundation);
@@ -211,23 +188,13 @@ public final class ProductionRuntime implements AutoCloseable {
         lifecycleEvents = new PaperOperationLifecycle(plugin, scheduler, clock);
         AuthoritativeProgressContextFactory progressContexts =
                 new AuthoritativeProgressContextFactory(prestiges::find, seasons);
-        rankAuthorization = new RankUpAuthorizationService(
-                () -> configuration.active().map(value -> value.priorPhases()), this::stageState,
-                progressContexts::rankUp, requirementStates, providers, clock);
-        prestigeAuthorization = new PrestigeAuthorizationService(configuration::active, this::stageState,
+        prestigeAuthorization = new PrestigeAuthorizationService(configuration::active,
                 this::prestigeState, progressContexts::prestige, requirementStates, providers, currencyLedger,
                 prestigeLifecycle, seasons::active, clock);
-        rankExecutor = new RankUpOperationExecutor(operations, providers, this::activeRevision,
-                new RepositoryStageTransitionCommitter(stages, clock), transitions, worker, lifecycleEvents,
-                this::revalidateRank, this::initializePlayerAfterPre);
         prestigeExecutor = new PrestigeOperationExecutor(prestigeLifecycle, operations, providers,
-                this::activeRevision, transitions, clock, lifecycleEvents, this::revalidatePrestige,
+                this::activeRevision, clock, lifecycleEvents, this::revalidatePrestige,
                 this::initializePlayerAfterPre);
-        initialRankProjectionExecutor = new RankProjectionOperationExecutor(operations, stages,
-                new SqliteAuditRepository(foundation), providers,
-                () -> configuration.active().map(value -> value.priorPhases().stages()), transitions,
-                worker, clock);
-        placeholders = new PlaceholderSnapshotPublisher(plugin, placeholderCache, stages, prestiges,
+        placeholders = new PlaceholderSnapshotPublisher(plugin, placeholderCache, prestiges,
                 this::initializePlayerLifecycleOutcome);
         service = new ProductionMaddPrestigeService(this::progress, this::stageCatalog, this::evaluateRankUp,
                 this::evaluatePrestige, this::currencyBalances, this::activeSeason, this::rankUp, this::prestige,
@@ -242,26 +209,28 @@ public final class ProductionRuntime implements AutoCloseable {
         ConfigurationIntrospectionService introspection = new ConfigurationIntrospectionService(schema,
                 canonical::active, latestValidation::get);
         OperationPreviewService previews = new OperationPreviewService(
-                intent -> CompletableFuture.supplyAsync(() -> authorizeRank(intent), worker),
+                ignored -> CompletableFuture.completedFuture(RankUpAuthorizationResult.rejected(
+                        "Rank-up is compatibility-only; use numeric Prestige")),
                 intent -> CompletableFuture.supplyAsync(() -> authorizePrestige(intent), worker));
         OperationConfirmationService confirmations = new OperationConfirmationService(previews,
-                rankExecutor::execute, plan -> CompletableFuture.supplyAsync(() -> prestigeExecutor.execute(plan),
-                        worker), this::activeRevision, Duration.ofMinutes(2), clock);
+                ignored -> CompletableFuture.failedFuture(new IllegalStateException(
+                        "Rank-up execution is compatibility-only")),
+                plan -> CompletableFuture.supplyAsync(() -> prestigeExecutor.execute(plan), worker),
+                this::activeRevision, Duration.ofMinutes(2), clock);
         var databaseProbe = new DatabaseDiagnosticProbe(() -> CompletableFuture.supplyAsync(() -> {
             var validation = SqliteDatabaseValidator.validate(
-                    foundation.databaseFile(), SqliteMigrations.phaseEightC());
-            return new DatabaseHealth(true, validation.schemaVersion() == 11, "SQLite",
+                    foundation.databaseFile(), SqliteMigrations.phaseNineB());
+            return new DatabaseHealth(true, validation.schemaVersion() == 12, "SQLite",
                     "validated schema " + validation.schemaVersion());
         }, worker));
         var operationalProbe = new PhaseSixOperationalDiagnosticProbe(providers,
                 () -> CompletableFuture.supplyAsync(this::operationalDiagnosticSnapshot, worker));
-        var rankProbe = new RankTargetDiagnosticProbe(() -> configuration.active()
-                .map(value -> value.priorPhases().stages().configuration()), providers);
         var historyProbe = new ConfigurationHistoryDiagnosticProbe(history, worker);
         DoctorService doctor = new DoctorService(providers, canonical::active,
-                List.of(databaseProbe, operationalProbe, rankProbe, historyProbe), clock);
+                List.of(databaseProbe, operationalProbe, historyProbe), clock);
         WhyService why = new WhyService(
-                intent -> CompletableFuture.supplyAsync(() -> authorizeRank(intent), worker),
+                ignored -> CompletableFuture.completedFuture(RankUpAuthorizationResult.rejected(
+                        "Rank-up is compatibility-only; use numeric Prestige")),
                 intent -> CompletableFuture.supplyAsync(() -> authorizePrestige(intent), worker));
         PlayerProgressViewService playerViews = new PlayerProgressViewService(previews);
         ManualPrestigeAdministrationService manualPrestige = new ManualPrestigeAdministrationService(
@@ -347,12 +316,6 @@ public final class ProductionRuntime implements AutoCloseable {
                     ? reconciliation : pending;
             target.put(operation.operationId().toString(), operation.state().name());
         });
-        configuration.unresolvedStageRemaps(1000).forEach(remap -> reconciliation.put(
-                remap.operationId().toString(), remap.status()));
-
-        Set<String> configuredStages = current.map(value -> value.priorPhases().stages().configuration()
-                .stages().keySet().stream().map(stage -> stage.value()).collect(Collectors.toUnmodifiableSet()))
-                .orElse(Set.of());
         DiagnosticSubsystemState placeholder = placeholderDiagnosticState();
         DiagnosticSubsystemState schedulerState = DiagnosticSubsystemState.healthy(
                 "The bounded Paper scheduler and immutable presentation cache are composed.");
@@ -361,9 +324,7 @@ public final class ProductionRuntime implements AutoCloseable {
 
         return new PhaseSixOperationalSnapshot(schemaVersion, 3, metrics, costs, rewards,
                 Map.copyOf(pending), Map.copyOf(reconciliation),
-                PhaseSixOperationalSnapshot.diagnoseLeases(transitions.leases(1000)),
-                PhaseSixOperationalSnapshot.diagnoseTransitions(configuration.stageTransitions(1000)),
-                currentPlayerStages(), configuredStages, List.of(), List.of(), placeholder, schedulerState,
+                Map.of(), Map.of(), Map.of(), Set.of(), List.of(), List.of(), placeholder, schedulerState,
                 flushState, Map.of());
     }
 
@@ -382,30 +343,12 @@ public final class ProductionRuntime implements AutoCloseable {
                         "PlaceholderAPI output is enabled but PlaceholderAPI is unavailable.");
     }
 
-    private Map<UUID, String> currentPlayerStages() {
-        LinkedHashMap<UUID, String> result = new LinkedHashMap<>();
-        String sql = "SELECT player_uuid, stage_id FROM mp_player_stage_state ORDER BY player_uuid LIMIT 10001";
-        try (var connection = foundation.open(); PreparedStatement statement = connection.prepareStatement(sql);
-                ResultSet rows = statement.executeQuery()) {
-            while (rows.next()) {
-                if (result.size() == 10_000) {
-                    throw new IllegalStateException("Doctor player-stage scan exceeded its bounded 10,000-row limit");
-                }
-                result.put(UUID.fromString(rows.getString(1)), rows.getString(2));
-            }
-            return Map.copyOf(result);
-        } catch (SQLException exception) {
-            throw new IllegalStateException("Doctor could not inspect player-stage integrity", exception);
-        }
-    }
-
     private CompletionStage<PlayerProgressSnapshot> progress(UUID playerId) {
         return CompletableFuture.supplyAsync(() -> {
             requirePlayerLifecycle(playerId);
-            var stage = stages.find(playerId);
             var prestige = prestiges.find(playerId);
             placeholders.refresh(playerId);
-            return new PlayerProgressSnapshot(playerId, stage.map(PlayerStageState::stageId),
+            return new PlayerProgressSnapshot(playerId, Optional.empty(),
                     prestige.map(PlayerPrestigeState::currentPrestige).orElse(0L),
                     prestige.map(PlayerPrestigeState::lifetimePrestige).orElse(0L), activeRevision(), Map.of(),
                     clock.instant());
@@ -413,31 +356,15 @@ public final class ProductionRuntime implements AutoCloseable {
     }
 
     private List<StageView> stageCatalog() {
-        return configuration.active().map(active -> {
-            var configured = active.priorPhases().stages().configuration();
-            List<net.maddkraft.maddprestige.api.id.StageId> order = configured.order();
-            return configured.stages().values().stream()
-                    .sorted(java.util.Comparator.comparingInt(
-                            (net.maddkraft.maddprestige.core.stage.StageDefinition value) -> {
-                        int position = order.indexOf(value.id());
-                        return position >= 0 ? position : order.size();
-                    }).thenComparing(value -> value.id().value()))
-                    .map(stage -> {
-                        int position = order.indexOf(stage.id());
-                        int ordinal = position >= 0 ? position : order.size();
-                        return new StageView(stage.id(), stage.enabled(), ordinal,
-                                stage.requirementTreeId().map(value -> value.value()));
-                    }).toList();
-        }).orElse(List.of());
+        return List.of();
     }
 
     private CompletionStage<OperationEvaluation> evaluateRankUp(UUID playerId) {
-        if (!operational()) {
-            return CompletableFuture.completedFuture(unavailableEvaluation(OperationKind.RANK_UP));
-        }
-        return CompletableFuture.supplyAsync(() -> authorizeRank(new RankUpIntent(player(playerId),
-                playerId, Optional.empty(), "api-evaluate-rankup-" + UUID.randomUUID())), worker)
-                .thenApply(value -> rankEvaluation(playerId, value));
+        return CompletableFuture.completedFuture(new OperationEvaluation(OperationKind.RANK_UP,
+                OperationEvaluationStatus.BLOCKED, Optional.empty(), Optional.empty(), activeRevision(),
+                List.of(error("rankup.compatibility_only",
+                        "Rank-up is a retained API compatibility operation, not V2 Prestige progression")),
+                List.of(), Optional.empty(), clock.instant()));
     }
 
     private CompletionStage<OperationEvaluation> evaluatePrestige(UUID playerId) {
@@ -449,33 +376,17 @@ public final class ProductionRuntime implements AutoCloseable {
                 .thenApply(value -> prestigeEvaluation(playerId, value));
     }
 
-    private OperationEvaluation rankEvaluation(UUID playerId, RankUpAuthorizationResult authorization) {
-        if (authorization.plan().isEmpty()) {
-            return new OperationEvaluation(OperationKind.RANK_UP, OperationEvaluationStatus.BLOCKED,
-                    stageState(playerId).map(PlayerStageState::stageId), Optional.empty(),
-                    activeRevision(), blockers(authorization.blockers()), List.of(), Optional.empty(),
-                    clock.instant());
-        }
-        RankUpPlan plan = authorization.plan().orElseThrow();
-        return new OperationEvaluation(OperationKind.RANK_UP,
-                plan.executionAllowed() ? OperationEvaluationStatus.ELIGIBLE : OperationEvaluationStatus.BLOCKED,
-                Optional.of(plan.sourceStage()), Optional.of(plan.targetStage()), Optional.of(plan.configRevision()),
-                blockers(plan.blockers()), flatten(OperationKind.RANK_UP, plan.requirements()),
-                Optional.of(simulation(plan)),
-                clock.instant());
-    }
-
     private OperationEvaluation prestigeEvaluation(UUID playerId, PrestigeAuthorizationResult authorization) {
         if (authorization.plan().isEmpty()) {
             return new OperationEvaluation(OperationKind.PRESTIGE, OperationEvaluationStatus.BLOCKED,
-                    stageState(playerId).map(PlayerStageState::stageId), Optional.empty(), activeRevision(),
+                    Optional.empty(), Optional.empty(), activeRevision(),
                     blockers(authorization.rejection().stream().toList()), List.of(), Optional.empty(),
                     clock.instant());
         }
         PrestigePlan plan = authorization.plan().orElseThrow();
         return new OperationEvaluation(OperationKind.PRESTIGE,
                 plan.executionAllowed() ? OperationEvaluationStatus.ELIGIBLE : OperationEvaluationStatus.BLOCKED,
-                Optional.of(plan.simulation().sourceStage()), Optional.of(plan.simulation().resetStage()),
+                Optional.empty(), Optional.empty(),
                 Optional.of(plan.configRevision()), blockers(plan.blockers()),
                 flatten(OperationKind.PRESTIGE, plan.simulation().requirements().result()),
                 Optional.of(simulation(plan)), clock.instant());
@@ -505,17 +416,8 @@ public final class ProductionRuntime implements AutoCloseable {
     }
 
     private CompletionStage<OperationResult> rankUp(UUID playerId, UUID requestId) {
-        if (!operational()) {
-            return CompletableFuture.completedFuture(unavailable(requestId, OperationKind.RANK_UP));
-        }
-        return CompletableFuture.supplyAsync(() -> authorizeRankOperation(new RankUpIntent(
-                player(playerId), playerId, requestId, Optional.empty(), "api-rankup-" + requestId)), worker)
-                .thenCompose(value -> executeRank(requestId, value))
-                .whenComplete((result, failure) -> {
-                    if (OperationPlaceholderRefreshPolicy.shouldRefresh(result, failure)) {
-                        placeholders.refresh(playerId);
-                    }
-                });
+        return CompletableFuture.completedFuture(blocked(requestId, OperationKind.RANK_UP,
+                List.of("Rank-up is compatibility-only; use numeric Prestige")));
     }
 
     private CompletionStage<OperationResult> prestige(UUID playerId, UUID requestId) {
@@ -532,31 +434,12 @@ public final class ProductionRuntime implements AutoCloseable {
                 });
     }
 
-    private RankUpAuthorizationResult authorizeRank(RankUpIntent intent) {
-        Optional<String> initializationFailure = initializePlayerLifecycle(intent.playerId());
-        if (initializationFailure.isPresent()) {
-            return RankUpAuthorizationResult.rejected(initializationFailure.orElseThrow());
-        }
-        return authorizeRankRaw(intent);
-    }
-
     private PrestigeAuthorizationResult authorizePrestige(PrestigeIntent intent) {
         Optional<String> initializationFailure = initializePlayerLifecycle(intent.playerId());
         if (initializationFailure.isPresent()) {
             return PrestigeAuthorizationResult.rejected(initializationFailure.orElseThrow());
         }
         return authorizePrestigeRaw(intent);
-    }
-
-    private RankUpAuthorizationResult authorizeRankOperation(RankUpIntent intent) {
-        RankUpAuthorizationResult authorization = authorizeRankRaw(intent);
-        if (authorization.plan().map(RankUpPlan::executionAllowed).orElse(false)) {
-            return authorization;
-        }
-        Optional<String> initializationFailure = initializePlayerLifecycle(intent.playerId());
-        return initializationFailure.isPresent()
-                ? RankUpAuthorizationResult.rejected(initializationFailure.orElseThrow())
-                : authorizeRankRaw(intent);
     }
 
     private PrestigeAuthorizationResult authorizePrestigeOperation(PrestigeIntent intent) {
@@ -568,10 +451,6 @@ public final class ProductionRuntime implements AutoCloseable {
         return initializationFailure.isPresent()
                 ? PrestigeAuthorizationResult.rejected(initializationFailure.orElseThrow())
                 : authorizePrestigeRaw(intent);
-    }
-
-    private RankUpAuthorizationResult authorizeRankRaw(RankUpIntent intent) {
-        return rankAuthorization.authorize(intent).toCompletableFuture().join();
     }
 
     private PrestigeAuthorizationResult authorizePrestigeRaw(PrestigeIntent intent) {
@@ -594,70 +473,16 @@ public final class ProductionRuntime implements AutoCloseable {
             if (active == null) {
                 return PlaceholderSnapshotPublisher.InitializationResult.dormantResult();
             }
-            var stageConfiguration = active.priorPhases().stages();
-            var initialStage = initialStage(stageConfiguration.configuration());
-            if (initialStage.isEmpty()) {
-                return initializationFailed("The canonical stage ladder has no initial stage for player initialization");
-            }
-            Optional<PlayerStageState> existingStage = stages.find(playerId);
             Optional<PlayerPrestigeState> existingPrestige = prestiges.find(playerId);
-            if (existingStage.isPresent() != existingPrestige.isPresent()) {
-                return initializationFailed("Player lifecycle state is incomplete and requires operator recovery");
-            }
-            if (existingStage.isEmpty()) {
-                Optional<String> initializationFailure = initializePlayerState(playerId, active,
-                        initialStage.orElseThrow());
+            if (existingPrestige.isEmpty()) {
+                Optional<String> initializationFailure = initializePlayerState(playerId, active);
                 if (initializationFailure.isPresent()) {
                     return initializationFailed(initializationFailure.orElseThrow());
                 }
-                existingStage = stages.find(playerId);
                 existingPrestige = prestiges.find(playerId);
             }
-            PlayerStageState stage = existingStage.orElseThrow();
-            PlayerPrestigeState prestige = existingPrestige.orElseThrow();
-            var priorProjection = operations.findByIdempotency("player-initial-rank-projection", playerId,
-                    "player-initial-rank-projection:" + playerId);
-            if (priorProjection.isPresent()) {
-                return priorProjection.orElseThrow().state() == OperationState.COMPLETED
-                        ? PlaceholderSnapshotPublisher.InitializationResult.ready()
-                        : initializationFailed("Player initial rank projection requires recovery: "
-                                + priorProjection.orElseThrow().state().name());
-            }
-            if (!initialProjectionPending(stage, prestige, initialStage.orElseThrow())) {
-                return PlaceholderSnapshotPublisher.InitializationResult.ready();
-            }
-            var target = stageConfiguration.configuration().stages().get(initialStage.orElseThrow());
-            if (target == null) {
-                return initializationFailed("The canonical initial stage definition is unavailable");
-            }
-            if (target.projection().policy()
-                    == net.maddkraft.maddprestige.core.rank.ProjectionPolicy.NONE) {
-                return PlaceholderSnapshotPublisher.InitializationResult.ready();
-            }
-            ProviderId providerId = target.projection().providerId().orElseThrow();
-            Long generation = active.phaseFour().providerGenerations().get(providerId);
-            providers.refreshHealth(providerId);
-            var snapshot = providers.find(providerId);
-            var adapter = providers.provider(providerId).filter(RankAdapter.class::isInstance)
-                    .map(RankAdapter.class::cast);
-            if (generation == null || snapshot.isEmpty() || adapter.isEmpty()
-                    || snapshot.orElseThrow().generation() != generation
-                    || snapshot.orElseThrow().activation() != ActivationState.ACTIVE
-                    || !healthy(snapshot.orElseThrow().health().state())) {
-                return initializationFailed("Player initialization rank provider is unavailable: "
-                        + providerId.value());
-            }
-            var operation = initialRankProjectionPlanner.plan("player-initial-rank-projection",
-                    new Actor("SYSTEM", Optional.empty(), "Initial managed-rank projection"), stage,
-                    initialStage.orElseThrow(), stageConfiguration, providerId, generation,
-                    "player-initial-rank-projection:" + playerId, false);
-            var execution = initialRankProjectionExecutor.execute(operation, adapter.orElseThrow())
-                    .toCompletableFuture().join();
-            if (execution.status() != RankOperationExecutionStatus.COMPLETED) {
-                return initializationFailed("Player initial rank projection did not complete safely: "
-                        + execution.status().name() + ": " + execution.detail());
-            }
-            return PlaceholderSnapshotPublisher.InitializationResult.ready();
+            return existingPrestige.isPresent() ? PlaceholderSnapshotPublisher.InitializationResult.ready()
+                    : initializationFailed("Numeric Prestige state initialization produced no durable row");
         } catch (RuntimeException exception) {
             return initializationFailed("Player lifecycle initialization failed: " + rootMessage(exception));
         } finally {
@@ -671,8 +496,7 @@ public final class ProductionRuntime implements AutoCloseable {
 
     private Optional<String> initializePlayerState(
             UUID playerId,
-            ActivePhaseFourConfiguration active,
-            net.maddkraft.maddprestige.api.id.StageId initialStage) {
+            ActivePhaseFourConfiguration active) {
         try {
             var phaseThree = active.priorPhases().phaseThree();
             List<RequirementDefinition> definitions = phaseThree.configuration().requirements().values().stream()
@@ -721,25 +545,12 @@ public final class ProductionRuntime implements AutoCloseable {
             var baselines = new BaselineInitializationService(requirementStates, clock).prepareScope(
                     playerId, MeasurementScope.SINCE_PRESTIGE_START, scope, definitions, samples,
                     phaseThree.providerGenerations());
-            playerInitialization.initialize(playerId, initialStage,
-                    active.phaseFour().revisionId(), scope, clock.instant(), baselines);
+            playerInitialization.initializePrestige(playerId, active.phaseFour().revisionId(), scope,
+                    clock.instant(), baselines);
             return Optional.empty();
         } catch (RuntimeException exception) {
             return Optional.of("Player lifecycle initialization failed: " + rootMessage(exception));
         }
-    }
-
-    private static boolean initialProjectionPending(
-            PlayerStageState stage,
-            PlayerPrestigeState prestige,
-            net.maddkraft.maddprestige.api.id.StageId initialStage) {
-        return stage.stageId().equals(initialStage)
-                && stage.stateRevision() == 0
-                && stage.lastProviderGeneration().isEmpty()
-                && stage.lastReconciledAt().isEmpty()
-                && prestige.currentPrestige() == 0
-                && prestige.lifetimePrestige() == 0
-                && prestige.stateRevision() == 0;
     }
 
     private void requirePlayerLifecycle(UUID playerId) {
@@ -758,23 +569,6 @@ public final class ProductionRuntime implements AutoCloseable {
         return state == ProviderHealthState.AVAILABLE || state == ProviderHealthState.ACTIVE;
     }
 
-    private CompletionStage<OperationResult> executeRank(
-            UUID requestId,
-            RankUpAuthorizationResult authorization) {
-        if (authorization.plan().isEmpty()) {
-            return CompletableFuture.completedFuture(blocked(requestId, OperationKind.RANK_UP,
-                    authorization.blockers()));
-        }
-        RankUpPlan plan = authorization.plan().orElseThrow();
-        requireRequestId(requestId, plan.requestId());
-        return rankExecutor.execute(plan).thenApply(result -> new OperationResult(
-                plan.requestId(), operations.find(result.operationId()).map(ignored -> result.operationId()),
-                OperationKind.RANK_UP, rankStatus(result.status()),
-                result.status() == RankUpExecutionStatus.COMPLETED ? Optional.empty()
-                        : Optional.of(error("rankup." + result.status().name().toLowerCase(Locale.ROOT),
-                                result.detail()))));
-    }
-
     private OperationResult executePrestige(UUID requestId, PrestigeAuthorizationResult authorization) {
         if (authorization.plan().isEmpty()) {
             return blocked(requestId, OperationKind.PRESTIGE, authorization.rejection().stream().toList());
@@ -789,17 +583,6 @@ public final class ProductionRuntime implements AutoCloseable {
                                 result.detail())));
     }
 
-    private Optional<PlayerStageState> stageState(UUID playerId) {
-        Optional<PlayerStageState> durable = stages.find(playerId);
-        if (durable.isPresent()) {
-            return durable;
-        }
-        return configuration.active().flatMap(active -> initialStage(active.priorPhases().stages().configuration()))
-                .map(stage -> new PlayerStageState(playerId, stage, 0, activeRevision().orElseThrow(),
-                        clock.instant(), clock.instant(), clock.instant(), Optional.empty(), Optional.empty(),
-                        Optional.empty()));
-    }
-
     private Optional<PlayerPrestigeState> prestigeState(UUID playerId) {
         Optional<PlayerPrestigeState> durable = prestiges.find(playerId);
         if (durable.isPresent()) {
@@ -808,10 +591,6 @@ public final class ProductionRuntime implements AutoCloseable {
         return activeRevision().map(revision -> new PlayerPrestigeState(playerId, 0, 0, 0, revision,
                 AuthoritativeProgressContextFactory.initialPrestigeScope(playerId), Optional.empty(), clock.instant(),
                 clock.instant()));
-    }
-
-    private void initializePlayerAfterPre(RankUpPlan plan) {
-        requireInitializedAfterPre(plan.playerId());
     }
 
     private void initializePlayerAfterPre(PrestigePlan plan) {
@@ -824,29 +603,9 @@ public final class ProductionRuntime implements AutoCloseable {
         });
     }
 
-    private boolean revalidateRank(RankUpPlan plan) {
-        Optional<PlayerStageState> durableStage = stages.find(plan.playerId());
-        Optional<PlayerPrestigeState> durablePrestige = prestiges.find(plan.playerId());
-        if (durableStage.isPresent() != durablePrestige.isPresent()) {
-            return false;
-        }
-        return operational() && activeRevision().filter(plan.configRevision()::equals).isPresent()
-                && stageState(plan.playerId()).filter(state ->
-                        state.stateRevision() == plan.expectedStateRevision()
-                        && state.stageId().equals(plan.sourceStage())
-                        && state.configRevision().equals(plan.expectedPlayerConfigRevision())).isPresent();
-    }
-
     private boolean revalidatePrestige(PrestigePlan plan) {
-        Optional<PlayerStageState> durableStage = stages.find(plan.playerId());
         Optional<PlayerPrestigeState> durablePrestige = prestiges.find(plan.playerId());
-        if (durableStage.isPresent() != durablePrestige.isPresent()) {
-            return false;
-        }
         return operational() && activeRevision().filter(plan.configRevision()::equals).isPresent()
-                && stageState(plan.playerId()).filter(state -> state.stateRevision() == plan.expectedStageRevision()
-                        && state.stageId().equals(plan.simulation().sourceStage())
-                        && state.configRevision().equals(plan.simulation().playerStageProvenance())).isPresent()
                 && prestigeState(plan.playerId()).filter(state ->
                         state.stateRevision() == plan.expectedPrestigeRevision()
                         && state.currentPrestige() == plan.simulation().currentPrestigeBefore()
@@ -965,11 +724,6 @@ public final class ProductionRuntime implements AutoCloseable {
         return directProviderFailure || unavailableMetricDiscovery;
     }
 
-    private static Optional<net.maddkraft.maddprestige.api.id.StageId> initialStage(
-            net.maddkraft.maddprestige.core.stage.StageConfiguration stages) {
-        return stages.baselineStage().isPresent() ? stages.baselineStage() : stages.order().stream().findFirst();
-    }
-
     private static Actor player(UUID playerId) {
         return new Actor("PLAYER", Optional.of(playerId), playerId.toString());
     }
@@ -1003,14 +757,6 @@ public final class ProductionRuntime implements AutoCloseable {
         java.util.ArrayList<RequirementProgressView> result = new java.util.ArrayList<>();
         flatten(operation, root, result);
         return List.copyOf(result);
-    }
-
-    private static OperationSimulationView simulation(RankUpPlan plan) {
-        return new OperationSimulationView(
-                plan.costs().stream().map(value -> value.definition().id().value()).toList(),
-                plan.rewards().stream().map(value -> value.definition().id().value()).toList(),
-                plan.rankProjectionRequest().flatMap(ignored ->
-                        plan.externalRankProjection().flatMap(value -> value.providerId())));
     }
 
     private static OperationSimulationView simulation(PrestigePlan plan) {
@@ -1083,16 +829,6 @@ public final class ProductionRuntime implements AutoCloseable {
         private boolean providerLifecycleRelated() {
             return providerLifecycleRelated;
         }
-    }
-
-    private static OperationStatus rankStatus(RankUpExecutionStatus status) {
-        return switch (status) {
-            case COMPLETED -> OperationStatus.COMPLETED;
-            case DUPLICATE -> OperationStatus.CONFLICT;
-            case BLOCKED, STALE_GENERATION -> OperationStatus.BLOCKED;
-            case NEEDS_RECONCILIATION -> OperationStatus.NEEDS_RECONCILIATION;
-            case FAILED, COMPENSATED -> OperationStatus.FAILED;
-        };
     }
 
     private static OperationStatus prestigeStatus(PrestigeExecutionStatus status) {

@@ -28,8 +28,8 @@ public record PrestigeConfiguration(
     public PrestigeConfiguration {
         requiredStages = Set.copyOf(Objects.requireNonNull(requiredStages, "required stages"));
         resetStage = Objects.requireNonNull(resetStage, "reset stage");
-        if (currentCountIncrement < 1 || lifetimeCountIncrement < 1) {
-            throw new IllegalArgumentException("Prestige increments must be positive");
+        if (currentCountIncrement != 1 || lifetimeCountIncrement != 1) {
+            throw new IllegalArgumentException("Numeric Prestige increments are fixed at exactly one");
         }
         limit = Objects.requireNonNull(limit, "limit");
         cooldown = Objects.requireNonNull(cooldown, "cooldown");
@@ -42,15 +42,9 @@ public record PrestigeConfiguration(
         scalingProfileId = Objects.requireNonNull(scalingProfileId, "scaling profile ID");
         catchUpProfileId = Objects.requireNonNull(catchUpProfileId, "catch-up profile ID");
         resetPolicy = Objects.requireNonNull(resetPolicy, "reset policy");
-        if (enabled && requiredStages.isEmpty()) {
-            throw new IllegalArgumentException("Enabled Prestige requires at least one source stage");
-        }
         if (costIds.stream().distinct().count() != costIds.size()
                 || rewardIds.stream().distinct().count() != rewardIds.size()) {
             throw new IllegalArgumentException("Prestige cost and reward references must be unique");
-        }
-        if (resetPolicy.disposition(ResetComponent.PROGRESSION_STAGE) != ResetDisposition.RESET) {
-            throw new IllegalArgumentException("Prestige progression stage must use RESET");
         }
         if (resetPolicy.disposition(ResetComponent.HISTORICAL_STATISTICS) != ResetDisposition.PRESERVE) {
             throw new IllegalArgumentException("Historical/lifetime statistics cannot be reset");
@@ -61,5 +55,12 @@ public record PrestigeConfiguration(
         return new PrestigeConfiguration(false, Set.of(), new StageId("disabled"), 1, 1,
                 PrestigeLimit.unlimited(), Duration.ZERO, Optional.empty(), List.of(), List.of(), Optional.empty(),
                 Optional.empty(), ResetPreservePolicy.safeDefaults(), false);
+    }
+
+    /**
+     * Compatibility-only stage metadata retained for old configuration readers. Numeric Prestige never consumes it.
+     */
+    public boolean hasLegacyStagePolicy() {
+        return !requiredStages.isEmpty() || !"disabled".equals(resetStage.value());
     }
 }

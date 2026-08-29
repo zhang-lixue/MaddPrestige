@@ -8,8 +8,8 @@ import org.bukkit.event.HandlerList;
 import org.jetbrains.annotations.NotNull;
 
 /**
- * Immutable Paper-server-thread notification fired after a durable terminal rank-up outcome and before the caller's
- * completion stage resolves. Listener failure is isolated and cannot change the durable result.
+ * Stage-era event retained for stable source and binary compatibility. Active numeric Prestige never fires this event
+ * because no durable rank-up operation can be created. Direct compatibility instances are immutable notifications only.
  */
 @Stable
 public final class PostRankUpEvent extends Event {

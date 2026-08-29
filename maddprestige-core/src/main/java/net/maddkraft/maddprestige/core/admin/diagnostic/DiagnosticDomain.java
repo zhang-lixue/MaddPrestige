@@ -8,7 +8,6 @@ public enum DiagnosticDomain {
     REQUIRED_METRICS("required-metrics"),
     COST_PROVIDERS("cost-providers"),
     REWARD_PROVIDERS("reward-providers"),
-    RANK_TARGETS("rank-targets"),
     PENDING_OPERATIONS("pending-operations"),
     OPERATION_RECONCILIATION("operation-reconciliation"),
     CONFIGURATION_HISTORY("configuration-history"),

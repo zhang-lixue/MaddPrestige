@@ -28,14 +28,14 @@ but the remaining clone/manual boundary is explicit. `MISSING` means Phase 9 can
 |---|---|---|
 | MaddKraft profile | READY for repository validation; PARTIAL for deployment | `PhaseSevenAcceptanceFixtureTest` and `qualification/phase9a/maddkraft-clone/progression.yml` compile the exact six stages. Real current LP groups must be inventoried on the clone before apply. |
 | Legacy config detection | READY after Phase 9A correction | `LegacyStageDetector` now recognizes the actual nested V1 `progression.ranks`, LP mapping, patron, and obsolete competition shapes read-only. It does not guess a mapping. |
-| Legacy player-stage mapping | PARTIAL | `LegacyStageMigrationPlanner` produces deterministic explicit, revisioned, backup-gated plans and exposes no executable-looking mapping on error. It remains read-only. |
-| General V1-to-V2 mutation executor | MISSING, intentionally blocked | No accepted executor converts V1 schema 1 into V2 schema 11. It must not be implemented until the owner resolves the mapping decisions in `MIGRATION_MAPPING.md`. |
-| Migration reports | PARTIAL | V2 schema migration has exact history/manifest evidence. The legacy planner returns findings in memory; Phase 9 still needs a source-to-destination report persisted beside the clone migration. |
+| Historical legacy player-stage mapping | SUPERSEDED / NON-EXECUTABLE | `LegacyStageMigrationPlanner` and the blocked mapping template remain historical Phase 9A evidence only. They are not deployment gates. |
+| V1-to-V2 player mutation executor | NOT AUTHORIZED | The owner selected fresh V2 with no V1 player import. No executor will be built. |
+| Fresh-V2 no-import proof | REQUIRED / EXTERNAL for clone | Qualification must prove a separate V1 data source is never read or imported, V2 initializes at P0, and V1/external plugin state remains byte-for-byte or semantically unchanged. |
 | V2 SQLite backup/restore | READY | `SqliteBackupService` uses the native SQLite backup API, strict manifest/hash/integrity/schema/history/config validation, and disposable restore rehearsal. |
 | Legacy DB/config backup | PARTIAL / EXTERNAL | A stopped-directory copy plus hashes is the safe pre-V2 boundary. `FileBackupService` is only for quiesced fixtures; production composition does not use it. Host/clone tooling must prove the source was stopped. |
 | Startup migration/recovery | READY for V2 schemas 0-11 | `MigrationRunner`, schema 11 validation, pending-operation recovery, configuration compatibility, and unchanged restart are accepted. This is not a V1 semantic conversion. |
 | LuckPerms reconciliation/isolation | READY for repository boundary; EXTERNAL for clone | Exact permanent context-free managed membership, group-existence validation, offline UUID load/save, supporter preservation, and warn-only reconciliation are covered. Actual clone groups/accounts remain manual. |
-| Doctor/Why/provider health | READY | Database, configuration, provider, rank target, pending/reconciliation, Placeholder, scheduler/cache, and flush status are composed into production diagnostics. |
+| Doctor/Why/provider health | READY | Numeric configuration, database, provider, requirement, operation/reconciliation, Placeholder, scheduler/cache, and flush status are composed into production diagnostics without stage/rank probes. |
 | mcMMO | READY for supported adapter; EXTERNAL for real scenarios | Public mcMMO 2.2.053 current metrics and authenticated adjusted-XP events are covered. Real earning, restart, disable/recovery, and player data must run on the clone. |
 | Vault/economy | READY for supported adapter; EXTERNAL for real scenarios | Balance, cost, reward, loss/rebind, and uncertainty boundaries exist for Vault 2.20.2 with an Economy service. Real EssentialsX balances and failure handling remain clone work. |
 | EconomyShopGUI | READY as zero-credit diagnostics; PARTIAL as earnings provider | 7.2.0 public events bind for compatibility only. No reliable currency-homogeneous earnings metric is exposed, so production credit remains disabled. |
@@ -54,24 +54,19 @@ Every step is performed only in an owner-designated disposable clone after the o
 1. Freeze the source. Stop Paper cleanly, record host/time/operator, hash the server directory inventory and every
    plugin JAR, and prove the clone uses a separate absolute path, ports, network endpoints, Discord target, and backup
    destination. Do not reuse production credentials or webhooks.
-2. Create and validate the pre-migration backup described in `MIGRATION_MAPPING.md`. Preserve the whole legacy
-   `plugins/MaddPrestige/` directory, not only the SQLite main file. Record hashes, row counts, integrity result, WAL
-   state, LP export, and a restore rehearsal. Any missing or failed check stops the run.
-3. Inventory source data read-only. Record schema version, every table count, distinct `progression_rank` values,
-   pending transactions, supporter/staff groups, current configuration hashes, and all unresolved mappings.
-4. Resolve and sign the mapping manifest. `OWNER_DECISION_REQUIRED` may not appear in an executable manifest. The
-   source hash, mapping hash, candidate JAR hash, operator, and decision record become immutable run inputs.
+2. Preserve and hash the whole legacy `plugins/MaddPrestige/` directory as immutable evidence. Do not make it an
+   input to V2 and do not parse it through an import path.
+3. Record the separate V1 and V2 absolute paths, V1 database/config hashes and external-provider evidence before boot.
+4. Record the owner no-import decision, candidate JAR hash, operator, and run ID as immutable qualification inputs.
 5. Boot the clone first with the accepted artifact in safely dormant mode. Confirm generated V2 documents, V2 schema
    11, clean Doctor output appropriate to dormancy, and no write to the legacy `maddprestige.db` or `config.yml`.
-6. Validate the exact six-stage profile against existing LP groups. `wanderer` represents the implicit `default`
-   baseline with `projection: none`; only `curious`, `dreamer`, `tea_guest`, `wonderlander`, and `madcap` are managed
-   direct groups. A missing group blocks apply and is never created.
-7. Execute a read-only migration dry run. Compare source counts and per-player decisions, review every skipped/archive
-   category, and require zero unresolved affected players. Phase 9 cannot proceed to mutation while the executor is
-   absent or the dry-run report is incomplete.
-8. When a later owner-approved executor exists, restore the clone to the pristine checkpoint, run the migration once,
-   and reconcile source/report/destination counts and hashes. Run it a second time only if the executor explicitly
-   proves idempotency; otherwise prove repetition is rejected before mutation.
+6. With the V1 directory still present only as separate immutable evidence, initialize representative V2 players and
+   prove each starts at Prestige 0 with no V1 rank, Prestige, Tea Leaves, perk, progress, pending, season, history,
+   competition, or preference value imported.
+7. Restart unchanged and prove exact persisted V2 P0 state, unchanged V1 hashes/rows, and unchanged external-provider
+   state. Any V1 read/import or external mutation fails the gate.
+8. Exercise configured numeric Prestige P0 to P1 separately using only live configured provider reads; this is not a
+   migration and does not authorize production balance.
 9. Run the real-provider matrix in `PROVIDER_TEST_MATRIX.md`, followed by restart, controlled process interruption,
    provider loss/rebind, stale generation, and explicit outage cases. Preserve console, audit, Doctor, Why, DB,
    provider inventory, and before/after external state.
@@ -115,10 +110,10 @@ Every step is performed only in an owner-designated disposable clone after the o
 
 | Actor | Required cases | Expected boundary |
 |---|---|---|
-| OP/admin | status, Doctor verbose, setup/config preview, simulation, apply/rollback, player view/edit/repair, migration dry run | Every mutation is explicit, acknowledged, audited, and redacted; OP state is not used as LP authority. |
+| OP/admin | status, numeric Doctor, setup/config preview, simulation, apply/rollback, player view/edit/repair, no-import audit | Every mutation is explicit, acknowledged, audited, and redacted; OP state is not used as LP authority. |
 | Authorized non-OP staff | Doctor/Why/simulation and only granted player/config actions | Granular permission allows the action; denied actions have zero state change. |
-| Ordinary non-OP player | profile, Why, rank-up preview/apply, Prestige preview/confirm, GUI/command parity | Only own player actions are available; exact provider/cost blockers are visible without secrets. |
-| Supporter + progression player | every stage, Prestige reset, reconciliation, restart | `mad_hatter` and all staff/supporter/unrelated/contextual nodes survive; only the exact managed progression node changes. |
+| Ordinary non-OP player | profile, Why, numeric Prestige preview/confirm, command parity | Only own player actions are available; exact requirement/provider/cost blockers are visible without secrets. |
+| Supporter + Prestige player | P0 to P1, configured reward, reconciliation, restart | All staff/supporter/unrelated/contextual nodes survive; only explicitly configured additive reward nodes may change. |
 | Offline player | view/repair/rank projection and supported costs/rewards | UUID-capable paths work; online-only mcMMO/WG/CraftEngine paths return unavailable rather than zero or mutation. |
 
 For every row capture actor UUID/name, permissions, command or GUI path, request/durable operation IDs, configuration
@@ -127,5 +122,6 @@ revision, external groups/balance before and after, audit rows, Doctor/Why outpu
 ## Acceptance accounting
 
 A71, A72, A73, A74, and A75 retain their already accepted `Satisfied` classifications from Phase 7; Phase 9A neither
-reopens nor inflates them. Their current-clone rerun remains a Phase 9 deployment gate. A63 remains `Partial` until the
-actual owner-approved MaddKraft clone data migration passes. A64 remains `Later`. No ledger row changes in Phase 9A.
+reopens nor inflates them. Their current-clone rerun remains a Phase 9 deployment gate. A63 remains `Partial` until a
+real populated pre-Phase9B V2 SQLite upgrade/preservation/report/restart run passes. The separate no-import gate must
+also pass. A64 remains `Later`. No ledger row changes in Phase 9A.

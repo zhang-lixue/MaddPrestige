@@ -1,23 +1,55 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 9A repository qualification package implemented; owner review ready; real clone qualification not started
+**Current phase:** Phase 9B numeric Prestige policy freeze and architecture alignment; owner-review candidate
 
-**Last updated:** 2026-08-28
+**Last updated:** 2026-08-29
 
-**Branch:** `v2/phase-9a`
+**Branch:** `v2/phase-9b`
 
-**Starting merged-main HEAD:** `57d8487e3153d1edee892832be9187caab854bba`
+**Starting merged-main HEAD:** `f97d812be7a5963e2f9f3f042722ff77356e8363`
 
-**Candidate scope:** production-qualification baseline and migration preparation for a future disposable MaddKraft clone; no live deployment, legacy mutation, production balance activation, or Phase 10/web work
+**Candidate scope:** repository-only numeric Prestige architecture alignment; no live/clone qualification, V1 player migration, production balance selection, or Phase 10/web work
+
+## Phase 9B candidate outcome
+
+Phase 9B makes a durable non-negative numeric Prestige level the sole production progression authority. Each accepted
+transition advances exactly one level under an optional finite maximum or `unlimited`. Authorization, initialization,
+execution, persistence, production reads, previews, defaults, setup, and normal documentation no longer require or
+mutate a stage/rank ladder. Stable stage/rank API signatures remain compatibility-only and production returns
+empty/blocked results rather than breaking the owner-frozen API surface.
+
+Requirement trees support ALL/ANY/X_OF_N. Requirements, costs, and rewards remain distinct and provider-owned values
+are queried rather than mirrored. Requirement leaves plus cost/reward IDs now support independent contiguous
+FLAT/LINEAR/EXPONENTIAL/MANUAL scaling segments, configurable transition/base/rate/rounding/floor/cap, and per-level
+overrides. mcMMO `total_level` is canonical for guided Prestige. LuckPerms is an optional additive permission/existing-
+group reward provider and never creates a group or removes unrelated nodes.
+
+SQLite migration 12 appends checked `LEGACY_STAGE`/`NUMERIC_LEVEL` markers without changing migrations 1-11. It archives
+old stage-era active rows, removes them from authority, and initializes active numeric state at Prestige 0 without
+mapping stage position or projecting groups. Fresh V2 players start at Prestige 0 with no stage row; V1 player state is
+not imported. Journal/CAS/transaction/recovery semantics, generic currency, milestones, and provider uncertainty
+handling remain intact. A configurable first-party Prestige shop is authorized later Phase 9 work and is not yet
+implemented. The audit and proposed
+acceptance reinterpretation are recorded in `docs/V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md` and
+`docs/V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md`.
+
+No live server/database was touched, no disposable clone was run, no production economic/reward balance was selected,
+and no Phase 10 work was started. The change remains uncommitted and unpushed for owner review.
+
+Final repository verification is clean: 581 tests in 106 XML suites (580 Surefire tests plus the one distribution
+Failsafe package test), with 0 failures, 0 errors, and 0 skips; configured Checkstyle reports 0 violations and
+`git diff --check` passes. The distribution JAR is 16,528,792 bytes with SHA-256
+`A38479D6BA9187A504FE502E5BF91EC1B4A0548E15BC6A5B3D188239E775B9A7`; the aggregate SBOM is 190,831 bytes with
+SHA-256 `3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E`. The exact review scope is recorded in
+`docs/V2_PHASE9B_FILE_MANIFEST.md`.
 
 ## Phase 9A candidate outcome
 
-Phase 9A adds the repository-only qualification package needed to prepare a future disposable MaddKraft clone. The
-package records the exact accepted Phase 8F baseline, clone topology and operator sequence, legacy mapping inventory,
-real-provider and economy isolation matrices, backup/restore and rollback gates, readiness blockers, and the exact
-six-stage qualification profile. Migration execution remains blocked on eight unresolved manifest fields plus the
-broader owner decisions; there is no migration executor, no automatic group creation, and no legacy or production data
-mutation.
+Phase 9A added repository-only qualification evidence for a future disposable MaddKraft clone. Its legacy mapping
+template is now explicitly HISTORICAL, SUPERSEDED, and NON-EXECUTABLE. The eight preserved decision markers are not
+deployment gates: the owner selected fresh V2, no V1 per-player import, and no V1-to-V2 player mutation executor.
+Qualification must instead prove V2 never reads/imports V1 player state, initializes at Prestige 0, and leaves V1 and
+external plugin data untouched. No production data mutation or balance activation occurred.
 
 The pre-change baseline verification passed 553 tests in 103 suites with zero failures, errors, or skips and zero
 Checkstyle violations. The Phase 9A candidate clean verification passed 557 tests in 104 suites with zero failures,
@@ -315,7 +347,7 @@ deferred post-2.0 unless explicitly re-authorized. This is a scope decision, not
 | A47 | Satisfied | RankUp/Prestige authorization emits exhaustive typed blocker identities and facts; the real command/service Why path distinguishes inactive state, illegal target, missing cost, maximum, cooldown, provider, cost-preflight, projection, requirements and boundaries without parsing diagnostic prose |
 | A61 | Satisfied | The exhaustive offline matrix proves UUID-capable internal/LuckPerms/Vault/manual/SDK paths and explicitly fail-closed online/cache-limited Paper/mcMMO/Placeholder/WorldGuard/CraftEngine paths without fabricated zero or mutation |
 | A62 | Satisfied | The exact final-artifact real-Paper load retained 19.999-20.005 TPS, bounded platform threads/backlogs and cache-only rendering while JFR proved operation/Placeholder high-water 128/12 with exact 6,034/6,034 and 11,648/11,648 convergence; all 104,960 accepted manual increments converged exactly through SQLite contention, shutdown and unchanged restart; deterministic batches were exactly 1,024/1,024/52 |
-| A63 | Partial | Populated fresh/prefix migration, native backup, restore rehearsal, corruption/history failures and real Paper restart are qualified; Phase 9 retains actual MaddKraft clone/deployment migration qualification |
+| A63 | Partial | Synthetic populated fresh/prefix V2 migrations, native backup, restore rehearsal, corruption/history failures and real Paper restart are qualified; the independent real populated pre-Phase9B V2 SQLite upgrade/preservation/report/restart gate remains |
 | A64 | Later | MySQL/MariaDB production support and semantic parity are explicitly deferred post-2.0; no support or acceptance claim is made |
 | A65 | Satisfied | Two independently owned Stable provider plugins simultaneously compose multiple metrics and prove late registration, exact metadata/maps, offline limitation, duplicate rejection, timeout/cancellation, failure isolation, unregister, generation replacement and recovery |
 | A66 | Satisfied | The real-Paper matrix proves normal RankUp/Prestige PRE/POST durability, unknown-player cancellation, listener failure, same-player conflict, cross-player completion, rebind-after-PRE, service loss, definitely-not-applied, throw, verified apply and uncertain reconciliation semantics |

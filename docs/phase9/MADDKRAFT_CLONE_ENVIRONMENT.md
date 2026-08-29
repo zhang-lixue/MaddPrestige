@@ -5,7 +5,8 @@
 The clone must be a disposable, access-controlled copy of the owner-designated MaddKraft server. It must not share a
 server directory, database, port, RCON credential, Discord webhook/channel, backup target, plugin API token, or
 scheduled task with production. Network-facing integrations are disabled or redirected to test endpoints before the
-first boot. The V1 JAR is removed, not co-loaded; its entire data directory remains preserved by the migration backup.
+first boot. The V1 JAR is removed, not co-loaded; its entire data directory remains preserved as immutable historical
+evidence and is never read or imported by V2.
 
 The repository-supported runtime baseline is Java 25 and Paper 26.1.2 build 74. Broader Java/Paper compatibility is
 not claimed. Phase 9 starts with exact distribution `MaddPrestige-2.0.0-rc.1.jar`, 16,507,914 bytes, SHA-256
@@ -159,4 +160,4 @@ copy; sanitization must not remove failure lines, identities, operation IDs, or 
 - [ ] Vault Economy, mcMMO player data, shop/trade test funds/items, and rollback checkpoints are seeded.
 - [ ] No production balance or rewards are configured.
 - [ ] Full console and audit capture is enabled with secrets redacted.
-- [ ] Stop/restore procedure has been rehearsed before any migration mutation is authorized.
+- [ ] Stop/restore procedure has been rehearsed; no V1 migration mutation is authorized.

@@ -23,8 +23,8 @@ public final class PhaseThreeSchema {
                 Optional.empty(), "Typed metric requirements with scopes, completion, scaling, and catch-up.",
                 AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, "requirement_trees", "requirements.trees", SchemaValueType.MAP,
-                Optional.empty(), "Bounded recursive ALL/ANY/ANY_X/WEIGHTED requirement trees.",
-                AllowedValues.fixed("ALL", "ANY", "ANY_X_OF_Y", "WEIGHTED"), RiskLevel.HIGH);
+                Optional.empty(), "Bounded recursive ALL/ANY/X_OF_N/WEIGHTED requirement trees.",
+                AllowedValues.fixed("ALL", "ANY", "X_OF_N", "WEIGHTED"), RiskLevel.HIGH);
         register(registry, "cost_definitions", "requirements.costs", SchemaValueType.MAP,
                 Optional.empty(), "Provider cost definitions; preflight and evaluation never consume them.",
                 AllowedValues.unrestricted(), RiskLevel.HIGH);
