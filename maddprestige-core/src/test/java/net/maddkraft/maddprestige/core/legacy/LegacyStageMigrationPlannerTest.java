@@ -45,6 +45,45 @@ class LegacyStageMigrationPlannerTest {
     }
 
     @Test
+    @DisplayName("[Phase 9A] Exact nested V1 config shape is detected without treating patrons as progression")
+    void detectsNestedV1ConfigurationShape() {
+        String source = """
+                integrations:
+                  luckperms:
+                    progression-groups:
+                      CURIOUS: curious
+                      ODD: odd
+                progression:
+                  ranks:
+                    CURIOUS: {display-name: Curious}
+                    ODD: {display-name: Odd}
+                rewards:
+                  patron-permissions:
+                    homes: {}
+                patron:
+                  tiers:
+                    OLD_SUPPORTER: {luckperms-group: old_supporter}
+                maddhatter:
+                  minimum-prestige: 10
+                """;
+
+        var detection = new LegacyStageDetector().detect(source, List.of("CURIOUS"));
+
+        assertEquals(java.util.Set.of("CURIOUS", "ODD"), detection.legacyStageValues());
+        assertEquals(java.util.Set.of(
+                        "legacy.stage.fixed_rank_config",
+                        "legacy.stage.external_group_config",
+                        "legacy.stage.parallel_identity",
+                        "legacy.config.obsolete_competition",
+                        "legacy.stage.stored_values"),
+                detection.findings().findings().stream()
+                        .map(finding -> finding.code()).collect(java.util.stream.Collectors.toSet()));
+        assertEquals("legacy.progression.ranks", detection.findings().findings().stream()
+                .filter(finding -> finding.code().equals("legacy.stage.fixed_rank_config"))
+                .findFirst().orElseThrow().path());
+    }
+
+    @Test
     @DisplayName("[A36] Missing and ambiguous mappings stop instead of guessing")
     void missingAndAmbiguousMappingsFail() {
         UUID player = UUID.randomUUID();
