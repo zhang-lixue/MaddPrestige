@@ -4,7 +4,7 @@ Baseline: `f97d812be7a5963e2f9f3f042722ff77356e8363`
 
 Branch: `v2/phase-9b`
 
-Exact owner-review correction scope: 128 paths. Generated output under root and module `target/`
+Exact SonarCloud correction scope: 129 paths. Generated output under root and module `target/`
 directories is ignored and excluded; every listed path is source, test, documentation, example, qualification
 evidence, or repository hygiene.
 
@@ -102,6 +102,7 @@ evidence, or repository hygiene.
 - `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/prestige/PrestigeProviderHealthTest.java`
 - `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/requirement/RequirementEngineTest.java`
 - `maddprestige-core/src/test/java/net/maddkraft/maddprestige/core/scaling/PhaseNineBSegmentedScalingTest.java`
+- `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/luckperms/LuckPermsIntegrationSupport.java`
 - `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/luckperms/LuckPermsRankAdapter.java`
 - `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/luckperms/LuckPermsRewardProvider.java`
 - `maddprestige-integrations/src/main/java/net/maddkraft/maddprestige/integrations/mcmmo/McMmoMetricProvider.java`

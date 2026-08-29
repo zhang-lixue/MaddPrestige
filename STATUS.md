@@ -38,8 +38,8 @@ and no Phase 10 work was started. The change remains uncommitted and unpushed fo
 
 Final repository verification is clean: 581 tests in 106 XML suites (580 Surefire tests plus the one distribution
 Failsafe package test), with 0 failures, 0 errors, and 0 skips; configured Checkstyle reports 0 violations and
-`git diff --check` passes. The distribution JAR is 16,531,093 bytes with SHA-256
-`569A44A290A8E32F6DD511657903017921FB275A66CE2A0AA915BF3FA9C33487`; the aggregate SBOM is 190,831 bytes with
+`git diff --check` passes. The distribution JAR is 16,528,792 bytes with SHA-256
+`A38479D6BA9187A504FE502E5BF91EC1B4A0548E15BC6A5B3D188239E775B9A7`; the aggregate SBOM is 190,831 bytes with
 SHA-256 `3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E`. The exact review scope is recorded in
 `docs/V2_PHASE9B_FILE_MANIFEST.md`.
 
