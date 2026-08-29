@@ -29,18 +29,34 @@ public final class LegacyStageDetector {
         try {
             Object loaded = new Load(SETTINGS).loadFromString(source);
             if (loaded instanceof Map<?, ?> root) {
-                Object fixedRanks = root.get("ranks");
-                if (fixedRanks instanceof Map<?, ?> rankMap) {
-                    rankMap.keySet().stream().filter(String.class::isInstance).map(String.class::cast)
-                            .forEach(values::add);
-                    findings.add(finding("legacy.stage.fixed_rank_config", "legacy.ranks",
+                Map<?, ?> topLevelRanks = root.get("ranks") instanceof Map<?, ?> map ? map : null;
+                Map<?, ?> fixedRanks = firstMap(topLevelRanks, nestedMap(root, "progression", "ranks"));
+                if (fixedRanks != null) {
+                    addStringKeys(fixedRanks, values);
+                    String fixedRankPath = topLevelRanks == null ? "legacy.progression.ranks" : "legacy.ranks";
+                    findings.add(finding("legacy.stage.fixed_rank_config", fixedRankPath,
                             "A fixed-rank configuration shape was detected.",
                             "Use an explicit mapping manifest to immutable V2 stage IDs."));
                 }
-                if (root.containsKey("patrons") || root.containsKey("patron-tiers")) {
+                Map<?, ?> externalGroups = nestedMap(root, "integrations", "luckperms", "progression-groups");
+                if (externalGroups != null) {
+                    addStringKeys(externalGroups, values);
+                    findings.add(finding("legacy.stage.external_group_config",
+                            "legacy.integrations.luckperms.progression-groups",
+                            "Legacy fixed-stage to LuckPerms group mappings were detected.",
+                            "Inventory both the opaque stage IDs and external groups; never create a missing group."));
+                }
+                if (root.containsKey("patrons") || root.containsKey("patron-tiers")
+                        || nestedMap(root, "patron", "tiers") != null
+                        || nestedMap(root, "rewards", "patron-permissions") != null) {
                     findings.add(finding("legacy.stage.parallel_identity", "legacy",
                             "Legacy parallel identity configuration was detected and is not progression state.",
                             "Keep supporter/staff identities outside the progression mapping manifest."));
+                }
+                if (root.containsKey("maddhatter")) {
+                    findings.add(finding("legacy.config.obsolete_competition", "legacy.maddhatter",
+                            "A legacy server-specific competition configuration was detected.",
+                            "Archive it unless an owner-approved generic destination is explicitly configured."));
                 }
             } else {
                 findings.add(finding("legacy.config.unrecognized", "legacy",
@@ -59,6 +75,25 @@ public final class LegacyStageDetector {
         }
         return new LegacyStageDetection(RevisionHasher.hashText(source), Set.copyOf(values),
                 ValidationReport.of(findings));
+    }
+
+    private static Map<?, ?> nestedMap(Map<?, ?> root, String... path) {
+        Object current = root;
+        for (String segment : path) {
+            if (!(current instanceof Map<?, ?> map)) {
+                return null;
+            }
+            current = map.get(segment);
+        }
+        return current instanceof Map<?, ?> map ? map : null;
+    }
+
+    private static Map<?, ?> firstMap(Object first, Map<?, ?> second) {
+        return first instanceof Map<?, ?> map ? map : second;
+    }
+
+    private static void addStringKeys(Map<?, ?> source, Collection<String> target) {
+        source.keySet().stream().filter(String.class::isInstance).map(String.class::cast).forEach(target::add);
     }
 
     private static ValidationFinding finding(String code, String path, String explanation, String remediation) {

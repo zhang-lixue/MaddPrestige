@@ -1,14 +1,39 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 8F and Phase 8 complete; final acceptance reconciliation verified; Phase 9 next but not started
+**Current phase:** Phase 9A repository qualification package implemented; owner review ready; real clone qualification not started
 
 **Last updated:** 2026-08-28
 
-**Branch:** `v2/phase-8f`
+**Branch:** `v2/phase-9a`
 
-**Starting merged-main HEAD:** `993599dc47cacc76b6372302d338d1850bf2896e`
+**Starting merged-main HEAD:** `57d8487e3153d1edee892832be9187caab854bba`
 
-**Candidate scope:** final Phase 8 packaging, release identity, reproducibility, public documentation and compatibility-baseline enforcement; accepted Phase 1-8E runtime behavior retained
+**Candidate scope:** production-qualification baseline and migration preparation for a future disposable MaddKraft clone; no live deployment, legacy mutation, production balance activation, or Phase 10/web work
+
+## Phase 9A candidate outcome
+
+Phase 9A adds the repository-only qualification package needed to prepare a future disposable MaddKraft clone. The
+package records the exact accepted Phase 8F baseline, clone topology and operator sequence, legacy mapping inventory,
+real-provider and economy isolation matrices, backup/restore and rollback gates, readiness blockers, and the exact
+six-stage qualification profile. Migration execution remains blocked on eight unresolved manifest fields plus the
+broader owner decisions; there is no migration executor, no automatic group creation, and no legacy or production data
+mutation.
+
+The pre-change baseline verification passed 553 tests in 103 suites with zero failures, errors, or skips and zero
+Checkstyle violations. The Phase 9A candidate clean verification passed 557 tests in 104 suites with zero failures,
+errors, or skips and zero Checkstyle violations. The rebuilt candidate distribution is 16,508,810 bytes with SHA-256
+`5C5E116ACF12B6A28F91523AF33004BA91F0E728F802AC38865A3E22AD598B95`; the aggregate SBOM is 190,831 bytes with
+SHA-256 `3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E`.
+
+The only production-code change broadens read-only legacy discovery to the actual nested V1 configuration shape and
+classifies configured external groups and obsolete competition configuration. Tests mechanically hold the exact
+qualification profile, blocked mapping template, frozen V1 detection, and documentation truth boundaries. No server
+was cloned or deployed, no live database was opened or changed, no production values were finalized, and no Phase 10
+or web work was started.
+
+The acceptance ledger remains 63 Satisfied / 12 Partial / 1 Later: A63 remains Partial, A64 remains Later, A76 remains
+Satisfied, and A71-A75 retain their accepted Phase 7 Satisfied evidence. The future Phase 9 clone reruns are deployment
+gates, not a downgrade or replacement of that accepted evidence.
 
 ## Phase 8F candidate outcome
 
