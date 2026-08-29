@@ -7,11 +7,11 @@ currencies, entitlements, seasons, and optional integrations compile into one im
 This repository is a Phase 8 release candidate, not a production-ready or GA release. Production deployment and real
 server migration qualification remain Phase 9.
 
-## Supported Phase 8D candidate
+## Final Phase 8 release candidate
 
 - Java 25.
 - Paper 26.1.2 build 74 stable.
-- LuckPerms 5.5.10 for a rank-projected profile.
+- LuckPerms 5.5.71 for the exactly qualified rank-projected profile.
 - SQLite is the sole MaddPrestige 2.0 production persistence backend.
 - One Paper process and one server directory per database.
 - MySQL/MariaDB and shared-database/multi-process operation are deferred post-2.0.
@@ -40,6 +40,7 @@ minimal external API consumer is under [examples/provider-sdk](examples/provider
 - [Seasons and milestones](docs/SEASONS_MILESTONES.md)
 - [Providers and integrations](docs/PROVIDERS_INTEGRATIONS.md)
 - [Migrations, backups, and recovery](docs/MIGRATIONS_BACKUPS_RECOVERY.md)
+- [Upgrade and rollback](docs/UPGRADE_ROLLBACK_V2.md)
 - [Public API and SDK](docs/API_SDK.md)
 - [Paper events](docs/EVENTS.md)
 
@@ -52,6 +53,6 @@ installation or configuration instructions.
 .\mvnw.cmd --no-transfer-progress clean verify
 ```
 
-The shaded candidate is `maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar`; the aggregate CycloneDX
-SBOM is `target/bom.json`. Do not publish a locally built candidate as production-ready before release hardening and
-Phase 9 qualification.
+The shaded release candidate is `maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar`; the public API
+coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.1`, and the aggregate CycloneDX SBOM is
+`target/bom.json`. This candidate is not GA or production-ready; Phase 9 deployment/migration qualification remains.

@@ -345,8 +345,12 @@ public final class SemanticPresentation {
         register(result, "setup_preview_required", "setup.preview.required");
         register(result, "setup_provider_required", "setup.provider.required");
         register(result, "setup_requirement_baseline", "setup.requirement.baseline");
+        register(result, "setup_requirement_completion_invalid", "setup.requirement.completion.invalid");
         register(result, "setup_requirement_duplicate", "setup.requirement.duplicate");
         register(result, "setup_requirement_metric_unknown", "setup.requirement.metric_unknown");
+        register(result, "setup_requirement_operator_invalid", "setup.requirement.operator.invalid");
+        register(result, "setup_requirement_scope_invalid", "setup.requirement.scope.invalid");
+        register(result, "setup_requirement_target_invalid", "setup.requirement.target.invalid");
         register(result, "setup_session_owner_mismatch", "setup.session.owner_mismatch");
         register(result, "setup_session_unknown", "setup.session.unknown");
         register(result, "setup_stage_duplicate", "setup.stage.duplicate");

@@ -1,7 +1,7 @@
 # MaddPrestige V2 architecture
 
-**Architecture baseline:** Owner-accepted Phase 8D implementation, 2026-08-23
-**Runtime status:** the V2 Paper entry composes the accepted providers, canonical engines, full Phase 6 setup/GUI administration, owner-accepted public service/provider bridge and Stable event candidates, lifecycle events and Placeholder publisher; Phase 8C and Phase 8D are owner-accepted, A76 is deferred to the final frozen Phase 8 release candidate, and Phase 8E has not started
+**Architecture baseline:** Owner-accepted Phase 8F final release candidate, 2026-08-28
+**Runtime status:** the V2 Paper entry composes the owner-accepted Phase 1-8F runtime. Compatibility baseline `2.x-stable-1` is owner-frozen; targeted Owner Review 3 and the real-player owner-operated A76 run pass against exact `2.0.0-rc.1`. Phase 8 is complete, while Phase 9 MaddKraft deployment/migration/production qualification has not started and GA readiness is not claimed.
 
 ## Module graph
 

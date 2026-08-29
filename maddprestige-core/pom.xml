@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion><parent><groupId>net.maddkraft</groupId><artifactId>maddprestige-parent</artifactId><version>2.0.0-SNAPSHOT</version></parent><artifactId>maddprestige-core</artifactId><name>MaddPrestige V2 Core</name>
+    <modelVersion>4.0.0</modelVersion><parent><groupId>net.maddkraft</groupId><artifactId>maddprestige-parent</artifactId><version>2.0.0-rc.1</version></parent><artifactId>maddprestige-core</artifactId><name>MaddPrestige V2 Core</name>
     <dependencies><dependency><groupId>net.maddkraft</groupId><artifactId>maddprestige-api</artifactId></dependency><dependency><groupId>org.snakeyaml</groupId><artifactId>snakeyaml-engine</artifactId></dependency><dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency></dependencies>
 </project>

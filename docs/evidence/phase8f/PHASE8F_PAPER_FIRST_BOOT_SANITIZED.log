@@ -1,0 +1,164 @@
+Downloading mojang_26.1.2.jar
+Applying patches
+Starting org.bukkit.craftbukkit.Main
+[02:45:38 INFO]: [bootstrap] Running Java 25 (OpenJDK 64-Bit Server VM 25.0.3+9-LTS; Eclipse Adoptium Temurin-25.0.3+9) on Windows 11 10.0 (amd64)
+[02:45:38 INFO]: [bootstrap] Loading Paper 26.1.2-74-ver/26.1.2@e4e17fc (2026-07-06T16:51:09Z) for Minecraft 26.1.2
+[02:45:38 WARN]: [oshi.driver.windows.perfmon.PerfmonDisabled] Invalid registry value type detected for PerfOS counters. Should be REG_DWORD. Ignoring: HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\PerfOS\Performance\Disable Performance Counters.
+[02:45:38 INFO]: [PluginInitializerManager] Initializing plugins...
+[02:45:38 INFO]: [PluginInitializerManager] Initialized 3 plugins
+[02:45:38 INFO]: [PluginInitializerManager] Bukkit plugins (3):
+ - LuckPerms (5.5.71), MaddPrestige (2.0.0-rc.1), Phase8D-Harness (1.0.0)
+WARNING: A terminally deprecated method in sun.misc.Unsafe has been called
+WARNING: sun.misc.Unsafe::objectFieldOffset has been called by org.joml.MemUtil$MemUtilUnsafe (file:/<WORKSPACE>/qualification/phase8d-paper-harness/target/phase8f-release-runtime-final/libraries/org/joml/joml/1.10.8/joml-1.10.8.jar)
+WARNING: Please consider reporting this to the maintainers of class org.joml.MemUtil$MemUtilUnsafe
+WARNING: sun.misc.Unsafe::objectFieldOffset will be removed in a future release
+[02:45:40 INFO]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, profilesHost=https://api.mojang.com, name=PROD]
+[02:45:41 INFO]: Found new data pack file/bukkit, loading it automatically
+[02:45:41 INFO]: Found new data pack paper, loading it automatically
+[02:45:41 INFO]: No existing world data, creating new world
+[02:45:41 INFO]: Loaded 1515 recipes
+[02:45:41 INFO]: Loaded 1617 advancements
+[02:45:41 INFO]: [ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry] Initialising converters for DataConverter...
+[02:45:41 INFO]: [ca.spottedleaf.dataconverter.minecraft.datatypes.MCTypeRegistry] Finished initialising converters for DataConverter in 165.8ms
+[02:45:41 INFO]: Starting minecraft server version 26.1.2
+[02:45:41 INFO]: Loading properties
+[02:45:41 INFO]: This server is running Paper version 26.1.2-74-ver/26.1.2@e4e17fc (2026-07-06T16:51:09Z) (Implementing API version 26.1.2.build.74-stable)
+[02:45:41 INFO]: [spark] This server bundles the spark profiler. For more information please visit https://docs.papermc.io/paper/profiling
+[02:45:41 INFO]: Server Ping Player Sample Count: 12
+[02:45:41 INFO]: Using 4 threads for Netty based IO
+[02:45:42 INFO]: [MoonriseCommon] Paper is using 2 worker threads, 1 I/O threads
+[02:45:42 INFO]: Default game type: SURVIVAL
+[02:45:42 INFO]: Generating keypair
+[02:45:42 INFO]: Starting Minecraft server on *:0
+[02:45:42 INFO]: Paper: Using Java compression from Velocity.
+[02:45:42 INFO]: Paper: Using Java cipher from Velocity.
+[02:45:42 INFO]: [LuckPerms] Loading server plugin LuckPerms v5.5.71
+[02:45:43 INFO]: [LuckPerms] Loading configuration...
+[02:45:43 INFO]: [MaddPrestige] Loading server plugin MaddPrestige v2.0.0-rc.1
+[02:45:43 INFO]: [Phase8D-Harness] Loading server plugin Phase8D-Harness v1.0.0
+[02:45:43 INFO]: [LuckPerms] Enabling LuckPerms v5.5.71
+[02:45:43 INFO]: [96m       [36m __    [0m
+[02:45:43 INFO]: [96m  |    [36m|__)   [32mLuckPerms[0m [96mv5.5.71[0m
+[02:45:43 INFO]: [96m  |___ [36m|      [90mRunning on Bukkit - Paper[0m
+[02:45:43 INFO]:
+[02:45:43 INFO]: [LuckPerms] Loading storage provider... [H2]
+[02:45:43 INFO]: [LuckPerms] Loading internal permission managers...
+[02:45:43 INFO]: [LuckPerms] Performing initial data load...
+[02:45:43 INFO]: [LuckPerms] Successfully enabled. (took 363ms)
+[02:45:43 WARN]: **** SERVER IS RUNNING IN OFFLINE/INSECURE MODE!
+[02:45:43 WARN]: The server will make no attempt to authenticate usernames. Beware.
+[02:45:43 WARN]: While this makes the game possible to play without internet access, it also opens up the ability for hackers to connect with any username they choose.
+[02:45:43 WARN]: To change this, set "online-mode" to "true" in the server.properties file.
+[02:45:43 INFO]: Preparing level "phase8b-world"
+[02:45:44 INFO]: Selecting spawn point for level 'minecraft:overworld'...
+[02:45:47 INFO]: Selecting spawn point for level 'minecraft:the_nether'...
+[02:45:47 INFO]: Selecting spawn point for level 'minecraft:the_end'...
+[02:45:47 INFO]: Loading 0 persistent chunks for level 'minecraft:overworld'...
+[02:45:47 INFO]: Preparing spawn area: 100%
+[02:45:47 INFO]: Prepared spawn area in 3350 ms
+[02:45:47 INFO]: Loading 0 persistent chunks for level 'minecraft:the_nether'...
+[02:45:47 INFO]: Preparing spawn area: 100%
+[02:45:47 INFO]: Prepared spawn area in 464 ms
+[02:45:47 INFO]: Loading 0 persistent chunks for level 'minecraft:the_end'...
+[02:45:47 INFO]: Preparing spawn area: 100%
+[02:45:47 INFO]: Prepared spawn area in 141 ms
+[02:45:47 INFO]: Done preparing level "phase8b-world" (3.519s)
+[02:45:47 INFO]: [MaddPrestige] Enabling MaddPrestige v2.0.0-rc.1
+[02:45:47 INFO]: [MaddPrestige] MaddPrestige V2 2.0.0-rc.1 release candidate ready; configuration is safely dormant; startup recovery inspected 0 operation(s).
+[02:45:47 INFO]: [Phase8D-Harness] Enabling Phase8D-Harness v1.0.0
+[02:45:47 INFO]: [spark] Starting background profiler...
+[02:45:47 INFO]: [spark] The async-profiler engine is not supported for your os/arch (windows11/amd64), so the built-in Java engine will be used instead.
+[02:45:47 INFO]: Saving chunks for level 'ServerLevel[phase8b-world]'/minecraft:overworld
+[02:45:47 INFO]: Saving chunks for level 'ServerLevel[phase8b-world]'/minecraft:the_nether
+[02:45:47 INFO]: Saving chunks for level 'ServerLevel[phase8b-world]'/minecraft:the_end
+[02:45:47 INFO]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[02:45:47 INFO]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[02:45:47 INFO]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[02:45:47 INFO]: ThreadedAnvilChunkStorage: All dimensions are saved
+[02:45:47 INFO]: Running delayed init tasks
+[02:45:47 INFO]: Done (9.884s)! For help, type "help"
+[02:45:47 INFO]: *************************************************************************************
+[02:45:47 INFO]: This is the first time you're starting this server.
+[02:45:47 INFO]: It's recommended you read our 'Getting Started' documentation for guidance.
+[02:45:47 INFO]: View this and more helpful information here: https://docs.papermc.io/paper/next-steps
+[02:45:47 INFO]: *************************************************************************************
+[02:45:48 WARN]: *************************************************************************************
+[02:45:48 WARN]: You are running the latest build for your Minecraft version (26.1.2)
+[02:45:48 WARN]: However, you are 2 release(s) behind the latest stable release (26.2)!
+[02:45:48 WARN]: It is recommended that you update as soon as possible
+[02:45:48 WARN]: https://papermc.io/downloads/paper
+[02:45:48 WARN]: *************************************************************************************
+[02:45:49 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 1 fresh SQLite/server directory published the exact production services in dormant mode
+[02:45:50 INFO]: [37m[[1m[37m[96mL[36mP[0m[37m][0m [37mAnother command is being executed, waiting for it to finish...[0m
+[02:45:50 INFO]: [37m[[1m[37m[96mL[36mP[0m[37m][0m [37mAnother command is being executed, waiting for it to finish...[0m
+[02:45:50 INFO]: [37m[[1m[37m[96mL[36mP[0m[37m][0m [92m[96mmember[92m was successfully created.[0m
+[02:45:50 INFO]: [37m[[1m[37m[96mL[36mP[0m[37m][0m [92m[96madventurer[92m was successfully created.[0m
+[02:45:50 INFO]: [37m[[1m[37m[96mL[36mP[0m[37m][0m [92m[96mveteran[92m was successfully created.[0m
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 2 administrator-created Member/Adventurer/Veteran groups exist; MaddPrestige created none
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 3 public Quick Start discovery succeeded
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 4 public setup session started
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 5 existing LuckPerms provider selected
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 6 Member baseline stage added
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 7 Adventurer stage added
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 8 Veteran stage added
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 9 Member baseline selected
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 10 60-second current-Prestige requirement attached to Adventurer
+[02:45:50 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 11 180-second current-Prestige requirement attached to Veteran
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 12 Veteran-only Prestige reset to Member configured with no cost/reward
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 13 canonical setup preview validated the exact three-stage profile
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 14 activation risk was explicitly acknowledged using the server token
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 15 exact acknowledged profile applied as r_d2e434cd97844ab4b44a5954edc0186e
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 16 Doctor reported the active profile healthy
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 17 fresh stable playerProgress established durable state and real LuckPerms Member projection
+[02:45:51 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 18 repeated lifecycle establishment was idempotent with no duplicate projection mutation
+[02:45:52 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 19 durable Member insufficient Adventurer and Why were actionable with zero effects
+[02:45:52 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 20 brand-new Why ingress established real Member before explaining progress
+[02:45:52 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 21 brand-new preview ingress established real Member before returning its result
+[02:45:53 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 22 brand-new progression operation ingress established real Member before blocking
+[02:45:53 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 23 offline rank path completed Member to Adventurer exactly once with one LP managed group
+[02:45:53 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 24 below 180 seconds Veteran request failed with exact Why evidence and zero effects
+[02:45:54 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 25 Adventurer advanced to Veteran exactly once with coherent LP and durable history
+[02:45:54 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 26 Prestige incremented once, reset Member/LP/baseline, preserved Paper statistic/history
+[02:45:54 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 27 facade exposes no caller idempotency token; repeated terminal request produced no duplicate effect
+[02:45:54 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 28 supported offline UUID statistic/rank/projection path completed deterministically without a client
+[02:45:54 INFO]: [Phase8D-Harness] PHASE8D-Q PASS 29 fresh-boot evidence sealed for unchanged restart
+[02:45:54 INFO]: [Phase8D-Harness] PHASE8D-Q FIRST-BOOT COMPLETE revision=r_d2e434cd97844ab4b44a5954edc0186e pass-count=29
+[02:45:55 INFO]: Stopping server
+[02:45:55 INFO]: [Phase8D-Harness] Disabling Phase8D-Harness v1.0.0
+[02:45:55 INFO]: [Phase8D-Harness] PHASE8D-Q shutdown pass-count=29
+[02:45:55 INFO]: [MaddPrestige] Disabling MaddPrestige v2.0.0-rc.1
+[02:45:55 INFO]: [LuckPerms] Disabling LuckPerms v5.5.71
+[02:45:55 INFO]: [LuckPerms] Starting shutdown process...
+[02:45:55 INFO]: [LuckPerms] Closing storage...
+[02:45:55 INFO]: [LuckPerms] Goodbye!
+[02:45:55 INFO]: Saving players
+[02:45:55 INFO]: Saving worlds
+[02:45:55 INFO]: Saving chunks for level 'ServerLevel[phase8b-world]'/minecraft:overworld
+[02:45:55 INFO]: [ChunkHolderManager] Waiting 60s for chunk system to halt for world 'minecraft:overworld'
+[02:45:55 INFO]: [ChunkHolderManager] Halted chunk system for world 'minecraft:overworld'
+[02:45:55 INFO]: [ChunkHolderManager] Saving all chunkholders for world 'minecraft:overworld'
+[02:45:55 INFO]: [ChunkHolderManager] Saved 0 block chunks, 0 entity chunks, 0 poi chunks in world 'minecraft:overworld' in 0.00s
+[02:45:55 INFO]: [ChunkHolderManager] Waiting 60s for chunk I/O to halt for world 'minecraft:overworld'
+[02:45:55 INFO]: [ChunkHolderManager] Halted I/O scheduler for world 'minecraft:overworld'
+[02:45:55 INFO]: Saving chunks for level 'ServerLevel[phase8b-world]'/minecraft:the_nether
+[02:45:55 INFO]: [ChunkHolderManager] Waiting 60s for chunk system to halt for world 'minecraft:the_nether'
+[02:45:55 INFO]: [ChunkHolderManager] Halted chunk system for world 'minecraft:the_nether'
+[02:45:55 INFO]: [ChunkHolderManager] Saving all chunkholders for world 'minecraft:the_nether'
+[02:45:55 INFO]: [ChunkHolderManager] Saved 0 block chunks, 0 entity chunks, 0 poi chunks in world 'minecraft:the_nether' in 0.00s
+[02:45:55 INFO]: [ChunkHolderManager] Waiting 60s for chunk I/O to halt for world 'minecraft:the_nether'
+[02:45:55 INFO]: [ChunkHolderManager] Halted I/O scheduler for world 'minecraft:the_nether'
+[02:45:55 INFO]: Saving chunks for level 'ServerLevel[phase8b-world]'/minecraft:the_end
+[02:45:56 INFO]: [ChunkHolderManager] Waiting 60s for chunk system to halt for world 'minecraft:the_end'
+[02:45:56 INFO]: [ChunkHolderManager] Halted chunk system for world 'minecraft:the_end'
+[02:45:56 INFO]: [ChunkHolderManager] Saving all chunkholders for world 'minecraft:the_end'
+[02:45:56 INFO]: [ChunkHolderManager] Saved 0 block chunks, 0 entity chunks, 0 poi chunks in world 'minecraft:the_end' in 0.00s
+[02:45:56 INFO]: [ChunkHolderManager] Waiting 60s for chunk I/O to halt for world 'minecraft:the_end'
+[02:45:56 INFO]: [ChunkHolderManager] Halted I/O scheduler for world 'minecraft:the_end'
+[02:45:56 INFO]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[02:45:56 INFO]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[02:45:56 INFO]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[02:45:56 INFO]: ThreadedAnvilChunkStorage: All dimensions are saved
+[02:45:56 INFO]: Waiting for all RegionFile I/O tasks to complete...
+[02:45:56 INFO]: All RegionFile I/O tasks to complete
+[02:45:56 INFO]: [MoonriseCommon] Awaiting termination of worker pool for up to 60s...
+[02:45:56 INFO]: [MoonriseCommon] Awaiting termination of I/O pool for up to 60s...

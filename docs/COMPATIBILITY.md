@@ -1,5 +1,7 @@
 # Plugin compatibility
 
+> **Historical V1 document.** This is retained as accepted 1.x evidence, not current V2 installation, API, compatibility, or operator guidance. Start with [the V2 README](../README.md).
+
 MaddPrestige treats every third-party plugin as optional. All integrations are loaded after their provider, discovered at runtime, and isolated from provider implementation classes. A missing, disabled, or changed optional plugin therefore cannot create a hard class-loading dependency in MaddPrestige.
 
 Use `/mp gui` → **Compatibility dashboard** to see the live installed/enabled/version state of every entry below. Operators can disable a direct adapter under `integrations.compatibility` and restart. GUI appearance, slots, permissions, and staff edit increments are under `gui` in `config.yml`.

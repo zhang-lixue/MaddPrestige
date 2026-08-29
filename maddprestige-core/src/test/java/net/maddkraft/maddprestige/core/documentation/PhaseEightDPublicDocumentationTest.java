@@ -59,7 +59,8 @@ class PhaseEightDPublicDocumentationTest {
             "docs/COMMANDS_PERMISSIONS.md", "docs/STAGES_RANKS.md", "docs/REQUIREMENTS_SCOPES.md",
             "docs/COSTS_REWARDS.md", "docs/PRESTIGE_LIFECYCLE.md", "docs/CURRENCIES_ENTITLEMENTS.md",
             "docs/SEASONS_MILESTONES.md", "docs/PROVIDERS_INTEGRATIONS.md",
-            "docs/MIGRATIONS_BACKUPS_RECOVERY.md", "docs/DIAGNOSTICS_TROUBLESHOOTING.md",
+            "docs/MIGRATIONS_BACKUPS_RECOVERY.md", "docs/UPGRADE_ROLLBACK_V2.md",
+            "docs/DIAGNOSTICS_TROUBLESHOOTING.md",
             "docs/API_SDK.md", "docs/EVENTS.md", "examples/member-adventurer-veteran/README.md",
             "examples/provider-sdk/README.md");
     private static final Set<String> COMMAND_ROOTS = Set.of("help", "status", "rankup", "prestige", "confirm",
@@ -162,6 +163,73 @@ class PhaseEightDPublicDocumentationTest {
         assertEquals("member", active.priorPhases().stages().configuration().baselineStage().orElseThrow().value());
         assertTrue(active.phaseFour().configuration().prestige().enabled());
         assertEquals("member", active.phaseFour().configuration().prestige().resetStage().value());
+    }
+
+    @Test
+    @DisplayName("[8F] Release identity, support boundaries, and config/example schemas agree")
+    void finalReleaseDocumentationAndSchemaParityAreExact() throws IOException {
+        Path root = repositoryRoot();
+        for (String document : PUBLIC_DOCUMENTS) {
+            String text = Files.readString(root.resolve(document), StandardCharsets.UTF_8);
+            assertFalse(text.contains("2.0.0-SNAPSHOT"), document);
+            assertFalse(text.contains("Phase 8D candidate"), document);
+        }
+
+        List<String> currentPoms = List.of(
+                "pom.xml", "maddprestige-api/pom.xml", "maddprestige-core/pom.xml",
+                "maddprestige-persistence/pom.xml", "maddprestige-platform-paper/pom.xml",
+                "maddprestige-integrations/pom.xml", "maddprestige-testkit/pom.xml",
+                "maddprestige-distribution/pom.xml", "examples/provider-sdk/pom.xml",
+                "qualification/phase8b-paper-harness/pom.xml",
+                "qualification/phase8c-paper-harness/pom.xml",
+                "qualification/phase8d-paper-harness/pom.xml",
+                "qualification/phase8e-alpha-provider/pom.xml",
+                "qualification/phase8e-beta-provider/pom.xml",
+                "qualification/phase8e-paper-harness/pom.xml");
+        for (String pom : currentPoms) {
+            String text = Files.readString(root.resolve(pom), StandardCharsets.UTF_8);
+            assertFalse(text.contains("2.0.0-SNAPSHOT"), pom);
+            assertTrue(text.contains("2.0.0-rc.1"), pom);
+        }
+
+        String readme = Files.readString(root.resolve("README.md"), StandardCharsets.UTF_8);
+        String installation = Files.readString(root.resolve("docs/INSTALLATION_V2.md"), StandardCharsets.UTF_8);
+        String upgrade = Files.readString(root.resolve("docs/UPGRADE_ROLLBACK_V2.md"), StandardCharsets.UTF_8);
+        String api = Files.readString(root.resolve("docs/API_SDK.md"), StandardCharsets.UTF_8);
+        assertTrue(readme.contains("MaddPrestige-2.0.0-rc.1.jar"));
+        assertTrue(readme.contains("not GA or production-ready"));
+        assertTrue(installation.contains("Paper 26.1.2 build 74"));
+        assertTrue(installation.contains("LuckPerms 5.5.71"));
+        assertTrue(upgrade.contains("forward-only"));
+        assertTrue(upgrade.contains("Phase 9"));
+        assertTrue(api.contains("2.x-stable-1"));
+        assertTrue(api.contains("net.maddkraft:maddprestige-api:2.0.0-rc.1"));
+
+        String quickStart = Files.readString(root.resolve("docs/QUICK_START.md"), StandardCharsets.UTF_8);
+        assertTrue(quickStart.contains("/maddprestige setup playtime adventurer PT1M"));
+        assertTrue(quickStart.contains("/maddprestige setup playtime veteran PT3M"));
+        assertTrue(quickStart.contains("/maddprestige setup prestige enabled veteran member"));
+        assertTrue(quickStart.contains("/maddprestige setup preview\n/maddprestige setup acknowledge"));
+        assertTrue(quickStart.contains("paper_statistics play_one_minute GREATER_OR_EQUAL PT1M "
+                + "SINCE_PRESTIGE_START LIVE"));
+        String scopes = Files.readString(root.resolve("docs/REQUIREMENTS_SCOPES.md"), StandardCharsets.UTF_8);
+        assertTrue(scopes.contains("canonicalize the target as `DURATION` when entered"));
+
+        List<Path> schemaDocuments = List.of(
+                root.resolve("examples/member-adventurer-veteran/progression.yml"),
+                root.resolve("examples/member-adventurer-veteran/requirements.yml"),
+                root.resolve("examples/member-adventurer-veteran/rewards.yml"),
+                root.resolve("examples/member-adventurer-veteran/lifecycle.yml"),
+                root.resolve("examples/member-adventurer-veteran/integrations.yml"));
+        assertEquals(List.of("3", "3", "3", "4", "7"), schemaDocuments.stream().map(document -> {
+            try {
+                return Files.readAllLines(document, StandardCharsets.UTF_8).stream()
+                        .filter(line -> line.startsWith("schema-version:"))
+                        .findFirst().orElseThrow().substring("schema-version:".length()).strip();
+            } catch (IOException failure) {
+                throw new IllegalStateException(failure);
+            }
+        }).toList());
     }
 
     private static Path repositoryRoot() {

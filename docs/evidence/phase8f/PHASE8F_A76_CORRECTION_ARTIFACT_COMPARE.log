@@ -1,0 +1,8 @@
+Phase 8F A76 setup correction final-tree reproducible artifact comparison.
+Consecutive clean verifies: 2; each 549 tests / 102 suites / 0 failures / 0 errors / 0 skips; Checkstyle 0.
+build1=MaddPrestige-2.0.0-rc.1.jar bytes=16504823 sha256=6C4CD6B9349CF7AB7EBD0E0330920C2DC34A024E27C81577CF6C93F05C8277E2
+build2=MaddPrestige-2.0.0-rc.1.jar bytes=16504823 sha256=6C4CD6B9349CF7AB7EBD0E0330920C2DC34A024E27C81577CF6C93F05C8277E2
+byte_identical=True
+build1=bom.json bytes=190831 sha256=3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E
+build2=bom.json bytes=190831 sha256=3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E
+byte_identical=True

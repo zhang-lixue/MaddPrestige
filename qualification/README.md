@@ -9,7 +9,7 @@
 - Paper 26.1.2 build 74
 - LuckPerms 5.5.58
 - PlaceholderAPI 2.12.2
-- first-party `MaddPrestige-2.0.0-SNAPSHOT.jar`
+- first-party `MaddPrestige-2.0.0-rc.1.jar`
 - first-party `Phase8B-Paper-Harness.jar`
 
 Paper, LuckPerms and PlaceholderAPI artifacts are supplied externally to an ignored disposable `target` directory.
@@ -21,7 +21,7 @@ They are never copied into source control or the owner-review bundle.
    installs the public API through the normal local Maven repository used by the isolated harness build.
 2. Run `mvnw.cmd --no-transfer-progress -f qualification/phase8b-paper-harness/pom.xml clean package`.
 3. Create a fresh short disposable directory under `target`, add `paper.jar`, the two external dependency JARs,
-   `maddprestige-distribution/target/MaddPrestige-2.0.0-SNAPSHOT.jar` and
+   `maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar` and
    `qualification/phase8b-paper-harness/target/Phase8B-Paper-Harness.jar`.
 4. Copy `qualification/eula.txt` and `qualification/paper-server.properties` as `eula.txt` and
    `server.properties`.

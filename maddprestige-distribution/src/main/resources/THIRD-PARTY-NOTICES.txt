@@ -1,0 +1,17 @@
+MaddPrestige 2.0.0-rc.1 third-party notices
+
+The MaddPrestige distribution contains the following runtime libraries:
+
+- Xerial SQLite JDBC 3.50.3.0 (org.xerial:sqlite-jdbc), Apache License 2.0.
+  Its embedded license texts are retained at
+  META-INF/maven/org.xerial/sqlite-jdbc/LICENSE and LICENSE.zentus.
+- SnakeYAML Engine 3.0.1 (org.snakeyaml:snakeyaml-engine), Apache License 2.0.
+
+The complete Apache License 2.0 text distributed at
+META-INF/maven/org.xerial/sqlite-jdbc/LICENSE applies to both Apache-licensed
+libraries listed above. This notice does not change the license of MaddPrestige
+itself, which remains described by its project metadata as all rights reserved.
+
+Optional Paper plugins and their APIs are not bundled in the MaddPrestige JAR.
+Their names in plugin.yml and documentation describe optional runtime discovery,
+not redistribution or ownership.

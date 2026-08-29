@@ -1,8 +1,12 @@
 # MaddPrestige V2 API and provider SDK
 
-The Phase 8 owner accepts the current Bukkit-free Stable SDK candidate and six-type Paper Stable event candidate. They
-are approved candidates, not yet the final frozen compatibility baseline; that freeze remains Phase 8 release-hardening
-work. Use only documented Stable types and compile against the exact candidate API JAR.
+MaddPrestige `2.0.0-rc.1` records owner-frozen compatibility baseline `2.x-stable-1`: 46 Bukkit-free Stable SDK types
+and six Stable Paper event types. This is the accepted final Phase 8 freeze. Use only documented Stable types and
+compile against the exact candidate API JAR. Stable changes are
+blocked mechanically and require backwards-compatible extension review or a later major-version baseline.
+
+The Maven coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.1`. Experimental, Internal/Should Not Be Public,
+and Legacy/Pending Removal types are excluded from the 2.x compatibility guarantee.
 
 ## Reading and mutating progression
 
@@ -27,7 +31,8 @@ providing plugin, and MaddPrestige supplies the generation-specific `ProviderReg
 
 The complete compilable example is [`examples/provider-sdk`](../examples/provider-sdk). It imports only public API and
 Paper types, exposes one generic count metric, reports unavailable on shutdown/deadline/cancellation, and unregisters
-cleanly. Its existence does not complete the broader Phase 8E provider/dependency qualification matrix.
+cleanly. Phase 8E separately qualified independent Alpha/Beta providers and dependency/fault isolation; the example remains
+minimal documentation rather than that qualification harness.
 
 No separate external nullness-annotation dependency is required for this candidate. Javadocs, explicit `Optional`,
 immutable return contracts, and runtime argument validation are authoritative. Paper-specific JetBrains annotations may

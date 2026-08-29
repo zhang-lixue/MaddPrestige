@@ -1,8 +1,9 @@
 # Quick Start: Member → Adventurer → Veteran
 
-This is the canonical command-driven setup flow. It creates one active revision without editing YAML or SQLite. Allow
+This is the canonical guided command setup flow. It creates one active revision without editing YAML or SQLite. Allow
 about 10–15 minutes of active administrator time; downloads, server startup, and the three-minute play demonstration
-are excluded. Replace `<session>` and `<token>` with the UUIDs printed by the server.
+are excluded. The wizard remembers the current setup session for the administrator who started it. Only the
+short-lived acknowledgement `<token>` must be copied later.
 
 ## 1. Create the external ranks
 
@@ -26,27 +27,39 @@ Run as a Paper operator or subject with `maddprestige.admin.setup`:
 /maddprestige setup start
 ```
 
-Record the printed setup session UUID as `<session>`, then run these commands in order:
+The printed UUID is an audit/resume identifier; normal commands use your current session automatically. Run:
 
 ```text
-/maddprestige setup provider <session> luckperms
-/maddprestige setup stage <session> member Member Member
-/maddprestige setup stage <session> adventurer Adventurer Adventurer
-/maddprestige setup stage <session> veteran Veteran Veteran
-/maddprestige setup baseline <session> member
-/maddprestige setup requirement <session> adventurer playtime_60_seconds paper_statistics play_one_minute GREATER_OR_EQUAL PT1M SINCE_PRESTIGE_START LIVE
-/maddprestige setup requirement <session> veteran playtime_180_seconds paper_statistics play_one_minute GREATER_OR_EQUAL PT3M SINCE_PRESTIGE_START LIVE
-/maddprestige setup prestige <session> enabled veteran member
+/maddprestige setup provider luckperms
+/maddprestige setup stage member Member Member
+/maddprestige setup stage adventurer Adventurer Adventurer
+/maddprestige setup stage veteran Veteran Veteran
+/maddprestige setup baseline member
+/maddprestige setup playtime adventurer PT1M
+/maddprestige setup playtime veteran PT3M
+/maddprestige setup prestige enabled veteran member
 ```
 
-The first target is one minute and the second is three minutes of Paper's lifetime `PLAY_ONE_MINUTE` statistic measured
-against the current-Prestige baseline. Costs and rewards are left empty.
+The playtime commands generate immutable requirement IDs and use the canonical
+`paper_statistics/play_one_minute`, `GREATER_OR_EQUAL`, `SINCE_PRESTIGE_START`, and `LIVE` settings. The first target
+is one minute and the second is three minutes of Paper's lifetime `PLAY_ONE_MINUTE` statistic measured against the
+current-Prestige baseline. Costs and rewards are left empty.
+
+Power users and automation may still use the explicit canonical form. The exact Adventurer equivalent is:
+
+```text
+/maddprestige setup requirement <session> adventurer playtime_60_seconds paper_statistics play_one_minute GREATER_OR_EQUAL PT1M SINCE_PRESTIGE_START LIVE
+```
+
+The Veteran form substitutes `veteran`, `playtime_180_seconds`, and `PT3M`. The target is resolved as `DURATION` and
+canonicalized when the command is entered; preview independently recompiles the complete candidate and remains
+fail-closed.
 
 ## 3. Preview, acknowledge, and apply
 
 ```text
-/maddprestige setup preview <session>
-/maddprestige setup acknowledge <session>
+/maddprestige setup preview
+/maddprestige setup acknowledge
 ```
 
 Preview must say `Validation: VALID`. Read every diff, warning, consequence, and remediation. Record the short-lived

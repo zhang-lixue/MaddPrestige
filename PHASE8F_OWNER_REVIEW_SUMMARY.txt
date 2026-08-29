@@ -1,0 +1,102 @@
+MaddPrestige V2 Phase 8F Final Acceptance Reconciliation Summary
+Date: 2026-08-28
+
+STATE
+- Starting merged Phase 8E baseline / current HEAD: 993599dc47cacc76b6372302d338d1850bf2896e
+- Branch: v2/phase-8f
+- Candidate: unstaged, uncommitted, unpushed
+- Independent Owner Review 2: PASS; compatibility baseline 2.x-stable-1 is owner-frozen
+- Frozen Stable SDK/Paper-event surfaces: unchanged
+- First owner-operated A76 run: BLOCKED at public setup preview
+- Owner Review 1 correction candidate: REJECTED by OR8F-A76-01 diagnostic identity collision
+- Owner Review 2 correction candidate: accepted for a new owner-operated run
+- Second owner-operated A76 run: BLOCKED by OR8F-A76-02 dormant Placeholder warning spam
+- Targeted Owner Review 3: PASS; exact correction candidate accepted
+- Final real-player owner-operated A76 run: PASS
+- OR8F-A76-01 / OR8F-A76-02: CLOSED
+- A76: Satisfied
+- Phase 8F exit: PASS
+- Phase 8 work-phase exit: PASS; GA/production readiness remains pending Phase 9
+- Phase 9: not started
+
+ROOT CAUSE
+- paper_statistics/play_one_minute correctly advertises DURATION.
+- Exact ASCII PT1M and PT3M parse successfully and remain the canonical public contract.
+- Setup accepted and stored raw untyped target text, reported command success, and deferred provider type resolution,
+  parsing and canonicalization until preview/compiler validation.
+- A rejected requirement leaf then correctly produced downstream unknown-reference/empty-group findings.
+- The evidence cannot reconstruct the owner run's stored token byte-for-byte; the corrected boundary eliminates that
+  entire delayed-validation class and regression-covers the exact public literals.
+
+CORRECTION
+- Resolve the active metric descriptor and validate/canonicalize target, operator, scope and completion at command entry.
+- Retain independent fail-closed full-draft preview compilation.
+- Retain draft -> preview -> server acknowledgement -> confirm publication authority.
+- Keep explicit session/full canonical commands for resumption, automation and power users.
+- Add owner-bound current session, generated immutable playtime IDs and setup playtime <stage> <duration>.
+- Add contextual provider/metric/operator/duration/scope/completion and Prestige tab completion.
+- Make /maddprestige help an overview; add exact setup and duration next-step help.
+- Completion remains immutable/in-memory and performs no provider, database or filesystem work per keystroke.
+- Invalid target/operator/scope/completion failures own four exact semantic identities and catalog messages.
+- setup.draft.invalid remains exclusive to active/rollback ancestry and retains its established public rendering.
+- Placeholder refresh now distinguishes intentional dormant initialization from an active-state failure.
+- While no canonical configuration is active, scheduled online-player refresh removes any stale snapshot and performs
+  no player-state repository materialization and no WARN/ERROR logging.
+- The same live player initializes normally on the first refresh after canonical activation, without a restart or a
+  persistent dormant marker.
+- Active genuine initialization failures retain the existing actionable warning with the real failure detail.
+
+VERIFICATION
+- Focused: 89 tests / 6 suites / 0 failures / 0 errors / 0 skips
+- Two consecutive authoritative clean verifies: 553 tests / 103 suites / 0 failures / 0 errors / 0 skips each
+- Distribution/SBOM byte comparison across the two clean verifies: PASS
+- Checkstyle: 0 violations
+- Changed Phase 8D Paper harness isolated build: PASS
+- Exact corrected-JAR Paper: 30/30 fresh + 3/3 identical-directory restart
+- Dormant-online proof: six one-second scheduled/listener intervals, zero Placeholder warnings and zero stage/Prestige rows
+- Dormant -> active proof: the same player initialized and received real Member projection on live activation
+- Active genuine-failure proof: focused publisher regression preserved the exact actionable failure warning
+- Stable API and Paper-event compatibility/leakage gates: PASS
+- Package-content integration audit: PASS
+- Final acceptance reconciliation clean verify: 553 tests / 103 suites / 0 failures / 0 errors / 0 skips; Checkstyle 0
+- Accepted distribution/SBOM identities after reconciliation: unchanged
+
+REPRODUCIBLE ARTIFACTS
+- Distribution: 16,507,914 bytes
+- Distribution SHA-256: 0D961DB73D6C44CF18986CA42B7950914CEA5A1598BA7D41D0E919BFB76C6513
+- Aggregate SBOM: 190,831 bytes
+- Aggregate SBOM SHA-256: 3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E
+- Distribution and SBOM are byte-identical across the compared clean builds.
+- Historical blocker distribution: 16,497,928 bytes /
+  112A0534F6166D8842F470A6C898A452284362761BF5350578453AE198961111
+- Owner Review 2 blocker distribution: 16,505,971 bytes /
+  C5646F927789CFF95C8F8F8663ADB264C1498D8D8EA927F4C027369085A656D3
+
+SCOPE
+- Complete A76 correction production Java paths: 9 internal setup/composition/presentation/Placeholder classes
+- OR8F-A76-02 production Java paths: 2 (`ProductionRuntime`, `PlaceholderSnapshotPublisher`)
+- Existing accepted Phase 8F production Java path: 1 release-banner class
+- Protected V1 Java changes: 0
+- Stable SDK source changes: 0
+- Stable Paper-event source changes: 0
+- External-SQL production paths: 0
+- Phase 9 paths: 0
+- Sonar suppression/exclusion additions: 0
+- Ledger: 63 Satisfied / 12 Partial / 1 Later
+- A63: Partial; A64: Later; blocked criteria: 0
+
+OWNER REVIEW MATERIAL
+- Exact review manifest: docs/V2_PHASE8F_FILE_MANIFEST.md
+- Accepted correction review paths: 128
+- Accepted correction review ZIP: target/MaddPrestige_Phase8F_A76_Setup_Correction_Owner_Review_3.zip
+- Accepted ZIP: 16,900,382 bytes / EADC91F70F4691826F723B3F186CD5634FDCBA5380CA9C492432F3F1F6CABB72
+- Final reconciliation manifest: 130 paths, including the owner acceptance record and reconciliation verify log
+- ZIP carries the accepted pre-reconciliation candidate; final reconciliation changes documentation/evidence only.
+- ZIP excludes Paper, LuckPerms, worlds, databases, caches, secrets and unsanitized runtime state.
+
+NO PUBLICATION ACTION
+- staged/commit/push/PR/merge: no
+- force-push/branch-protection bypass: no
+- Phase 9: not started
+- A76 final result: PASS against the exact Owner Review 3 artifact
+- Phase 9/output-polish/GUI: not started

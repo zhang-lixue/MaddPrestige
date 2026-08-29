@@ -111,8 +111,10 @@ class PhaseSixConfigurationAdministrationTest {
     @Test
     @DisplayName("[A68][OR8D-09] Real setup and config failures retain exact public facts")
     void realAdministrationFailuresRetainExactSemanticFacts() {
-        Fixture fixture = new Fixture();
-        SetupWizardService wizard = new SetupWizardService(fixture.service, new ProviderRegistry());
+        ProviderRegistry setupProviders = new ProviderRegistry();
+        setupProviders.activate(setupProviders.register("test", new SetupProvider()));
+        Fixture fixture = new Fixture(setupProviders);
+        SetupWizardService wizard = new SetupWizardService(fixture.service, setupProviders);
         UUID session = wizard.start(OWNER);
         SetupStage member = new SetupStage(new StageId("member"), "Member", Optional.empty());
         wizard.addStage(OWNER, session, member);
@@ -137,7 +139,7 @@ class PhaseSixConfigurationAdministrationTest {
         wizard.addStage(OWNER, requirements,
                 new SetupStage(new StageId("elite"), "Elite", Optional.empty()));
         SetupRequirement repeated = new SetupRequirement(new RequirementId("playtime"),
-                new ProviderId("statistics"), new MetricId("play_time"), "greater-or-equal", "10",
+                new ProviderId("setup_metric"), new MetricId("play_time"), "greater-or-equal", "10",
                 "absolute", "live");
         wizard.configureRequirementForStage(OWNER, requirements, new StageId("veteran"), repeated);
         AdministrationException duplicateRequirement = assertThrows(AdministrationException.class,
@@ -148,9 +150,10 @@ class PhaseSixConfigurationAdministrationTest {
                 new SetupStage(new StageId("member"), "Member", Optional.empty()));
         wizard.addStage(OWNER, missingMetricSession,
                 new SetupStage(new StageId("veteran"), "Veteran", Optional.empty()));
-        wizard.configureRequirement(OWNER, missingMetricSession, repeated);
         AdministrationException missingMetric = assertThrows(AdministrationException.class,
-                () -> wizard.preview(OWNER, missingMetricSession));
+                () -> wizard.configureRequirement(OWNER, missingMetricSession, new SetupRequirement(
+                        new RequirementId("missing"), new ProviderId("statistics"), new MetricId("play_time"),
+                        "greater-or-equal", "10", "absolute", "live")));
 
         UUID missingGroupSession = wizard.start(OWNER);
         wizard.selectRankProvider(OWNER, missingGroupSession, Optional.of(new ProviderId("luckperms")));
@@ -303,6 +306,54 @@ class PhaseSixConfigurationAdministrationTest {
             assertEquals(Files.readString(root.resolve("examples/member-adventurer-veteran").resolve(document),
                     StandardCharsets.UTF_8), first.get(document), document);
         }
+    }
+
+    @Test
+    @DisplayName("[A02][A70][A76] Guided playtime setup types PT1M/PT3M at entry and retains preview authority")
+    void guidedPlaytimeSetupCanonicalizesDurationTargetsBeforePreview() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new CanonicalRankAdapter()));
+        providers.activate(providers.register("test", new CanonicalMetricProvider()));
+        Fixture fixture = new Fixture(providers);
+        SetupWizardService wizard = new SetupWizardService(fixture.service, providers);
+        UUID session = wizard.start(OWNER);
+        assertEquals(session, wizard.currentSession(OWNER));
+
+        wizard.selectRankProvider(OWNER, session, Optional.of(new ProviderId("luckperms")));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("member"), "Member", Optional.of("Member")));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("adventurer"), "Adventurer",
+                Optional.of("Adventurer")));
+        wizard.addStage(OWNER, session, new SetupStage(new StageId("veteran"), "Veteran", Optional.of("Veteran")));
+        wizard.selectBaseline(OWNER, session, new StageId("member"));
+        wizard.configurePlaytimeRequirement(OWNER, session, new StageId("adventurer"), "PT1M");
+        AdministrationException invalid = assertThrows(AdministrationException.class, () ->
+                wizard.configurePlaytimeRequirement(OWNER, session, new StageId("veteran"), "one-minute"));
+        assertEquals("setup.requirement.target.invalid", invalid.code());
+        assertEquals("DURATION", invalid.facts().get("type"));
+        assertEquals("one-minute", invalid.facts().get("target"));
+        wizard.configurePlaytimeRequirement(OWNER, session, new StageId("veteran"), "PT3M");
+        wizard.configurePrestige(OWNER, session, new SetupPrestige(true, Optional.of(new StageId("veteran")),
+                Optional.of(new StageId("member"))));
+
+        Map<String, String> generated = wizard.generatedDocuments(OWNER, session);
+        assertTrue(generated.get("requirements.yml").contains("adventurer_playtime:"));
+        assertTrue(generated.get("requirements.yml").contains("veteran_playtime:"));
+        assertEquals(2, occurrences(generated.get("requirements.yml"), "value-type: DURATION"));
+        assertTrue(generated.get("requirements.yml").contains("target: PT1M"));
+        assertTrue(generated.get("requirements.yml").contains("target: PT3M"));
+
+        var preview = wizard.preview(OWNER, session).toCompletableFuture().join();
+        assertFalse(preview.configuration().validation().hasErrors(), preview.configuration().validation().toString());
+        var acknowledgement = wizard.prepareAcknowledgement(OWNER, session);
+        wizard.confirmAcknowledgement(OWNER, acknowledgement.acknowledgementId(), "Guided public profile")
+                .toCompletableFuture().join();
+        assertEquals(generated, fixture.canonical.active().orElseThrow().compiled().documents());
+        assertEquals("setup.session.unknown", assertThrows(AdministrationException.class,
+                () -> wizard.currentSession(OWNER)).code());
+    }
+
+    private static long occurrences(String source, String value) {
+        return source.lines().filter(line -> line.contains(value)).count();
     }
 
     private static Map<String, String> generateCanonicalProfile() {
