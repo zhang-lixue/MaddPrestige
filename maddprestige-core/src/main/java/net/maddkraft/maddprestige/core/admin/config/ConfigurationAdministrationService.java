@@ -136,10 +136,7 @@ public final class ConfigurationAdministrationService {
                 "Use config search before editing.", "path", actualPath));
         subject.require(node.editPermission());
         ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(actualPath).orElseThrow(() ->
-                new AdministrationException("config.path.not_editable",
-                        "This schema path is not a lossless scalar edit surface: " + actualPath,
-                        "Edit the owning YAML draft or use a structured wizard operation.",
-                        "path", actualPath));
+                notEditable(actualPath));
         String source = state.draft().documents().get(resolved.documentName());
         if (source == null) {
             throw new AdministrationException("config.document.missing",
@@ -204,12 +201,18 @@ public final class ConfigurationAdministrationService {
                         "Use a schema-owned list or map path.", "path", actualPath));
         LosslessYamlDocument document = document(state, resolved);
         try {
+            if (node.type() != SchemaValueType.LIST && node.type() != SchemaValueType.MAP) {
+                throw new AdministrationException("config.path.not_listable",
+                        "Configuration path is not a list or map: " + actualPath,
+                        "Use config get/explain for scalar settings.", "path", actualPath);
+            }
+            if (!document.contains(resolved.yamlPath())) {
+                return List.of();
+            }
             return switch (node.type()) {
                 case LIST -> document.sequenceScalars(resolved.yamlPath());
                 case MAP -> document.mappingKeys(resolved.yamlPath());
-                default -> throw new AdministrationException("config.path.not_listable",
-                        "Configuration path is not a list or map: " + actualPath,
-                        "Use config get/explain for scalar settings.", "path", actualPath);
+                default -> throw new IllegalStateException("Listability was checked before dispatch");
             };
         } catch (IllegalArgumentException exception) {
             throw new AdministrationException("config.list.rejected", safeMessage(exception),
@@ -253,6 +256,100 @@ public final class ConfigurationAdministrationService {
             throw new AdministrationException("config.remove.rejected", safeMessage(exception),
                     "Remove an existing scalar value from the selected list.",
                     "path", actualPath, "value", value);
+        }
+        return replaceDocument(draftId, state, resolved.documentName(), edited.render(), state.remapPlan());
+    }
+
+    public ConfigDraft addStructuredObject(
+            PermissionSubject subject,
+            UUID draftId,
+            String collectionPath,
+            Optional<String> key,
+            StructuredConfigurationValue value) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(key, "structured object key");
+        Objects.requireNonNull(value, "structured object");
+        DraftState state = requireOwnedDraft(subject, draftId);
+        SchemaNode collection = requireCollectionNode(subject, collectionPath);
+        ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(collectionPath).orElseThrow(() ->
+                notEditable(collectionPath));
+        String objectPath = objectPath(collection, collectionPath, key, "0");
+        validateStructuredValue(subject, objectPath, value.fields());
+        LosslessYamlDocument edited;
+        try {
+            edited = switch (collection.type()) {
+                case MAP -> document(state, resolved).appendMappingStructure(resolved.yamlPath(),
+                        requiredMapKey(key), value.fields());
+                case LIST -> {
+                    requireNoListKey(key);
+                    yield document(state, resolved).appendSequenceStructure(resolved.yamlPath(), value.fields());
+                }
+                default -> throw new IllegalStateException("Collection type checked before structured add");
+            };
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.structured.add_rejected", safeMessage(exception),
+                    "Correct the schema-bound object and retry against the current draft.",
+                    "path", collectionPath);
+        }
+        return replaceDocument(draftId, state, resolved.documentName(), edited.render(), state.remapPlan());
+    }
+
+    public ConfigDraft editStructuredObject(
+            PermissionSubject subject,
+            UUID draftId,
+            String collectionPath,
+            String selector,
+            StructuredConfigurationValue value) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(selector, "structured object selector");
+        Objects.requireNonNull(value, "structured object");
+        DraftState state = requireOwnedDraft(subject, draftId);
+        SchemaNode collection = requireCollectionNode(subject, collectionPath);
+        ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(collectionPath).orElseThrow(() ->
+                notEditable(collectionPath));
+        String objectPath = objectPath(collection, collectionPath,
+                collection.type() == SchemaValueType.MAP ? Optional.of(selector) : Optional.empty(), selector);
+        validateStructuredValue(subject, objectPath, value.fields());
+        LosslessYamlDocument edited;
+        try {
+            edited = switch (collection.type()) {
+                case MAP -> document(state, resolved).replaceMappingStructure(resolved.yamlPath(), selector,
+                        value.fields());
+                case LIST -> document(state, resolved).replaceSequenceStructure(resolved.yamlPath(),
+                        sequenceIndex(selector), value.fields());
+                default -> throw new IllegalStateException("Collection type checked before structured edit");
+            };
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.structured.edit_rejected", safeMessage(exception),
+                    "Correct the schema-bound object and retry against the current draft.",
+                    "path", collectionPath);
+        }
+        return replaceDocument(draftId, state, resolved.documentName(), edited.render(), state.remapPlan());
+    }
+
+    public ConfigDraft removeStructuredObject(
+            PermissionSubject subject,
+            UUID draftId,
+            String collectionPath,
+            String selector) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(selector, "structured object selector");
+        DraftState state = requireOwnedDraft(subject, draftId);
+        SchemaNode collection = requireCollectionNode(subject, collectionPath);
+        ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(collectionPath).orElseThrow(() ->
+                notEditable(collectionPath));
+        LosslessYamlDocument edited;
+        try {
+            edited = switch (collection.type()) {
+                case MAP -> document(state, resolved).removeMappingEntry(resolved.yamlPath(), selector);
+                case LIST -> document(state, resolved).removeSequenceIndex(resolved.yamlPath(),
+                        sequenceIndex(selector));
+                default -> throw new IllegalStateException("Collection type checked before structured remove");
+            };
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.structured.remove_rejected", safeMessage(exception),
+                    "Correct the schema-bound object and retry against the current draft.",
+                    "path", collectionPath);
         }
         return replaceDocument(draftId, state, resolved.documentName(), edited.render(), state.remapPlan());
     }
@@ -970,17 +1067,149 @@ public final class ConfigurationAdministrationService {
             PermissionSubject subject,
             String path,
             SchemaValueType expected) {
-        SchemaNode node = schema.resolve(path).orElseThrow(() -> new AdministrationException(
-                "config.path.unknown", "Unknown canonical configuration path: " + path,
-                "Use config search before editing.", "path", path));
+        SchemaNode node = schema.resolve(path).orElseThrow(() -> unknownPath(path,
+                "Unknown canonical configuration path: " + path, "Use config search before editing."));
         subject.require(node.editPermission());
         if (node.type() != expected) {
-            throw new AdministrationException("config.path.type_mismatch",
+            throw pathTypeMismatch(
                     "Configuration path is " + node.type() + ", not " + expected + ": " + path,
                     "Use the operation that matches the schema-owned value type.",
                     "path", path, "current", node.type(), "type", expected);
         }
         return node;
+    }
+
+    private SchemaNode requireCollectionNode(PermissionSubject subject, String path) {
+        SchemaNode node = schema.resolve(path).orElseThrow(() -> unknownPath(path,
+                "Unknown canonical configuration path: " + path, "Use config search before editing."));
+        subject.require(node.editPermission());
+        if (node.type() != SchemaValueType.MAP && node.type() != SchemaValueType.LIST) {
+            throw pathTypeMismatch(
+                    "Configuration path is not a structured collection: " + path,
+                    "Select a schema-owned map or list.", "path", path, "current", node.type());
+        }
+        return node;
+    }
+
+    private void validateStructuredValue(PermissionSubject subject, String path, Object value) {
+        SchemaNode node = resolveStructuredNode(path).orElseThrow(() -> unknownPath(path,
+                "Unknown canonical structured path: " + path,
+                "Use only fields exposed by the active configuration schema."));
+        subject.require(node.editPermission());
+        if (value instanceof Map<?, ?> map) {
+            requireStructuredType(node, SchemaValueType.MAP, path);
+            for (var entry : map.entrySet()) {
+                validateStructuredValue(subject, path + "." + entry.getKey(), entry.getValue());
+            }
+            return;
+        }
+        if (value instanceof List<?> list) {
+            requireStructuredType(node, SchemaValueType.LIST, path);
+            for (int index = 0; index < list.size(); index++) {
+                validateStructuredValue(subject, path + "." + index, list.get(index));
+            }
+            return;
+        }
+        validateStructuredScalar(node, path, value);
+    }
+
+    private Optional<SchemaNode> resolveStructuredNode(String path) {
+        Optional<SchemaNode> direct = schema.resolve(path);
+        if (direct.isPresent() || !path.startsWith("requirements.trees.")) {
+            return direct;
+        }
+        String recursiveRequirementPath = path.replaceAll("(?:\\.children\\.\\d+){2,}", ".children.0");
+        return schema.resolve(recursiveRequirementPath);
+    }
+
+    private static void validateStructuredScalar(SchemaNode node, String path, Object value) {
+        boolean valid = switch (node.type()) {
+            case BOOLEAN -> value instanceof Boolean;
+            case INTEGER -> value instanceof Byte || value instanceof Short || value instanceof Integer
+                    || value instanceof Long || value instanceof java.math.BigInteger;
+            case DECIMAL -> value instanceof Number;
+            case STRING, ENUM, DURATION, SECRET -> value instanceof String;
+            case LIST, MAP -> false;
+        };
+        if (!valid) {
+            throw pathTypeMismatch(
+                    "Structured value at " + path + " does not match " + node.type() + ".",
+                    "Use the scalar type declared by the active schema.", "path", path, "type", node.type());
+        }
+        validateAllowed(node, value.toString());
+    }
+
+    private static void requireStructuredType(SchemaNode node, SchemaValueType expected, String path) {
+        if (node.type() != expected) {
+            throw pathTypeMismatch(
+                    "Structured value at " + path + " is " + expected + " but schema declares " + node.type()
+                            + ".",
+                    "Use the structure declared by the active schema.", "path", path, "type", expected);
+        }
+    }
+
+    private static String objectPath(
+            SchemaNode collection,
+            String collectionPath,
+            Optional<String> key,
+            String listIndex) {
+        return switch (collection.type()) {
+            case MAP -> collectionPath + "." + requiredMapKey(key);
+            case LIST -> {
+                requireNoListKey(key);
+                yield collectionPath + "." + listIndex;
+            }
+            default -> throw new IllegalStateException("Collection type checked before object path resolution");
+        };
+    }
+
+    private static String requiredMapKey(Optional<String> key) {
+        String value = key.orElseThrow(() -> new AdministrationException("config.structured.key_required",
+                "A map object requires a stable key.", "Supply one schema-safe map key."));
+        if (!value.matches("[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}")) {
+            throw new AdministrationException("config.structured.key_invalid",
+                    "Structured map key is not a safe path segment.",
+                    "Use 1-128 letters, digits, underscores, or hyphens.", "value", value);
+        }
+        return value;
+    }
+
+    private static void requireNoListKey(Optional<String> key) {
+        if (key.isPresent()) {
+            throw new AdministrationException("config.structured.key_unexpected",
+                    "List objects are appended without map keys.", "Omit the key for a list insertion.");
+        }
+    }
+
+    private static int sequenceIndex(String selector) {
+        try {
+            int index = Integer.parseInt(selector);
+            if (index < 0) {
+                throw new NumberFormatException("negative index");
+            }
+            return index;
+        } catch (NumberFormatException exception) {
+            throw new AdministrationException("config.structured.index_invalid",
+                    "Structured list selector must be a non-negative index.",
+                    "Select an existing object from the canonical list.", "value", selector);
+        }
+    }
+
+    private static AdministrationException notEditable(String path) {
+        return new AdministrationException("config.path.not_editable",
+                "This schema path is not a canonical document edit surface: " + path,
+                "Select a configuration path owned by one of the five canonical documents.", "path", path);
+    }
+
+    private static AdministrationException unknownPath(String path, String message, String remediation) {
+        return new AdministrationException("config.path.unknown", message, remediation, "path", path);
+    }
+
+    private static AdministrationException pathTypeMismatch(
+            String message,
+            String remediation,
+            Object... facts) {
+        return new AdministrationException("config.path.type_mismatch", message, remediation, facts);
     }
 
     private static String quoteYaml(String value) {
@@ -1121,16 +1350,16 @@ public final class ConfigurationAdministrationService {
                     if (!replacement.equalsIgnoreCase("true") && !replacement.equalsIgnoreCase("false")) {
                         throw new IllegalArgumentException("Expected true or false");
                     }
-                    yield document.replaceBoolean(path.yamlPath(), Boolean.parseBoolean(replacement));
+                    yield document.setBoolean(path.yamlPath(), Boolean.parseBoolean(replacement));
                 }
                 case INTEGER -> {
                     if (!replacement.matches("-?(0|[1-9][0-9]*)")) {
                         throw new IllegalArgumentException("Expected a canonical whole number");
                     }
-                    yield document.replaceDecimal(path.yamlPath(), replacement);
+                    yield document.setDecimal(path.yamlPath(), replacement);
                 }
-                case DECIMAL -> document.replaceDecimal(path.yamlPath(), replacement);
-                case STRING, ENUM, DURATION, SECRET -> document.replaceString(path.yamlPath(), replacement);
+                case DECIMAL -> document.setDecimal(path.yamlPath(), replacement);
+                case STRING, ENUM, DURATION, SECRET -> document.setString(path.yamlPath(), replacement);
                 case LIST, MAP -> throw new IllegalArgumentException("Structured values require a dedicated editor");
             };
         } catch (IllegalArgumentException exception) {

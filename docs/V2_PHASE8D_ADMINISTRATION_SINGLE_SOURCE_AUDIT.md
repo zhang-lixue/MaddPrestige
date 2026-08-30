@@ -3,12 +3,12 @@
 **Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7<br>
 **Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`<br>
 **Date:** 2026-08-22<br>
-**Scope:** all 70 codes with exactly one literal production `AdministrationException` construction site
+**Scope:** all 77 codes with exactly one literal production `AdministrationException` construction site
 
 ## Method and result
 
-The current production inventory contains 116 literal exception occurrences and 89 public administration codes. The
-19 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 70 remaining codes
+The current production inventory contains 130 literal exception occurrences and 98 public administration codes. The
+21 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 77 remaining codes
 are enumerated below. Each row was checked directly against the named production branch, not inferred from its code or
 developer exception text. The review compares the exact trigger, safety consequence, catalog-owned remediation and
 structured facts with the selected public semantic identity.
@@ -27,9 +27,12 @@ Phase 8F A76 Correction Owner Review 2 adds four exact requirement-input identit
 scope and completion values. Each retains its supplied value, provider/metric context and mechanically derived valid
 alternatives; `setup.draft.invalid` remains exclusive to active/rollback ancestry.
 
-Result: all 70 single-source codes have accurate catalog semantics. Together with the current 19-code multi-source
-register, every known public administration failure occurrence has been checked against its real production source
-condition.
+Phase 9C Owner Review Correction Pass 1 adds seven exact schema-confined structured-mutation identities for object
+add/edit/remove, map-key requirements, and list-index selection. Each failure occurs before draft replacement or active
+publication and carries the canonical collection path or rejected selector where applicable.
+
+Result: all 77 single-source codes have accurate catalog semantics. Together with the current 21-code multi-source
+register, all 98 known public administration failures have been checked against their production source condition.
 
 Source locations are relative to
 `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/`.
@@ -63,6 +66,13 @@ Source locations are relative to
 | `config.rollback.unknown` | `admin/config/CAS.java:113` | `config_rollback_unknown` | The requested target revision is absent from retained history. | No unknown content becomes a rollback draft. | List history and select an available revision. | `revision` |
 | `config.snapshot.activate_failed` | `admin/config/CAS.java:800` | `config_snapshot_activate_failed` | Atomic activation of an already prepared snapshot throws. | Prior active pointer/runtime remain authoritative and the transition is marked failed-safe. | Keep prior state authoritative and run Doctor before retrying. | — |
 | `config.snapshot.prepare_failed` | `admin/config/CAS.java:781` | `config_snapshot_prepare_failed` | Durable snapshot preparation throws before `activate()` is called. | Activation never occurs; current active configuration remains unchanged and authoritative. | Inspect validation, persistence/storage health and logs, correct the failure, then re-preview before apply. | — |
+| `config.structured.add_rejected` | `admin/config/CAS.java:290` | `config_structured_add_rejected` | Lossless insertion rejects a schema-validating map/list object because its current draft structure cannot accept it. | Draft replacement does not occur; active configuration is untouched. | Correct the schema-bound object/key and retry against the current draft. | `path` |
+| `config.structured.edit_rejected` | `admin/config/CAS.java:323` | `config_structured_edit_rejected` | Lossless replacement rejects the selected structured object or current draft shape. | Draft replacement does not occur; active configuration is untouched. | Select an existing object and supply its complete schema-valid replacement. | `path` |
+| `config.structured.index_invalid` | `admin/config/CAS.java:1192` | `config_structured_index_invalid` | A structured list edit/removal selector is not a non-negative integer. | No list entry is guessed or changed. | Select an existing canonical list index. | `value` |
+| `config.structured.key_invalid` | `admin/config/CAS.java:1170` | `config_structured_key_invalid` | A structured map key is outside the bounded safe path-segment vocabulary. | No arbitrary YAML path is created. | Use letters, digits, underscores, or hyphens in a bounded stable key. | `value` |
+| `config.structured.key_required` | `admin/config/CAS.java:1167` | `config_structured_key_required` | A map-object insertion omits its stable key. | No anonymous map object is created. | Supply a safe stable key. | — |
+| `config.structured.key_unexpected` | `admin/config/CAS.java:1179` | `config_structured_key_unexpected` | A list-object insertion supplies a map key even though list objects are index-addressed. | No ambiguous list/map mutation occurs. | Omit the key for list insertion. | — |
+| `config.structured.remove_rejected` | `admin/config/CAS.java:350` | `config_structured_remove_rejected` | Lossless removal cannot find or safely remove the selected structured map/list object. | Draft replacement does not occur; active configuration is untouched. | Select an existing key or list index from the current draft. | `path` |
 | `config.value.not_allowed` | `admin/config/CAS.java:1105` | `config_value_not_allowed` | A replacement is outside a non-empty static schema allowlist. | The disallowed scalar is not written. | Inspect config explanation and choose a documented value. | `path` |
 | `confirmation.actor_mismatch` | `admin/OperationConfirmationService.java:61` | `confirmation_actor_mismatch` | The confirming actor differs from the actor that requested the operation confirmation. | The token remains bound to its original actor and is not consumed by the mismatch. | Its requesting actor may use it, or the current actor requests a fresh preview. | — |
 | `confirmation.already_used` | `admin/OperationConfirmationService.java:116` | `confirmation_already_used` | Exact-token removal loses a concurrent consume race. | At most one execution uses the token. | Request a fresh operation preview/token. | — |
@@ -114,7 +124,7 @@ Source locations are relative to
 
 `PaperMessageServiceTest.administrationSingleSourceInventoryMatchesSemanticAudit` walks every production Java source,
 extracts literal constructor codes and derives the exact single-source set from occurrence counts. It parses the rows
-above and requires exact equality: 70 single-source rows, 19 multi-source codes, and a union equal to all 89 known
+above and requires exact equality: 77 single-source rows, 21 multi-source codes, and a union equal to all 98 known
 public codes. A new, removed, renamed or reclassified single-source code fails until this source-level audit is updated
 deliberately.
 

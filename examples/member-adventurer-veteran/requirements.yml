@@ -19,12 +19,10 @@ requirements:
     completion: LIVE
 trees:
   setup_eligibility_adventurer:
-    id: setup_eligibility_adventurer
     mode: all
     children:
       - requirement: playtime_60_seconds
   setup_eligibility_veteran:
-    id: setup_eligibility_veteran
     mode: all
     children:
       - requirement: playtime_180_seconds

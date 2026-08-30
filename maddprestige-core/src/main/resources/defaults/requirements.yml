@@ -1,6 +1,2 @@
-# Phase 3 generic requirement/cost definitions. Empty defaults keep progression inert.
+# Add requirement trees and independent costs only when the numeric lifecycle references them.
 schema-version: 3
-maximum-depth: 16
-requirements: {}
-trees: {}
-costs: {}

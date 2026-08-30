@@ -159,18 +159,23 @@ class PhaseSixCommandServiceTest {
                 .toCompletableFuture().join();
         var explain = fixture.commands.execute(new CommandInvocation(reader,
                 List.of("config", "explain", "prestige.enabled"))).toCompletableFuture().join();
+        var inherited = fixture.commands.execute(new CommandInvocation(reader,
+                List.of("config", "get", "prestige.maximum"))).toCompletableFuture().join();
         var denied = fixture.commands.execute(new CommandInvocation(reader, List.of("config", "draft")))
                 .toCompletableFuture().join();
 
         assertTrue(help.successful());
         assertTrue(help.messages().stream().flatMap(message -> message.arguments().values().stream())
-                .anyMatch(value -> value.contains("since-prestige-start")));
+                .anyMatch(value -> value.contains("SINCE_PRESTIGE_START")));
         assertTrue(explain.successful());
-        assertTrue(explain.messages().stream().anyMatch(message -> message.key().equals("command.config.value")
+        assertTrue(explain.messages().stream().anyMatch(message -> message.key().equals("command.config.effective")
                 && message.argument("path").filter("prestige.enabled"::equals).isPresent()
-                && message.argument("value").filter("false"::equals).isPresent()));
+                && message.argument("value").filter("false"::equals).isPresent()
+                && message.argument("source").filter("INHERITED_DEFAULT"::equals).isPresent()));
         assertTrue(explain.messages().stream().anyMatch(message ->
                 message.key().equals("command.config.description.prestige_enabled")));
+        assertEquals("unlimited", inherited.messages().getFirst().argument("value").orElseThrow());
+        assertEquals("INHERITED_DEFAULT", inherited.messages().getFirst().argument("source").orElseThrow());
         assertFalse(denied.successful());
         assertEquals("permission.denied", denied.code());
         assertEquals(List.of("command.error.administration.permission_denied.summary",
@@ -185,7 +190,7 @@ class PhaseSixCommandServiceTest {
     void publicSetupCommandTypesDurationAndAvoidsRepeatedSessionIds() {
         ProviderRegistry providers = new ProviderRegistry();
         providers.activate(providers.register("test", new DurationMetricProvider()));
-        Fixture fixture = new Fixture(providers);
+        Fixture fixture = new Fixture(providers, false);
         PermissionSubject owner = subject(PhaseSixPermissions.all().toArray(String[]::new));
 
         var overview = fixture.commands.execute(new CommandInvocation(owner, List.of("help")))
@@ -200,11 +205,27 @@ class PhaseSixCommandServiceTest {
                 List.of("setup", "stage", "veteran", "Veteran"))).toCompletableFuture().join();
         var prestige = fixture.commands.execute(new CommandInvocation(owner,
                 List.of("setup", "prestige", "enabled"))).toCompletableFuture().join();
+        var normalPreview = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "preview"))).toCompletableFuture().join();
+        var detailedPreview = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("setup", "preview", "details"))).toCompletableFuture().join();
 
         assertEquals("command.help.overview.title", overview.messages().getFirst().key());
         assertTrue(advanced.successful(), advanced.lines().toString());
         assertEquals("stage.compatibility_only", retiredStage.code());
         assertTrue(prestige.successful(), prestige.lines().toString());
+        assertTrue(normalPreview.successful(), normalPreview.code() + ": " + normalPreview.lines());
+        assertTrue(detailedPreview.successful(), detailedPreview.code() + ": " + detailedPreview.lines());
+        assertTrue(normalPreview.messages().stream().anyMatch(message ->
+                message.key().equals("command.config.preview_summary")));
+        assertTrue(normalPreview.messages().stream().anyMatch(message ->
+                message.key().equals("command.setup.experience_requirement")));
+        assertTrue(normalPreview.messages().stream().noneMatch(message ->
+                message.key().equals("command.config.preview_header")
+                        || message.key().equals("command.config.preview_diff")));
+        assertTrue(detailedPreview.messages().stream().anyMatch(message ->
+                message.key().equals("command.config.preview_header")));
+        assertTrue(detailedPreview.messages().size() > normalPreview.messages().size());
     }
 
     @Test
@@ -288,7 +309,7 @@ class PhaseSixCommandServiceTest {
         assertEquals("permission.denied", doctor.code());
         assertEquals("command.invalid", usage.code());
         assertEquals("command.error.usage", usage.messages().getFirst().key());
-        assertEquals("/maddprestige simulate prestige [player-uuid]",
+        assertEquals("/maddprestige simulate prestige [player-uuid] [details]",
                 usage.messages().getFirst().argument("usage").orElseThrow());
         assertTrue(unknown.lines().stream().noneMatch(line -> line.contains("Exception")));
         assertTrue(doctor.lines().stream().noneMatch(line -> line.contains("Exception")));
@@ -307,15 +328,20 @@ class PhaseSixCommandServiceTest {
                 .toCompletableFuture().join();
         var doctor = fixture.commands.execute(new CommandInvocation(owner, List.of("doctor")))
                 .toCompletableFuture().join();
+        var doctorDetails = fixture.commands.execute(new CommandInvocation(owner, List.of("doctor", "details")))
+                .toCompletableFuture().join();
 
         assertTrue(why.successful());
         assertTrue(why.messages().stream().anyMatch(message ->
                 message.key().equals("command.why.blocker.no_active_prestige_configuration")));
         assertEquals("rankup.compatibility_only", rankUp.code());
         assertTrue(doctor.successful());
-        assertTrue(doctor.messages().stream().anyMatch(message -> message.key().endsWith(".summary")));
-        assertTrue(doctor.messages().stream().anyMatch(message -> message.key().endsWith(".remediation")));
-        assertTrue(doctor.messages().stream().filter(message -> message.key().endsWith(".summary"))
+        assertTrue(doctor.messages().stream().anyMatch(message -> message.key().equals("command.doctor.summary")));
+        assertTrue(doctor.messages().stream().noneMatch(message -> message.key().endsWith(".remediation")));
+        assertTrue(doctorDetails.messages().stream().anyMatch(message -> message.key().endsWith(".remediation")));
+        assertTrue(doctorDetails.messages().stream()
+                .filter(message -> message.key().startsWith("command.doctor.finding.")
+                        && message.key().endsWith(".summary"))
                 .allMatch(message -> message.argument("path").isPresent()
                         && message.argument("code").isPresent()));
     }
@@ -704,7 +730,7 @@ class PhaseSixCommandServiceTest {
 
     private static final class Fixture {
         private final ConfigRevisionId revision = new ConfigRevisionId("command_revision");
-        private final ConfigurationService canonical = activeConfiguration();
+        private final ConfigurationService canonical;
         private final MemoryHistory history = new MemoryHistory();
         private final EmptyStageReferenceMigrationStore references = new EmptyStageReferenceMigrationStore();
         private final ConfigurationAdministrationService configuration;
@@ -716,6 +742,11 @@ class PhaseSixCommandServiceTest {
         }
 
         private Fixture(ProviderRegistry providers) {
+            this(providers, true);
+        }
+
+        private Fixture(ProviderRegistry providers, boolean active) {
+            canonical = active ? activeConfiguration() : new ConfigurationService();
             var schema = PhaseSixSchema.create();
             configuration = new ConfigurationAdministrationService(canonical,
                     new PhaseSixConfigurationWorkflow(canonical, providers,

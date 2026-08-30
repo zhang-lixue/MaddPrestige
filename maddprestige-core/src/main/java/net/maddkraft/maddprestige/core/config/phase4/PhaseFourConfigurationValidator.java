@@ -280,10 +280,13 @@ public final class PhaseFourConfigurationValidator {
             String path,
             List<ValidationFinding> findings) {
         if (!profile.covers(limit)) {
-            findings.add(error("phase9b.scaling.coverage", path,
+            findings.add(error(limit.maximum().isPresent()
+                            ? "phase9c.scaling.incomplete_finite_coverage"
+                            : "phase9c.scaling.incomplete_unlimited_coverage", path,
                     limit.maximum().isPresent()
-                            ? "Scaling does not cover the configured finite Prestige maximum."
-                            : "Unlimited Prestige requires an open-ended final scaling segment.",
+                            ? "Scaling must cover finite maximum P" + limit.maximum().getAsLong() + "."
+                            : "Scaling P" + profile.segments().getLast().startLevel()
+                                    + "+ must be open-ended for unlimited Prestige.",
                     "Extend the final segment through the maximum or use end-prestige: unlimited."));
         }
     }

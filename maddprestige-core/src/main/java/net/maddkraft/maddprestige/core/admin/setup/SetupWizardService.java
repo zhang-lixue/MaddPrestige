@@ -426,8 +426,6 @@ public final class SetupWizardService {
         if (session.stages().isEmpty()) {
             return """
                     schema-version: 3
-                    active: false
-                    reconciliation-policy: warn-only
                     """;
         }
         StringBuilder yaml = new StringBuilder("""
@@ -471,6 +469,9 @@ public final class SetupWizardService {
     }
 
     private String requirements(Session session) {
+        if (session.stages().isEmpty()) {
+            return numericRequirements(session);
+        }
         StringBuilder yaml = new StringBuilder("""
                 schema-version: 3
                 maximum-depth: 16
@@ -505,6 +506,43 @@ public final class SetupWizardService {
         return yaml.toString();
     }
 
+    private String numericRequirements(Session session) {
+        StringBuilder yaml = new StringBuilder("schema-version: 3\n");
+        session.requirement().ifPresent(value -> {
+            yaml.append("requirements:\n");
+            appendCompactRequirement(yaml, value, value.valueType()
+                    .orElseGet(() -> requirementValueType(value)).name());
+            yaml.append("trees:\n");
+            appendCompactTree(yaml, "setup_eligibility", value);
+        });
+        session.cost().ifPresent(value -> {
+            yaml.append("costs:\n  ").append(value.id().value()).append(":\n")
+                    .append("    provider: ").append(value.providerId().value()).append('\n');
+            appendUnless(yaml, "type", value.type(), "value");
+            appendUnless(yaml, "value-type", value.valueType(), "EXACT_DECIMAL");
+            yaml.append("    amount: ").append(quote(value.amount())).append('\n');
+            appendUnless(yaml, "display-name", value.displayName(), value.id().value());
+        });
+        return yaml.toString();
+    }
+
+    private static void appendCompactRequirement(StringBuilder yaml, SetupRequirement value, String valueType) {
+        yaml.append("  ").append(value.id().value()).append(":\n")
+                .append("    provider: ").append(value.providerId().value()).append('\n')
+                .append("    metric: ").append(value.metricId().value()).append('\n')
+                .append("    value-type: ").append(valueType).append('\n');
+        appendUnless(yaml, "operator", value.operator(), "GREATER_OR_EQUAL");
+        yaml.append("    target: ").append(scalar(value.target())).append('\n');
+        appendUnless(yaml, "scope", value.scope(), "ABSOLUTE");
+        appendUnless(yaml, "completion", value.completion(), "LIVE");
+    }
+
+    private static void appendCompactTree(StringBuilder yaml, String treeId, SetupRequirement value) {
+        yaml.append("  ").append(treeId).append(":\n")
+                .append("    children:\n")
+                .append("      - requirement: ").append(value.id().value()).append('\n');
+    }
+
     private static void appendRequirement(StringBuilder yaml, SetupRequirement value, String valueType) {
         yaml.append("  ").append(value.id().value()).append(":\n")
                 .append("    provider: ").append(value.providerId().value()).append('\n')
@@ -518,7 +556,6 @@ public final class SetupWizardService {
 
     private static void appendTree(StringBuilder yaml, String treeId, SetupRequirement value) {
         yaml.append("  ").append(treeId).append(":\n")
-                .append("    id: ").append(treeId).append('\n')
                 .append("    mode: all\n")
                 .append("    children:\n")
                 .append("      - requirement: ").append(value.id().value()).append('\n');
@@ -529,6 +566,9 @@ public final class SetupWizardService {
     }
 
     private static String rewards(Session session) {
+        if (session.stages().isEmpty()) {
+            return numericRewards(session);
+        }
         StringBuilder yaml = new StringBuilder("""
                 schema-version: 3
                 """);
@@ -559,7 +599,23 @@ public final class SetupWizardService {
         return yaml.toString();
     }
 
+    private static String numericRewards(Session session) {
+        StringBuilder yaml = new StringBuilder("schema-version: 3\n");
+        session.reward().ifPresent(value -> {
+            yaml.append("rewards:\n  ").append(value.id().value()).append(":\n")
+                    .append("    provider: ").append(value.providerId().value()).append('\n');
+            appendUnless(yaml, "type", value.type(), "value");
+            appendUnless(yaml, "value-type", value.valueType(), "EXACT_DECIMAL");
+            yaml.append("    value: ").append(quote(value.value())).append('\n');
+            appendUnless(yaml, "display-name", value.displayName(), value.id().value());
+        });
+        return yaml.toString();
+    }
+
     private static String lifecycle(Session session) {
+        if (session.stages().isEmpty()) {
+            return numericLifecycle(session);
+        }
         SetupPrestige prestige = session.prestige();
         StringBuilder yaml = new StringBuilder("""
                 schema-version: 4
@@ -606,7 +662,22 @@ public final class SetupWizardService {
         return yaml.toString();
     }
 
+    private static String numericLifecycle(Session session) {
+        StringBuilder yaml = new StringBuilder("schema-version: 4\n");
+        if (!session.prestige().enabled()) {
+            return yaml.toString();
+        }
+        yaml.append("prestige:\n  enabled: true\n");
+        session.requirement().ifPresent(value -> yaml.append("  requirement-tree: setup_eligibility\n"));
+        session.cost().ifPresent(value -> yaml.append("  costs: [").append(value.id().value()).append("]\n"));
+        session.reward().ifPresent(value -> yaml.append("  rewards: [").append(value.id().value()).append("]\n"));
+        return yaml.toString();
+    }
+
     private static String integrations(Session session) {
+        if (session.stages().isEmpty()) {
+            return numericIntegrations(session);
+        }
         Set<String> selected = selectedIntegrationComponents(session);
         boolean vault = selected.contains("vault");
         boolean mcMmo = selected.contains("mcmmo");
@@ -639,6 +710,24 @@ public final class SetupWizardService {
                   enabled: %s
                   reward-maximum-quantity: 2304
                 """.formatted(vault, mcMmo, griefPrevention, worldGuard, craftEngine);
+    }
+
+    private static String numericIntegrations(Session session) {
+        Set<String> selected = selectedIntegrationComponents(session);
+        StringBuilder yaml = new StringBuilder("schema-version: 7\n");
+        for (String integration : List.of("vault", "mcmmo", "griefprevention", "worldguard", "craftengine")) {
+            if (selected.contains(integration)) {
+                yaml.append(integration).append(":\n  enabled: true\n");
+            }
+        }
+        return yaml.toString();
+    }
+
+    private static void appendUnless(StringBuilder yaml, String key, String value, String defaultValue) {
+        String normalized = value.toUpperCase(java.util.Locale.ROOT).replace('-', '_');
+        if (!normalized.equals(defaultValue.toUpperCase(java.util.Locale.ROOT).replace('-', '_'))) {
+            yaml.append("    ").append(key).append(": ").append(quote(value)).append('\n');
+        }
     }
 
     private static Set<String> selectedIntegrationComponents(Session session) {

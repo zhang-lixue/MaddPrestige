@@ -5,7 +5,8 @@ player progression state is a durable non-negative integer: a successful operati
 to administrator-configured requirements, independent costs, rewards, cooldown, and optional maximum. Stages, ranks,
 LuckPerms groups, seasons, and world resets are not intrinsic to Prestige.
 
-This repository is a Phase 9B owner-review candidate, not a production-ready or GA release. It has not undergone real
+This repository is a Phase 9C configuration/admin-usability owner-review candidate, not a production-ready or GA
+release. It has not undergone real
 clone qualification and authorizes no live deployment, V1 player import, or production balance.
 
 ## Final Phase 8 release candidate

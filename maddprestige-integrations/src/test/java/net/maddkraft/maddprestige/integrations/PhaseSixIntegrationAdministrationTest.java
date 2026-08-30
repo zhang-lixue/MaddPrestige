@@ -18,7 +18,7 @@ class PhaseSixIntegrationAdministrationTest {
     void exposesOneCombinedCanonicalSchema() {
         var schema = PhaseSixIntegrationSchema.create();
 
-        assertTrue(schema.resolve("requirements.requirements.play.measurement-scope").isPresent());
+        assertTrue(schema.resolve("requirements.requirements.play.scope").isPresent());
         assertTrue(schema.resolve("integrations.vault.enabled").isPresent());
         assertEquals("false", schema.resolve("integrations.vault.enabled").orElseThrow()
                 .defaultValue().orElseThrow());

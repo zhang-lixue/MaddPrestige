@@ -85,14 +85,19 @@ public final class CommandCompletionService {
             return configCandidates(subject, tokens);
         }
         if (root.equals("simulate") && subject.has(PhaseSixPermissions.SIMULATE)) {
-            return tokens.size() == 2 ? List.of("prestige") : List.of();
+            return tokens.size() == 2 ? List.of("prestige")
+                    : tokens.size() == 3 || tokens.size() == 4 ? List.of("details") : List.of();
         }
         if (root.equals("why") && (subject.has(PhaseSixPermissions.USE)
                 || subject.has(PhaseSixPermissions.PLAYER_VIEW))) {
-            return tokens.size() == 2 ? List.of("prestige") : List.of();
+            return tokens.size() == 2 ? List.of("prestige")
+                    : tokens.size() == 3 || tokens.size() == 4 ? List.of("details") : List.of();
         }
         if (root.equals("help")) {
             return List.of("overview", "setup", "measurement", "requirements", "scaling", "providers");
+        }
+        if (root.equals("doctor") && subject.has(PhaseSixPermissions.DOCTOR)) {
+            return tokens.size() == 2 ? List.of("details") : List.of();
         }
         if (root.equals("setup") && subject.has(PhaseSixPermissions.SETUP)) {
             return setupCandidates(subject, tokens);

@@ -1,14 +1,33 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 9B numeric Prestige policy freeze and architecture alignment; owner-review candidate
+**Current phase:** Phase 9C configuration ergonomics and administrator usability; owner-review candidate
 
 **Last updated:** 2026-08-29
 
-**Branch:** `v2/phase-9b`
+**Branch:** `v2/phase-9c`
 
-**Starting merged-main HEAD:** `f97d812be7a5963e2f9f3f042722ff77356e8363`
+**Starting merged-main HEAD:** `45fdd108aa2df7d1307be4f27831e2026f10dda8`
 
-**Candidate scope:** repository-only numeric Prestige architecture alignment; no live/clone qualification, V1 player migration, production balance selection, or Phase 10/web work
+**Candidate scope:** repository-only configuration/admin ergonomics; no numeric semantic change, live/clone work, V1 import, balance selection, GUI/shop, Phase 9D, or Phase 10 work
+
+## Phase 9C candidate outcome
+
+Phase 9C retains the Phase 9B numeric architecture and makes the normal configuration path smaller. All five immutable
+revision documents remain required, but empty maps, disabled optional integrations, and deterministic safe values are
+omitted. The canonical lossless editor materializes omitted scalar/list paths on explicit admin edit. Reset-policy
+omissions inherit the existing safe policy without validation noise.
+
+Requirement, cost, and reward scaling now has one canonical compact form plus advanced ranges using the same resolver.
+Inheritance is global safe defaults, optional profile defaults, selected segment, then per-level override. Existing
+explicit segmented and compatibility inputs retain their meaning. Normal Doctor, player, Why, simulation, and config
+validation output is concise; `details`, `config explain`, and `config diff` expose provenance and full diagnostics.
+
+The audit and implementation contract are recorded in `docs/V2_PHASE9C_CONFIGURATION_ERGONOMICS.md`; the exact
+38-path scope is in `docs/V2_PHASE9C_FILE_MANIFEST.md`. Fresh clean verification passes 588 tests in 106 suites with
+zero failures, errors, or skips and zero Checkstyle violations. The candidate JAR is 16,537,299 bytes with SHA-256
+`F7D7A77CD3673DDAA500939C3122E3F946BE5E376D6E928CE424B0880809B0CD`; the 190,831-byte aggregate SBOM remains
+`3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E`. No live server/database, real clone, V1 import,
+production balance, GUI, Prestige shop, Phase 9D, or Phase 10 work occurred.
 
 ## Phase 9B candidate outcome
 

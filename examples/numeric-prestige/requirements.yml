@@ -1,25 +1,12 @@
 schema-version: 3
-maximum-depth: 16
 requirements:
   example_playtime:
     provider: paper_statistics
     metric: play_one_minute
     value-type: DURATION
-    operator: GREATER_OR_EQUAL
     target: PT1M
     scope: SINCE_PRESTIGE_START
-    completion: LIVE
-    scaling:
-      segments:
-        - start-prestige: 1
-          end-prestige: unlimited
-          mode: FLAT
-          transition: EXPLICIT_BASE
-          base: 1
 trees:
   prestige_eligibility:
-    id: prestige_eligibility
-    mode: ALL
     children:
       - requirement: example_playtime
-costs: {}

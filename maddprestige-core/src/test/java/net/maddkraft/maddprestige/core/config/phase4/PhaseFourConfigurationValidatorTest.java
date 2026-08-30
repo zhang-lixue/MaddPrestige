@@ -141,6 +141,7 @@ class PhaseFourConfigurationValidatorTest {
     }
 
     @Test
+    @DisplayName("[Phase 9C correction] Finite and open-ended coverage have exact findings")
     void finiteAndUnlimitedPrestigeRequireCompleteScalingCoverageAtPublication() {
         CostId costId = new CostId("scaled_cost");
         ProviderId providerId = new ProviderId("configured_provider");
@@ -151,16 +152,18 @@ class PhaseFourConfigurationValidatorTest {
 
         assertTrue(validator.validate(scaled(costId, PrestigeLimit.finite(10), profile(OptionalLong.of(9))),
                 phaseThree, validStages()).findings().stream()
-                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+                .anyMatch(finding -> finding.code().equals("phase9c.scaling.incomplete_finite_coverage")
+                        && finding.explanation().contains("P10")));
         assertTrue(validator.validate(scaled(costId, PrestigeLimit.unlimited(), profile(OptionalLong.of(10))),
                 phaseThree, validStages()).findings().stream()
-                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+                .anyMatch(finding -> finding.code().equals("phase9c.scaling.incomplete_unlimited_coverage")
+                        && finding.explanation().contains("P1+")));
         assertFalse(validator.validate(scaled(costId, PrestigeLimit.finite(10), profile(OptionalLong.of(10))),
                 phaseThree, validStages()).findings().stream()
-                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+                .anyMatch(finding -> finding.code().startsWith("phase9c.scaling.incomplete_")));
         assertFalse(validator.validate(scaled(costId, PrestigeLimit.unlimited(), profile(OptionalLong.empty())),
                 phaseThree, validStages()).findings().stream()
-                .anyMatch(finding -> finding.code().equals("phase9b.scaling.coverage")));
+                .anyMatch(finding -> finding.code().startsWith("phase9c.scaling.incomplete_")));
     }
 
     private static PhaseFourConfiguration scaled(

@@ -104,7 +104,154 @@ class PhaseFourConfigurationCompilerTest {
         assertTrue(compilation.validation().findings().stream()
                 .anyMatch(finding -> finding.code().equals("phase4.competition.unsupported")));
         assertTrue(compilation.validation().findings().stream()
-                .anyMatch(finding -> finding.code().equals("phase4.reset_policy.missing")));
+                .noneMatch(finding -> finding.code().equals("phase4.reset_policy.missing")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C] Omitted lifecycle settings inherit safe defaults")
+    void inheritsSafeLifecycleDefaults() {
+        PhaseFourConfigurationCompilation compilation = compile("""
+                schema-version: 4
+                prestige:
+                  enabled: true
+                """);
+
+        assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
+        assertEquals(ResetDisposition.RESET, compilation.configuration().prestige().resetPolicy()
+                .disposition(ResetComponent.ACTIVE_REQUIREMENT_PROGRESS));
+        assertEquals(ResetDisposition.PRESERVE, compilation.configuration().prestige().resetPolicy()
+                .disposition(ResetComponent.PURCHASED_PERKS));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C] Compact and inherited advanced cost/reward scaling resolve identically")
+    void compilesCompactAndInheritedValueScaling() {
+        PhaseFourConfigurationCompilation compilation = compile("""
+                schema-version: 4
+                prestige:
+                  enabled: true
+                  cost-scaling:
+                    payment:
+                      mode: LINEAR
+                      base: 1
+                      rate: 1
+                  reward-scaling:
+                    grant:
+                      defaults:
+                        rounding: EXACT
+                      segments:
+                        - end-prestige: 2
+                          mode: FLAT
+                          base: 2
+                        - mode: LINEAR
+                          transition: CONTINUE
+                          rate: 1
+                          overrides:
+                            4: 9
+                """);
+
+        assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
+        assertEquals(ExactDecimal.parse("3"), compilation.configuration().valueScaling().costs()
+                .get(new CostId("payment")).valueAt(3));
+        assertEquals(ExactDecimal.parse("2"), compilation.configuration().valueScaling().rewards()
+                .get(new RewardId("grant")).valueAt(3));
+        assertEquals(ExactDecimal.parse("9"), compilation.configuration().valueScaling().rewards()
+                .get(new RewardId("grant")).valueAt(4));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C] Ambiguous inferred scaling boundaries fail closed")
+    void rejectsAmbiguousInheritedScalingBoundaries() {
+        PhaseFourConfigurationCompilation compilation = compile("""
+                schema-version: 4
+                prestige:
+                  enabled: true
+                  cost-scaling:
+                    payment:
+                      segments:
+                        - mode: FLAT
+                          base: 1
+                        - mode: LINEAR
+                          rate: 1
+                """);
+
+        assertTrue(compilation.validation().hasErrors());
+        assertTrue(compilation.validation().findings().stream()
+                .anyMatch(finding -> finding.code().equals("phase4.scaling.ambiguous_boundary")
+                        && finding.explanation().contains("end-prestige")));
+        assertTrue(compilation.configuration().valueScaling().costs().isEmpty());
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Scaling gaps and overlaps have distinct actionable findings")
+    void classifiesScalingGapsAndOverlaps() {
+        PhaseFourConfigurationCompilation gap = compile(scalingLifecycle("""
+                - start-prestige: 1
+                  end-prestige: 10
+                  mode: FLAT
+                  base: 1
+                - start-prestige: 12
+                  end-prestige: unlimited
+                  mode: FLAT
+                  base: 2
+                """));
+        PhaseFourConfigurationCompilation overlap = compile(scalingLifecycle("""
+                - start-prestige: 1
+                  end-prestige: 20
+                  mode: FLAT
+                  base: 1
+                - start-prestige: 15
+                  end-prestige: unlimited
+                  mode: FLAT
+                  base: 2
+                """));
+
+        assertTrue(gap.validation().findings().stream().anyMatch(finding ->
+                finding.code().equals("phase4.scaling.gap")
+                        && finding.explanation().contains("P11")));
+        assertTrue(overlap.validation().findings().stream().anyMatch(finding ->
+                finding.code().equals("phase4.scaling.overlap")
+                        && finding.explanation().contains("overlaps")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Invalid ranges, bounds, and overrides retain exact categories")
+    void classifiesInvalidScalingRangeBoundsAndOverride() {
+        PhaseFourConfigurationCompilation range = compile(scalingLifecycle("""
+                - start-prestige: 10
+                  end-prestige: 5
+                  mode: FLAT
+                  base: 1
+                """));
+        PhaseFourConfigurationCompilation bounds = compile(scalingLifecycle("""
+                - start-prestige: 1
+                  end-prestige: unlimited
+                  mode: FLAT
+                  base: 1
+                  floor: 10
+                  cap: 5
+                """));
+        PhaseFourConfigurationCompilation override = compile(scalingLifecycle("""
+                - start-prestige: 1
+                  end-prestige: 10
+                  mode: FLAT
+                  base: 1
+                  overrides:
+                    25: 3
+                """));
+
+        assertTrue(hasFinding(range, "phase4.scaling.invalid_range"));
+        assertTrue(hasFinding(bounds, "phase4.scaling.invalid_bounds"));
+        assertTrue(hasFinding(override, "phase4.scaling.invalid_override"));
+    }
+
+    private static boolean hasFinding(PhaseFourConfigurationCompilation compilation, String code) {
+        return compilation.validation().findings().stream().anyMatch(finding -> finding.code().equals(code));
+    }
+
+    private static String scalingLifecycle(String segments) {
+        return "schema-version: 4\nprestige:\n  enabled: true\n  cost-scaling:\n    payment:\n"
+                + "      segments:\n" + segments.indent(8);
     }
 
     private static PhaseFourConfigurationCompilation compile(String lifecycle) {

@@ -1,7 +1,9 @@
 package net.maddkraft.maddprestige.core.yaml;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.regex.Pattern;
 import org.snakeyaml.engine.v2.api.LoadSettings;
@@ -60,6 +62,15 @@ public final class LosslessYamlDocument {
         return requireScalar(path).getValue();
     }
 
+    public boolean contains(YamlPath path) {
+        try {
+            requireNode(path);
+            return true;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
     public LosslessYamlDocument replaceString(YamlPath path, String replacement) {
         Objects.requireNonNull(replacement, "replacement");
         ScalarNode node = requireScalar(path);
@@ -67,8 +78,19 @@ public final class LosslessYamlDocument {
         return replaceRange(node, encoded);
     }
 
+    public LosslessYamlDocument setString(YamlPath path, String replacement) {
+        Objects.requireNonNull(replacement, "replacement");
+        return contains(path) ? replaceString(path, replacement)
+                : materializeScalar(path, encodeString(ScalarStyle.PLAIN, replacement));
+    }
+
     public LosslessYamlDocument replaceBoolean(YamlPath path, boolean replacement) {
         return replaceRange(requireScalar(path), Boolean.toString(replacement));
+    }
+
+    public LosslessYamlDocument setBoolean(YamlPath path, boolean replacement) {
+        return contains(path) ? replaceBoolean(path, replacement)
+                : materializeScalar(path, Boolean.toString(replacement));
     }
 
     public LosslessYamlDocument replaceDecimal(YamlPath path, String canonicalDecimal) {
@@ -77,6 +99,14 @@ public final class LosslessYamlDocument {
             throw new IllegalArgumentException("Not a canonical plain decimal: " + canonicalDecimal);
         }
         return replaceRange(requireScalar(path), canonicalDecimal);
+    }
+
+    public LosslessYamlDocument setDecimal(YamlPath path, String canonicalDecimal) {
+        Objects.requireNonNull(canonicalDecimal, "decimal");
+        if (!canonicalDecimal.matches("-?(0|[1-9][0-9]*)(\\.[0-9]+)?")) {
+            throw new IllegalArgumentException("Not a canonical plain decimal: " + canonicalDecimal);
+        }
+        return contains(path) ? replaceDecimal(path, canonicalDecimal) : materializeScalar(path, canonicalDecimal);
     }
 
     public List<String> sequenceScalars(YamlPath path) {
@@ -107,6 +137,10 @@ public final class LosslessYamlDocument {
 
     public LosslessYamlDocument appendSequenceString(YamlPath path, String value) {
         Objects.requireNonNull(value, "value");
+        String encoded = encodeString(ScalarStyle.PLAIN, value);
+        if (!contains(path)) {
+            return materializeSequence(path, encoded);
+        }
         Node node = requireNode(path);
         if (!(node instanceof SequenceNode sequence)) {
             throw new IllegalArgumentException("YAML path does not reference a sequence: " + path);
@@ -114,7 +148,6 @@ public final class LosslessYamlDocument {
         if (sequenceScalars(path).contains(value)) {
             throw new IllegalArgumentException("Sequence already contains value: " + value);
         }
-        String encoded = encodeString(ScalarStyle.PLAIN, value);
         if (sequence.getValue().isEmpty()) {
             return expandEmptyCollection(node, " ".repeat(parentIndent(node) + 2) + "- " + encoded);
         }
@@ -139,6 +172,54 @@ public final class LosslessYamlDocument {
             }
         }
         throw new IllegalArgumentException("Sequence does not contain value: " + value);
+    }
+
+    public LosslessYamlDocument appendSequenceStructure(YamlPath path, Map<String, ?> value) {
+        Objects.requireNonNull(value, "structured sequence value");
+        if (!contains(path)) {
+            return materialize(path, (indent, key) -> " ".repeat(indent) + key + ":" + lineEnding()
+                    + sequenceStructure(indent + 2, value));
+        }
+        Node node = requireNode(path);
+        if (!(node instanceof SequenceNode sequence)) {
+            throw new IllegalArgumentException("YAML path does not reference a sequence: " + path);
+        }
+        if (sequence.getValue().isEmpty()) {
+            return expandEmptyCollection(node, sequenceStructure(parentIndent(node) + 2, value));
+        }
+        Node last = sequence.getValue().getLast();
+        int indent = lineIndent(utf16Offset(last.getStartMark().orElseThrow()));
+        return insert(nodeLineEnd(last), sequenceStructure(indent, value) + lineEnding());
+    }
+
+    public LosslessYamlDocument replaceSequenceStructure(YamlPath path, int index, Map<String, ?> value) {
+        Objects.requireNonNull(value, "structured sequence value");
+        Node node = requireNode(path);
+        if (!(node instanceof SequenceNode sequence) || index < 0 || index >= sequence.getValue().size()) {
+            throw new IllegalArgumentException("YAML sequence index is out of range: " + index);
+        }
+        Node item = sequence.getValue().get(index);
+        int start = sequenceItemStart(item);
+        int end = index + 1 < sequence.getValue().size()
+                ? lineStart(utf16Offset(sequence.getValue().get(index + 1).getStartMark().orElseThrow()))
+                : nodeLineEnd(item);
+        return replaceRange(start, end, sequenceStructure(lineIndent(start), value) + lineEnding());
+    }
+
+    public LosslessYamlDocument removeSequenceIndex(YamlPath path, int index) {
+        Node node = requireNode(path);
+        if (!(node instanceof SequenceNode sequence) || index < 0 || index >= sequence.getValue().size()) {
+            throw new IllegalArgumentException("YAML sequence index is out of range: " + index);
+        }
+        if (sequence.getValue().size() == 1) {
+            return emptyCollection(sequence, "[]");
+        }
+        Node item = sequence.getValue().get(index);
+        int start = sequenceItemStart(item);
+        int end = index + 1 < sequence.getValue().size()
+                ? lineStart(utf16Offset(sequence.getValue().get(index + 1).getStartMark().orElseThrow()))
+                : nodeLineEnd(item);
+        return replaceRange(start, end, "");
     }
 
     public LosslessYamlDocument appendMappingBlock(YamlPath path, String key, List<String> valueLines) {
@@ -166,6 +247,54 @@ public final class LosslessYamlDocument {
         indent = last.getKeyNode().getStartMark().orElseThrow().getColumn();
         insertion = nodeLineEnd(last.getValueNode());
         return insert(insertion, mappingBlock(indent, encodedKey, valueLines) + lineEnding());
+    }
+
+    public LosslessYamlDocument appendMappingStructure(YamlPath path, String key, Map<String, ?> value) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(value, "structured mapping value");
+        String encodedKey = encodeString(ScalarStyle.PLAIN, key);
+        if (!contains(path)) {
+            return materialize(path, (indent, owner) -> " ".repeat(indent) + owner + ":" + lineEnding()
+                    + mappingStructure(indent + 2, encodedKey, value));
+        }
+        Node node = requireNode(path);
+        if (!(node instanceof MappingNode mapping)) {
+            throw new IllegalArgumentException("YAML path does not reference a mapping: " + path);
+        }
+        if (mappingKeys(path).contains(key)) {
+            throw new IllegalArgumentException("Mapping already contains key: " + key);
+        }
+        if (mapping.getValue().isEmpty()) {
+            return expandEmptyCollection(node, mappingStructure(parentIndent(node) + 2, encodedKey, value));
+        }
+        NodeTuple last = mapping.getValue().getLast();
+        int indent = last.getKeyNode().getStartMark().orElseThrow().getColumn();
+        return insert(nodeLineEnd(last.getValueNode()), mappingStructure(indent, encodedKey, value) + lineEnding());
+    }
+
+    public LosslessYamlDocument replaceMappingStructure(
+            YamlPath path,
+            String key,
+            Map<String, ?> value) {
+        Objects.requireNonNull(key, "key");
+        Objects.requireNonNull(value, "structured mapping value");
+        Node node = requireNode(path);
+        if (!(node instanceof MappingNode mapping)) {
+            throw new IllegalArgumentException("YAML path does not reference a mapping: " + path);
+        }
+        for (int index = 0; index < mapping.getValue().size(); index++) {
+            NodeTuple tuple = mapping.getValue().get(index);
+            if (tuple.getKeyNode() instanceof ScalarNode scalar && scalar.getValue().equals(key)) {
+                int start = lineStart(utf16Offset(tuple.getKeyNode().getStartMark().orElseThrow()));
+                int end = index + 1 < mapping.getValue().size()
+                        ? lineStart(utf16Offset(mapping.getValue().get(index + 1).getKeyNode()
+                                .getStartMark().orElseThrow()))
+                        : nodeLineEnd(tuple.getValueNode());
+                return replaceRange(start, end, mappingStructure(lineIndent(start),
+                        encodeString(ScalarStyle.PLAIN, key), value) + lineEnding());
+            }
+        }
+        throw new IllegalArgumentException("Mapping does not contain key: " + key);
     }
 
     public LosslessYamlDocument removeMappingEntry(YamlPath path, String key) {
@@ -248,8 +377,168 @@ public final class LosslessYamlDocument {
         return replaceRange(lineStart(utf16Offset(node.getStartMark().orElseThrow())), nodeLineEnd(node), "");
     }
 
+    private int sequenceItemStart(Node item) {
+        int childLine = lineStart(utf16Offset(item.getStartMark().orElseThrow()));
+        if (childLine == 0) {
+            return childLine;
+        }
+        int precedingLine = lineStart(childLine - 1);
+        if (source.substring(precedingLine, childLine).strip().equals("-")) {
+            return precedingLine;
+        }
+        return childLine;
+    }
+
     private LosslessYamlDocument insert(int offset, String value) {
         return replaceRange(offset, offset, value);
+    }
+
+    private String mappingStructure(int indent, String encodedKey, Map<String, ?> value) {
+        StringBuilder result = new StringBuilder(" ".repeat(indent)).append(encodedKey).append(':');
+        if (value.isEmpty()) {
+            return result.append(" {}").toString();
+        }
+        result.append(lineEnding());
+        appendMapping(result, value, indent + 2);
+        return stripTrailingLineEnding(result.toString());
+    }
+
+    private String sequenceStructure(int indent, Map<String, ?> value) {
+        StringBuilder result = new StringBuilder(" ".repeat(indent)).append('-');
+        if (value.isEmpty()) {
+            return result.append(" {}").toString();
+        }
+        result.append(lineEnding());
+        appendMapping(result, value, indent + 2);
+        return stripTrailingLineEnding(result.toString());
+    }
+
+    private void appendMapping(StringBuilder result, Map<String, ?> value, int indent) {
+        value.forEach((key, child) -> {
+            result.append(" ".repeat(indent)).append(encodeString(ScalarStyle.PLAIN, key)).append(':');
+            appendStructuredValue(result, child, indent);
+        });
+    }
+
+    private void appendSequence(StringBuilder result, List<?> value, int indent) {
+        for (Object child : value) {
+            result.append(" ".repeat(indent)).append('-');
+            if (structuredScalar(child)) {
+                result.append(' ').append(encodeStructuredScalar(child)).append(lineEnding());
+            } else {
+                result.append(lineEnding());
+                appendStructuredCollection(result, child, indent + 2);
+            }
+        }
+    }
+
+    private void appendStructuredValue(StringBuilder result, Object value, int indent) {
+        if (structuredScalar(value)) {
+            result.append(' ').append(encodeStructuredScalar(value)).append(lineEnding());
+            return;
+        }
+        if (value instanceof Map<?, ?> map && map.isEmpty()) {
+            result.append(" {}").append(lineEnding());
+            return;
+        }
+        if (value instanceof List<?> list && list.isEmpty()) {
+            result.append(" []").append(lineEnding());
+            return;
+        }
+        result.append(lineEnding());
+        appendStructuredCollection(result, value, indent + 2);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void appendStructuredCollection(StringBuilder result, Object value, int indent) {
+        if (value instanceof Map<?, ?> map) {
+            appendMapping(result, (Map<String, ?>) map, indent);
+        } else if (value instanceof List<?> list) {
+            appendSequence(result, list, indent);
+        } else {
+            throw new IllegalArgumentException("Unsupported structured YAML value");
+        }
+    }
+
+    private static boolean structuredScalar(Object value) {
+        return value instanceof String || value instanceof Boolean || value instanceof Number;
+    }
+
+    private static String encodeStructuredScalar(Object value) {
+        if (value instanceof String text) {
+            return encodeString(ScalarStyle.PLAIN, text);
+        }
+        if (value instanceof Boolean flag) {
+            return flag.toString();
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal.toPlainString();
+        }
+        if (value instanceof Number number) {
+            return number.toString();
+        }
+        throw new IllegalArgumentException("Unsupported structured YAML scalar");
+    }
+
+    private String stripTrailingLineEnding(String value) {
+        return value.endsWith(lineEnding()) ? value.substring(0, value.length() - lineEnding().length()) : value;
+    }
+
+    private LosslessYamlDocument materializeScalar(YamlPath path, String encoded) {
+        return materialize(path, (indent, key) -> " ".repeat(indent) + key + ": " + encoded);
+    }
+
+    private LosslessYamlDocument materializeSequence(YamlPath path, String encoded) {
+        return materialize(path, (indent, key) -> " ".repeat(indent) + key + ":" + lineEnding()
+                + " ".repeat(indent + 2) + "- " + encoded);
+    }
+
+    private LosslessYamlDocument materialize(YamlPath path, MissingLeaf leaf) {
+        Objects.requireNonNull(path, "path");
+        if (path.documentIndex() >= documents.size()) {
+            throw new IllegalArgumentException("YAML document index is out of range: " + path.documentIndex());
+        }
+        Node current = documents.get(path.documentIndex());
+        for (int index = 0; index < path.segments().size(); index++) {
+            YamlPath.Segment segment = path.segments().get(index);
+            if (!(segment instanceof YamlPath.Key key)) {
+                throw new IllegalArgumentException("Missing sequence-index paths cannot be materialized");
+            }
+            if (!(current instanceof MappingNode mapping)) {
+                throw new IllegalArgumentException("YAML path expected a mapping before key: " + key.value());
+            }
+            Node next = mappingValueOrNull(mapping, key.value());
+            if (next != null) {
+                current = next;
+                continue;
+            }
+            List<YamlPath.Key> remaining = new ArrayList<>();
+            for (int nested = index; nested < path.segments().size(); nested++) {
+                if (!(path.segments().get(nested) instanceof YamlPath.Key nestedKey)) {
+                    throw new IllegalArgumentException("Missing sequence-index paths cannot be materialized");
+                }
+                remaining.add(nestedKey);
+            }
+            int indent = mapping.getValue().isEmpty() ? parentIndent(mapping) + 2
+                    : mapping.getValue().getLast().getKeyNode().getStartMark().orElseThrow().getColumn();
+            StringBuilder block = new StringBuilder();
+            for (int nested = 0; nested < remaining.size() - 1; nested++) {
+                block.append(" ".repeat(indent + nested * 2)).append(remaining.get(nested).value())
+                        .append(':').append(lineEnding());
+            }
+            int leafIndent = indent + Math.max(0, remaining.size() - 1) * 2;
+            block.append(leaf.render(leafIndent, remaining.getLast().value()));
+            return appendToMapping(mapping, block.toString());
+        }
+        throw new IllegalArgumentException("YAML path already exists: " + path);
+    }
+
+    private LosslessYamlDocument appendToMapping(MappingNode mapping, String block) {
+        if (mapping.getValue().isEmpty()) {
+            return expandEmptyCollection(mapping, block);
+        }
+        int insertion = nodeLineEnd(mapping.getValue().getLast().getValueNode());
+        return insert(insertion, block + lineEnding());
     }
 
     private LosslessYamlDocument replaceRange(int start, int end, String encoded) {
@@ -370,6 +659,15 @@ public final class LosslessYamlDocument {
         throw new IllegalArgumentException("YAML key does not exist: " + key);
     }
 
+    private static Node mappingValueOrNull(MappingNode mapping, String key) {
+        for (NodeTuple tuple : mapping.getValue()) {
+            if (tuple.getKeyNode() instanceof ScalarNode scalarKey && scalarKey.getValue().equals(key)) {
+                return tuple.getValueNode();
+            }
+        }
+        return null;
+    }
+
     private static Node sequenceValue(Node node, int index) {
         if (!(node instanceof SequenceNode sequence)) {
             throw new IllegalArgumentException("YAML path expected a sequence before index: " + index);
@@ -412,5 +710,10 @@ public final class LosslessYamlDocument {
             }
         }
         return result.append('"').toString();
+    }
+
+    @FunctionalInterface
+    private interface MissingLeaf {
+        String render(int indent, String key);
     }
 }

@@ -311,6 +311,10 @@ class PaperMessageServiceTest {
                 "config.preview.required", "config.preview.stale", "config.remove.rejected",
                 "config.revision.stale", "config.rollback.not_applied", "config.rollback.not_prepared",
                 "config.rollback.unknown", "config.snapshot.activate_failed", "config.snapshot.prepare_failed",
+                "config.structured.add_rejected", "config.structured.edit_rejected",
+                "config.structured.index_invalid", "config.structured.key_invalid",
+                "config.structured.key_required", "config.structured.key_unexpected",
+                "config.structured.remove_rejected",
                 "config.validation.blocked", "config.value.not_allowed", "confirmation.actor_mismatch",
                 "confirmation.already_used", "confirmation.config_stale", "confirmation.expired",
                 "confirmation.unknown", "gui.action.forged", "gui.action.stale",
@@ -343,8 +347,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(91, identities.size());
-        assertEquals(91, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(98, identities.size());
+        assertEquals(98, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -478,7 +482,7 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(70, singleSource.size());
+        assertEquals(77, singleSource.size());
         assertEquals(21, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
@@ -824,8 +828,8 @@ class PaperMessageServiceTest {
                         "amount", "1", "value", "Adventurer badge"));
         var eligible = new net.maddkraft.maddprestige.core.admin.OperationPreview(
                 net.maddkraft.maddprestige.core.admin.OperationKind.RANK_UP, java.util.UUID.randomUUID(), true,
-                "PRECOMPOSED_STATE_SENTINEL", java.util.Optional.empty(), List.of("COST_SENTINEL"),
-                List.of("REWARD_SENTINEL"), List.of(), List.of(), revision, Map.of(), List.of(), details);
+                "Member → Adventurer", java.util.Optional.empty(), List.of("25 coins"),
+                List.of("Adventurer badge"), List.of(), List.of(), revision, Map.of(), List.of(), details);
         var blocked = new net.maddkraft.maddprestige.core.admin.OperationPreview(
                 net.maddkraft.maddprestige.core.admin.OperationKind.RANK_UP, java.util.UUID.randomUUID(), false,
                 "PRECOMPOSED_STATE_SENTINEL", java.util.Optional.empty(), List.of(), List.of(), List.of(),
@@ -849,8 +853,8 @@ class PaperMessageServiceTest {
         assertTrue(eligibleOutput.stream().anyMatch(value -> value.contains("r-plan")));
         assertTrue(blockedOutput.stream().anyMatch(value -> value.contains("vault")
                 && value.contains("absent")));
-        assertFalse(java.util.stream.Stream.concat(eligibleOutput.stream(), blockedOutput.stream())
-                .anyMatch(value -> value.contains("SENTINEL")));
+        assertTrue(eligibleOutput.stream().anyMatch(value -> value.contains("25 coins")));
+        assertTrue(eligibleOutput.stream().anyMatch(value -> value.contains("Adventurer badge")));
     }
 
     @Test

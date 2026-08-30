@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -53,6 +54,7 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationSnapshotStore;
 import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationWorkflow;
 import net.maddkraft.maddprestige.core.admin.config.PreparedConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
+import net.maddkraft.maddprestige.core.admin.config.StructuredConfigurationValue;
 import net.maddkraft.maddprestige.core.admin.setup.SetupStage;
 import net.maddkraft.maddprestige.core.admin.setup.SetupCost;
 import net.maddkraft.maddprestige.core.admin.setup.SetupPrestige;
@@ -230,7 +232,7 @@ class PhaseSixConfigurationAdministrationTest {
         wizard.apply(OWNER, session, Set.of(), "Complete simple setup")
                 .toCompletableFuture().join();
         Map<String, String> active = fixture.canonical.active().orElseThrow().compiled().documents();
-        assertTrue(active.get("progression.yml").contains("active: false"));
+        assertEquals("schema-version: 3\n", active.get("progression.yml"));
         assertFalse(active.get("progression.yml").contains("stages:"));
         assertTrue(active.get("requirements.yml").contains("metric: play_time"));
         assertTrue(active.get("lifecycle.yml").contains("requirement-tree: setup_eligibility"));
@@ -238,6 +240,10 @@ class PhaseSixConfigurationAdministrationTest {
         assertTrue(active.get("lifecycle.yml").contains("rewards: [grant]"));
         assertFalse(active.get("lifecycle.yml").contains("required-stages"));
         assertFalse(active.get("lifecycle.yml").contains("reset-stage"));
+        assertFalse(active.get("lifecycle.yml").contains("reset-policy"));
+        assertFalse(active.get("requirements.yml").contains("maximum-depth"));
+        assertFalse(active.get("rewards.yml").contains("command-actions"));
+        assertEquals("schema-version: 7\n", active.get("integrations.yml"));
     }
 
     @Test
@@ -635,7 +641,7 @@ class PhaseSixConfigurationAdministrationTest {
         var edited = fixture.service.editScalar(OWNER, draft, "prestige.cooldown", "PT2S");
         String after = edited.documents().get("lifecycle.yml");
 
-        assertEquals(before.replace("cooldown: PT0S", "cooldown: PT2S"), after);
+        assertEquals(before + "prestige:\n  cooldown: PT2S\n", after);
         assertEquals(before, fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml"));
         assertEquals(first.id(), fixture.canonical.active().orElseThrow().revisionId());
 
@@ -643,7 +649,160 @@ class PhaseSixConfigurationAdministrationTest {
         fixture.service.applyDraft(OWNER, draft, Optional.of(first.id()), acknowledgements(preview),
                 "Raise disabled default increment for future use").toCompletableFuture().join();
         assertEquals(after, fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml"));
-        assertTrue(after.contains("# MaddPrestige V2 Phase 4 generic lifecycle defaults."));
+        assertTrue(after.contains("# Numeric Prestige is disabled until a validated revision explicitly enables it."));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Schema-owned scope/completion edits change runtime compilation")
+    void canonicalRequirementEditsDriveRuntimeCompiler() {
+        Fixture fixture = new Fixture();
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(defaultDocuments());
+        documents.put("requirements.yml", """
+                schema-version: 3
+                requirements:
+                  play:
+                    provider: dormant
+                    metric: play
+                    value-type: DURATION
+                    target: PT1M
+                trees: {}
+                """);
+        fixture.applyInitial(documents);
+        UUID draft = fixture.service.beginDraft(OWNER, "command");
+
+        fixture.service.editScalar(OWNER, draft, "requirements.requirements.play.scope",
+                "SINCE_PRESTIGE_START");
+        var edited = fixture.service.editScalar(OWNER, draft, "requirements.requirements.play.completion",
+                "LATCHED");
+        var compilation = new net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationCompiler()
+                .compile(new CompiledConfiguration(RevisionHasher.hashDocuments(edited.documents()),
+                        edited.documents()), Map.of());
+        var requirement = compilation.configuration().requirements().get(new RequirementId("play"));
+
+        assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
+        assertEquals(net.maddkraft.maddprestige.core.requirement.MeasurementScope.SINCE_PRESTIGE_START,
+                requirement.scope());
+        assertEquals(net.maddkraft.maddprestige.core.requirement.CompletionMode.LATCHED,
+                requirement.completionMode());
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Canonical structured drafts create/edit/remove scaling and requirement trees")
+    void structuredMutationsAreLosslessSchemaConfinedAndDraftOnly() {
+        Fixture fixture = new Fixture();
+        StoredConfigurationRevision active = fixture.applyInitial(defaultDocuments());
+        UUID draft = fixture.service.beginDraft(OWNER, "gui");
+        var firstSegment = new StructuredConfigurationValue(Map.of(
+                "start-prestige", 1L,
+                "end-prestige", "unlimited",
+                "mode", "LINEAR",
+                "base", new java.math.BigDecimal("10"),
+                "rate", new java.math.BigDecimal("2")));
+
+        var added = fixture.service.addStructuredObject(OWNER, draft,
+                "prestige.cost-scaling.payment.segments", Optional.empty(), firstSegment);
+        assertTrue(added.documents().get("lifecycle.yml").contains("start-prestige: 1"));
+        assertTrue(added.documents().get("lifecycle.yml").contains("rate: 2"));
+
+        var editedSegment = new StructuredConfigurationValue(Map.of(
+                "start-prestige", 1L,
+                "end-prestige", "unlimited",
+                "mode", "FLAT",
+                "base", new java.math.BigDecimal("25")));
+        var edited = fixture.service.editStructuredObject(OWNER, draft,
+                "prestige.cost-scaling.payment.segments", "0", editedSegment);
+        assertTrue(edited.documents().get("lifecycle.yml").contains("base: 25"));
+        assertFalse(edited.documents().get("lifecycle.yml").contains("rate: 2"));
+
+        var nestedTree = new StructuredConfigurationValue(Map.of(
+                "mode", "ALL",
+                "children", List.of(Map.of(
+                        "id", "provider_gate",
+                        "mode", "ANY",
+                        "children", List.of(Map.of("requirement", "play"))))));
+        var treeAdded = fixture.service.addStructuredObject(OWNER, draft, "requirements.trees",
+                Optional.of("prestige_gate"), nestedTree);
+        assertTrue(treeAdded.documents().get("requirements.yml").contains("provider_gate"));
+
+        var treeEdited = fixture.service.editStructuredObject(OWNER, draft, "requirements.trees",
+                "prestige_gate", new StructuredConfigurationValue(
+                        Map.of("mode", "X_OF_N", "threshold", new java.math.BigDecimal("1"),
+                                "children", List.of(Map.of("requirement", "play")))));
+        assertTrue(treeEdited.documents().get("requirements.yml").contains("mode: X_OF_N"));
+
+        var cost = fixture.service.addStructuredObject(OWNER, draft, "requirements.costs",
+                Optional.of("payment"), new StructuredConfigurationValue(Map.of(
+                        "provider", "vault",
+                        "type", "withdraw",
+                        "value-type", "CURRENCY_AMOUNT",
+                        "amount", "100",
+                        "display-name", "Prestige payment",
+                        "metadata", Map.of("currency", "vault"))));
+        assertTrue(cost.documents().get("requirements.yml").contains("provider: vault"));
+
+        var reward = fixture.service.addStructuredObject(OWNER, draft, "rewards.rewards",
+                Optional.of("permission"), new StructuredConfigurationValue(Map.of(
+                        "provider", "luckperms",
+                        "type", "permission",
+                        "value-type", "INTEGER_COUNT",
+                        "value", "1",
+                        "failure-policy", "OPTIONAL",
+                        "repeatability", "REPEATABLE")));
+        assertTrue(reward.documents().get("rewards.yml").contains("provider: luckperms"));
+
+        var currency = fixture.service.addStructuredObject(OWNER, draft, "currencies", Optional.of("credits"),
+                new StructuredConfigurationValue(Map.of(
+                        "display-name", "Credits",
+                        "symbol", "C",
+                        "scale", 2,
+                        "rounding-mode", "HALF_UP",
+                        "maximum-precision", 18,
+                        "maximum-balance", new BigDecimal("999999.99"),
+                        "prestige-scoped", true)));
+        assertTrue(currency.documents().get("lifecycle.yml").contains("maximum-balance: 999999.99"));
+
+        var milestone = fixture.service.addStructuredObject(OWNER, draft, "milestones", Optional.of("first"),
+                new StructuredConfigurationValue(Map.of(
+                        "display-name", "First Prestige",
+                        "enabled", true,
+                        "trigger", "CURRENT_PRESTIGE",
+                        "value-type", "INTEGER_COUNT",
+                        "threshold", "1",
+                        "repeatability", "ONCE",
+                        "rewards", List.of("permission"))));
+        assertTrue(milestone.documents().get("lifecycle.yml").contains("- permission"));
+
+        assertThrows(AdministrationException.class, () -> fixture.service.addStructuredObject(OWNER, draft,
+                "prestige.cost-scaling.payment.segments", Optional.empty(),
+                new StructuredConfigurationValue(Map.of("not-canonical", "ignored"))));
+        assertEquals(active.id(), fixture.canonical.active().orElseThrow().revisionId());
+
+        var treeRemoved = fixture.service.removeStructuredObject(OWNER, draft, "requirements.trees",
+                "prestige_gate");
+        assertFalse(treeRemoved.documents().get("requirements.yml").contains("prestige_gate"));
+        var segmentRemoved = fixture.service.removeStructuredObject(OWNER, draft,
+                "prestige.cost-scaling.payment.segments", "0");
+        assertTrue(segmentRemoved.documents().get("lifecycle.yml").contains("segments: []"));
+        assertEquals(active.id(), fixture.canonical.active().orElseThrow().revisionId());
+    }
+
+    @Test
+    @DisplayName("[Phase 9C] Omitted reset defaults remain editable through the canonical draft surface")
+    void materializesOmittedResetDispositionOnExplicitEdit() {
+        Fixture fixture = new Fixture();
+        fixture.applyInitial(defaultDocuments());
+        String before = fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml");
+        UUID draft = fixture.service.beginDraft(OWNER, "command");
+
+        var edited = fixture.service.editScalar(OWNER, draft,
+                "prestige.reset-policy.purchased-perks", "RESET");
+
+        assertEquals(before + """
+                prestige:
+                  reset-policy:
+                    purchased-perks: RESET
+                """, edited.documents().get("lifecycle.yml"));
+        assertEquals(before, fixture.canonical.active().orElseThrow().compiled().documents().get("lifecycle.yml"));
     }
 
     @Test

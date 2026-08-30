@@ -56,6 +56,7 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
                     .map(value -> m("gui.result.configuration_active", "revision", value.revisionId().value()))
                     .orElseGet(() -> m("gui.result.configuration_inactive")));
             case EDIT_CONFIGURATION, ADD_CONFIGURATION_VALUE, REMOVE_CONFIGURATION_VALUE,
+                    ADD_CONFIGURATION_OBJECT, EDIT_CONFIGURATION_OBJECT, REMOVE_CONFIGURATION_OBJECT,
                     PREVIEW_CONFIGURATION, PREPARE_CONFIGURATION_ACKNOWLEDGEMENT,
                     CONFIRM_CONFIGURATION_ACKNOWLEDGEMENT, APPLY_CONFIGURATION, ROLLBACK_CONFIGURATION ->
                     mutations.execute(subject, action);

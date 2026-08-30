@@ -19,6 +19,7 @@ public record OperationPreview(
         Optional<ExplanationNode> requirements,
         List<String> costs,
         List<String> rewards,
+        List<String> milestones,
         List<String> consequences,
         List<String> blockers,
         ConfigRevisionId configRevision,
@@ -33,6 +34,7 @@ public record OperationPreview(
         requirements = Objects.requireNonNull(requirements, "requirements");
         costs = List.copyOf(Objects.requireNonNull(costs, "costs"));
         rewards = List.copyOf(Objects.requireNonNull(rewards, "rewards"));
+        milestones = List.copyOf(Objects.requireNonNull(milestones, "milestones"));
         consequences = List.copyOf(Objects.requireNonNull(consequences, "consequences"));
         blockers = List.copyOf(Objects.requireNonNull(blockers, "blockers"));
         configRevision = Objects.requireNonNull(configRevision, "configuration revision");
@@ -64,8 +66,27 @@ public record OperationPreview(
             Map<ProviderId, Long> providerGenerations,
             List<String> externalUncertainty,
             List<MessageReference> semanticDetails) {
-        this(kind, playerId, executable, stateChange, requirements, costs, rewards, consequences, blockers,
+        this(kind, playerId, executable, stateChange, requirements, costs, rewards, List.of(), consequences, blockers,
                 configRevision, providerGenerations, externalUncertainty, semanticDetails,
                 AuthorizationBlocker.unknownAll(blockers));
+    }
+
+    public OperationPreview(
+            OperationKind kind,
+            UUID playerId,
+            boolean executable,
+            String stateChange,
+            Optional<ExplanationNode> requirements,
+            List<String> costs,
+            List<String> rewards,
+            List<String> consequences,
+            List<String> blockers,
+            ConfigRevisionId configRevision,
+            Map<ProviderId, Long> providerGenerations,
+            List<String> externalUncertainty,
+            List<MessageReference> semanticDetails,
+            List<AuthorizationBlocker> authorizationBlockers) {
+        this(kind, playerId, executable, stateChange, requirements, costs, rewards, List.of(), consequences, blockers,
+                configRevision, providerGenerations, externalUncertainty, semanticDetails, authorizationBlockers);
     }
 }
