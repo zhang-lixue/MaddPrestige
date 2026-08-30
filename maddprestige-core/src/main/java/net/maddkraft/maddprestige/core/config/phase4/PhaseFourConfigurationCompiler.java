@@ -105,18 +105,18 @@ public final class PhaseFourConfigurationCompiler {
                 new LinkedHashMap<>();
         for (var entry : mapping(value, path, findings).entrySet()) {
             T id = id(entry.getKey(), idFactory, path, findings, null);
-            if (id == null || !(entry.getValue() instanceof Map<?, ?> fields)
-                    || !fields.containsKey("segments")) {
+            if (id == null || !(entry.getValue() instanceof Map<?, ?> fields)) {
                 findings.add(error("phase4.scaling.invalid", path,
-                        "Each scaling profile requires a segments list.",
-                        "Configure contiguous segments beginning at Prestige 1."));
+                        "Each scaling profile must be a mapping.",
+                        "Configure one compact mode or an advanced segments list."));
                 continue;
             }
             try {
-                result.put(id, PhaseThreeConfigurationCompiler.segmentedScaling(fields.get("segments")));
+                result.put(id, PhaseThreeConfigurationCompiler.segmentedScaling(fields));
             } catch (IllegalArgumentException exception) {
-                findings.add(error("phase4.scaling.invalid", path + "." + id,
-                        exception.getMessage(), "Use bounded contiguous segment formulas and overrides."));
+                findings.add(error(PhaseThreeConfigurationCompiler.scalingCode("phase4.scaling", exception),
+                        path + "." + id,
+                        exception.getMessage(), "Use one compact mode or bounded contiguous ranges."));
             }
         }
         return result;
@@ -328,11 +328,6 @@ public final class PhaseFourConfigurationCompiler {
         for (ResetComponent component : ResetComponent.values()) {
             String key = component.name().toLowerCase(Locale.ROOT).replace('_', '-');
             if (!fields.containsKey(key)) {
-                if (component != ResetComponent.PROGRESSION_STAGE) {
-                    findings.add(error("phase4.reset_policy.missing", path + "." + key,
-                            "Every active reset/preserve component must be explicit.",
-                            "Set the component to RESET or PRESERVE."));
-                }
                 dispositions.put(component, ResetPreservePolicy.safeDefaults().disposition(component));
             } else {
                 dispositions.put(component, enumValue(fields.get(key), ResetDisposition.class,

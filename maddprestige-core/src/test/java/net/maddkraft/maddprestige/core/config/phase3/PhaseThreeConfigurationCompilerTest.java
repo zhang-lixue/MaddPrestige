@@ -17,6 +17,8 @@ import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.core.config.CompiledConfiguration;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
 import net.maddkraft.maddprestige.core.requirement.MetricBinding;
+import net.maddkraft.maddprestige.core.requirement.CompletionMode;
+import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -107,6 +109,50 @@ class PhaseThreeConfigurationCompilerTest {
                 .anyMatch(finding -> finding.code().equals("phase3.schema.version")));
     }
 
+    @Test
+    @DisplayName("[Phase 9C] Compact requirement scaling inherits safe defaults and remains deterministic")
+    void compilesCompactRequirementScaling() {
+        String requirements = validRequirements().replace(
+                "scaling: {strategy: linear, rate: 0.1, rounding: ceiling}", """
+                scaling:
+                      mode: LINEAR
+                      base: 1
+                      rate: 0.5""");
+
+        var compilation = compile(requirements, validRewards());
+
+        assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
+        var scaling = compilation.configuration().requirements()
+                .get(new net.maddkraft.maddprestige.api.id.RequirementId("play")).scaling();
+        assertEquals("1", scaling.multiplier(0).toPlainString());
+        assertEquals("3", scaling.multiplier(4).toPlainString());
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Sparse root ID is inferred and explicit mismatch fails clearly")
+    void infersSparseRootIdAndRejectsMismatch() {
+        var sparse = compile(validRequirements(), validRewards());
+        assertFalse(sparse.validation().hasErrors(), sparse.validation().toString());
+        assertTrue(sparse.configuration().trees().containsKey(
+                new net.maddkraft.maddprestige.api.id.RequirementId("eligibility")));
+
+        var mismatch = compile(validRequirements().replace("eligibility:\n    mode:",
+                "eligibility:\n    id: another_root\n    mode:"), validRewards());
+        assertTrue(mismatch.validation().findings().stream().anyMatch(finding ->
+                finding.code().equals("requirement.tree.id")
+                        && finding.explanation().contains("map key")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Canonical scope and completion fields drive compiled behavior")
+    void consumesCanonicalScopeAndCompletionFields() {
+        var requirement = compile(validRequirements(), validRewards()).configuration().requirements()
+                .get(new net.maddkraft.maddprestige.api.id.RequirementId("play"));
+
+        assertEquals(MeasurementScope.SINCE_STAGE_START, requirement.scope());
+        assertEquals(CompletionMode.LATCHED, requirement.completionMode());
+    }
+
     private static PhaseThreeConfigurationCompilation compile(String requirements, String rewards) {
         Map<String, String> documents = Map.of("requirements.yml", requirements, "rewards.yml", rewards);
         return new PhaseThreeConfigurationCompiler().compile(
@@ -136,7 +182,6 @@ class PhaseThreeConfigurationCompilerTest {
                       rounding: ceiling
                 trees:
                   eligibility:
-                    id: eligibility
                     mode: all
                     children:
                       - requirement: play

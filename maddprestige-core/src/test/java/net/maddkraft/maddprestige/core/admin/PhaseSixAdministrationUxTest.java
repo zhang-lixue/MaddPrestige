@@ -72,6 +72,64 @@ class PhaseSixAdministrationUxTest {
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
     @Test
+    @DisplayName("[Phase 9C correction] Normal scaling validation exposes the exact actionable reason")
+    void rendersSpecificScalingFailureReason() {
+        var finding = new net.maddkraft.maddprestige.api.validation.ValidationFinding(
+                "phase4.scaling.overlap", net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR,
+                "prestige.cost-scaling.payment", "Scaling P10–P20 overlaps P15–P30",
+                "Candidate remains inactive.", "Correct the overlapping ranges.");
+
+        var summary = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
+                .validationFindingSummary(finding);
+        var detail = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
+                .validationFinding(finding).getFirst();
+
+        assertEquals("command.validation.finding.scaling", summary.key());
+        assertEquals(Optional.of("Scaling P10–P20 overlaps P15–P30"), summary.argument("reason"));
+        assertEquals("command.validation.finding.scaling.summary", detail.key());
+        assertEquals(summary.argument("reason"), detail.argument("reason"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Effective preview is concise normally and provenance-rich on details")
+    void progressivelyDisclosesEffectivePrestigePreview() {
+        var leaf = new net.maddkraft.maddprestige.api.explanation.ExplanationNode(
+                "requirement.leaf", net.maddkraft.maddprestige.api.explanation.ExplanationStatus.UNSATISFIED,
+                "Not ready", Map.of("requirement", "money", "provider", "vault", "metric", "balance",
+                        "current", "18000000", "target", "25000000", "scope", "ABSOLUTE",
+                        "completion", "LIVE", "operator", "GREATER_OR_EQUAL",
+                        "effective-formula", "LINEAR(P8)"), List.of());
+        var root = new net.maddkraft.maddprestige.api.explanation.ExplanationNode(
+                "requirement.group", net.maddkraft.maddprestige.api.explanation.ExplanationStatus.UNSATISFIED,
+                "Not ready", Map.of("requirement", "prestige", "mode", "ALL"), List.of(leaf));
+        var preview = new OperationPreview(OperationKind.PRESTIGE, UUID.randomUUID(), true,
+                "Prestige 7 → 8", Optional.of(root), List.of("$25M"), List.of("2 configured rewards"),
+                List.of("first → 1 reward"), List.of(), List.of(), new ConfigRevisionId("phase9c"), Map.of(), List.of(),
+                List.of(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                        "command.preview.prestige_state_change", "current_prestige", 7,
+                        "target_prestige", 8)), List.of());
+
+        var normal = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
+                .preview("command.preview.summary", preview, false);
+        var details = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
+                .preview("command.preview.summary", preview, true);
+
+        assertEquals(List.of("command.preview.summary", "command.preview.transition",
+                "command.preview.requirement_mode", "command.preview.effective_requirement",
+                "command.preview.effective_cost", "command.preview.effective_reward",
+                "command.preview.effective_milestone"),
+                normal.stream().map(value -> value.key()).toList());
+        assertEquals(Optional.of("Prestige 7 → 8"), normal.get(1).argument("value"));
+        assertEquals(Optional.of("ALL"), normal.get(2).argument("mode"));
+        assertEquals(Optional.of("18000000"), normal.get(3).argument("current"));
+        assertEquals(Optional.of("25000000"), normal.get(3).argument("target"));
+        assertTrue(details.stream().anyMatch(value -> value.key()
+                .equals("command.preview.requirement_provenance")
+                && value.argument("source").filter("COMPILED_EFFECTIVE_CONFIGURATION"::equals).isPresent()));
+        assertTrue(details.stream().anyMatch(value -> value.key().equals("command.preview.revision")));
+    }
+
+    @Test
     @DisplayName("[A42] Search/explain derive paths, values, types, and consequences from the canonical schema")
     void introspectionUsesCanonicalSchemaAndActiveValue() {
         Map<String, String> documents = Map.of("lifecycle.yml", """
@@ -91,7 +149,7 @@ class PhaseSixAdministrationUxTest {
         assertEquals(MetricValueType.BOOLEAN.name(), explanation.type().name());
         assertTrue(explanation.description().contains("canonical Prestige planning"));
         assertTrue(service.search(viewer, "saved boundary", 20).stream().anyMatch(value ->
-                value.canonicalPath().contains("measurement-scope")));
+                value.canonicalPath().endsWith(".scope")));
         assertThrows(AdministrationException.class, () -> service.explain(viewer, "../secrets"));
     }
 
@@ -150,8 +208,8 @@ class PhaseSixAdministrationUxTest {
                 "command.help.valid_values", "command.help.measurement.duration_targets",
                 "command.help.measurement.playtime_example", "command.help.measurement.baseline_safety"),
                 lines.stream().map(value -> value.key()).toList());
-        assertTrue(lines.get(2).argument("value").orElseThrow().contains("since-prestige-start"));
-        assertFalse(lines.get(2).argument("value").orElseThrow().contains("since-stage-start"));
+        assertTrue(lines.get(2).argument("value").orElseThrow().contains("SINCE_PRESTIGE_START"));
+        assertFalse(lines.get(2).argument("value").orElseThrow().contains("SINCE_STAGE_START"));
         assertEquals("command.help.setup.title", new ContextualHelpService(PhaseSixSchema.create())
                 .help(subject(PhaseSixPermissions.USE), "setup").getFirst().key());
         assertEquals("command.help.overview.title", new ContextualHelpService(PhaseSixSchema.create())

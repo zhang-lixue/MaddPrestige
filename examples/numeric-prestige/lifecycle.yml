@@ -2,26 +2,3 @@ schema-version: 4
 prestige:
   enabled: true
   requirement-tree: prestige_eligibility
-  maximum: unlimited
-  cooldown: PT0S
-  costs: []
-  rewards: []
-  cost-scaling: {}
-  reward-scaling: {}
-  external-resets:
-    enabled: false
-  reset-policy:
-    active-requirement-progress: RESET
-    latched-completions: RESET
-    baselines: RESET
-    prestige-scoped-currency: RESET
-    purchased-perks: PRESERVE
-    milestone-history: PRESERVE
-    season-progress: PRESERVE
-    historical-statistics: PRESERVE
-currencies: {}
-entitlements: {}
-milestones: {}
-seasons: {}
-competition:
-  enabled: false

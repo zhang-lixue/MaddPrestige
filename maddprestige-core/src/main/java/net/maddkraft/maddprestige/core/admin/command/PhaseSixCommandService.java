@@ -19,6 +19,7 @@ import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.id.RequirementId;
 import net.maddkraft.maddprestige.api.id.RewardId;
 import net.maddkraft.maddprestige.api.id.StageId;
+import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdministrationService;
 import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
@@ -30,6 +31,7 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationS
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationPreview;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
+import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticSeverity;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyReport;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
@@ -116,7 +118,7 @@ public final class PhaseSixCommandService {
             case "gui" -> gui(subject);
             case "config" -> config(subject, arguments);
             case "setup" -> setup(subject, arguments);
-            case "doctor" -> doctor(subject);
+            case "doctor" -> doctor(subject, arguments);
             case "staff" -> staff(subject, arguments);
             default -> completed(CommandResponse.failure("command.unknown",
                     m("command.unknown", "value", arguments.getFirst())));
@@ -158,30 +160,40 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> simulate(PermissionSubject subject, List<String> arguments) {
-        if (arguments.size() < 2 || arguments.size() > 3) {
-            throw usage("simulate prestige [player-uuid]");
+        if (arguments.size() < 2 || arguments.size() > 4) {
+            throw usage("simulate prestige [player-uuid] [details]");
         }
-        UUID target = arguments.size() == 3 ? uuid(arguments.get(2), "player UUID") : self(subject);
+        boolean details = arguments.getLast().equalsIgnoreCase("details");
+        int targetIndex = details ? arguments.size() - 2 : arguments.size() - 1;
+        if (!details && arguments.size() == 4) {
+            throw usage("simulate prestige [player-uuid] [details]");
+        }
+        UUID target = targetIndex == 2 ? uuid(arguments.get(2), "player UUID") : self(subject);
         CompletionStage<OperationPreview> stage = switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
             case "rankup" -> throw rankUpCompatibilityOnly();
             case "prestige" -> previews.simulatePrestige(subject, target);
-            default -> throw usage("simulate prestige [player-uuid]");
+            default -> throw usage("simulate prestige [player-uuid] [details]");
         };
         return stage.thenApply(value -> CommandResponse.success("simulation",
-                SemanticPresentation.preview("command.simulation.summary", value)));
+                SemanticPresentation.preview("command.simulation.summary", value, details)));
     }
 
     private CompletionStage<CommandResponse> why(PermissionSubject subject, List<String> arguments) {
-        if (arguments.size() < 2 || arguments.size() > 3) {
-            throw usage("why prestige [player-uuid]");
+        if (arguments.size() < 2 || arguments.size() > 4) {
+            throw usage("why prestige [player-uuid] [details]");
         }
-        UUID target = arguments.size() == 3 ? uuid(arguments.get(2), "player UUID") : self(subject);
+        boolean details = arguments.getLast().equalsIgnoreCase("details");
+        int targetIndex = details ? arguments.size() - 2 : arguments.size() - 1;
+        if (!details && arguments.size() == 4) {
+            throw usage("why prestige [player-uuid] [details]");
+        }
+        UUID target = targetIndex == 2 ? uuid(arguments.get(2), "player UUID") : self(subject);
         CompletionStage<WhyReport> stage = switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
             case "rankup" -> throw rankUpCompatibilityOnly();
             case "prestige" -> why.prestige(subject, target);
-            default -> throw usage("why prestige [player-uuid]");
+            default -> throw usage("why prestige [player-uuid] [details]");
         };
-        return stage.thenApply(value -> CommandResponse.success("why", SemanticPresentation.why(value)));
+        return stage.thenApply(value -> CommandResponse.success("why", SemanticPresentation.why(value, details)));
     }
 
     private CompletionStage<CommandResponse> player(PermissionSubject subject, List<String> arguments) {
@@ -191,7 +203,7 @@ public final class PhaseSixCommandService {
         UUID target = arguments.size() == 2 ? uuid(arguments.get(1), "player UUID") : self(subject);
         return playerViews.view(subject, target).thenApply(view -> {
             ArrayList<MessageReference> lines = new ArrayList<>(SemanticPresentation.preview(
-                    "command.player.prestige", view.prestige()));
+                    "command.player.prestige", view.prestige(), false));
             return CommandResponse.success("player.progress", lines);
         });
     }
@@ -210,7 +222,8 @@ public final class PhaseSixCommandService {
                     + "cancel|history|rollback|apply> ...");
         }
         return switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
-            case "get", "explain" -> configExplain(subject, arguments);
+            case "get" -> configGet(subject, arguments);
+            case "explain" -> configExplain(subject, arguments);
             case "search" -> configSearch(subject, arguments);
             case "list" -> configList(subject, arguments);
             case "draft" -> configDraft(subject, arguments);
@@ -218,7 +231,8 @@ public final class PhaseSixCommandService {
             case "add" -> configAdd(subject, arguments);
             case "remove" -> configRemove(subject, arguments);
             case "remap", "unmap" -> throw retiredStageSurface();
-            case "validate", "diff" -> configPreview(subject, arguments);
+            case "validate" -> configPreview(subject, arguments, false);
+            case "diff" -> configPreview(subject, arguments, true);
             case "acknowledge" -> configAcknowledge(subject, arguments);
             case "confirm" -> configConfirm(subject, arguments);
             case "cancel" -> configCancel(subject, arguments);
@@ -236,13 +250,21 @@ public final class PhaseSixCommandService {
         requireSize(arguments, 3, "config explain <canonical-path>");
         var value = introspection.explain(subject, arguments.get(2));
         return completed(CommandResponse.success("config.explain", List.of(
-                m("command.config.value", "path", value.canonicalPath(),
-                        "value", value.currentValue().orElse("NOT_SET")),
+                effectiveValue(value),
+                m("command.config.provenance", "source", provenance(value),
+                        "configured", value.currentValue().orElse("NOT_SET"),
+                        "default", value.defaultValue().orElse("NONE")),
                 m("command.config.metadata", "type", value.type(), "status", value.reloadBehavior(),
                         "risk", value.risk()),
                 SemanticPresentation.configurationDescription(value),
                 m("command.config.allowed", "allowed", value.allowedValues().isEmpty()
                         ? "SCHEMA_OR_PROVIDER_DEFINED" : String.join(", ", value.allowedValues())))));
+    }
+
+    private CompletionStage<CommandResponse> configGet(PermissionSubject subject, List<String> arguments) {
+        requireSize(arguments, 3, "config get <canonical-path>");
+        var value = introspection.explain(subject, arguments.get(2));
+        return completed(CommandResponse.success("config.get", List.of(effectiveValue(value))));
     }
 
     private CompletionStage<CommandResponse> configSearch(PermissionSubject subject, List<String> arguments) {
@@ -319,10 +341,13 @@ public final class PhaseSixCommandService {
                 m("command.config.preview_guidance"))));
     }
 
-    private CompletionStage<CommandResponse> configPreview(PermissionSubject subject, List<String> arguments) {
+    private CompletionStage<CommandResponse> configPreview(
+            PermissionSubject subject,
+            List<String> arguments,
+            boolean details) {
         requireSize(arguments, 3, "config validate <draft-id>");
         return configuration.preview(subject, uuid(arguments.get(2), "draft ID"))
-                .thenApply(PhaseSixCommandService::render);
+                .thenApply(preview -> render(preview, details));
     }
 
     private CompletionStage<CommandResponse> configRemap(PermissionSubject subject, List<String> arguments) {
@@ -390,7 +415,7 @@ public final class PhaseSixCommandService {
         requireSize(arguments, 3, "config rollback <revision-id>");
         UUID draft = configuration.beginRollback(subject, new ConfigRevisionId(arguments.get(2)), "command");
         return configuration.preview(subject, draft).thenApply(preview -> {
-            ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(preview));
+            ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(preview, true));
             lines.add(m("command.config.rollback_draft", "draft", draft));
             lines.add(m("command.config.rollback_history_safe"));
             return CommandResponse.success("config.rollback.preview", lines);
@@ -566,11 +591,14 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> setupPreview(PermissionSubject subject, List<String> arguments) {
-        if (arguments.size() != 2 && arguments.size() != 3) {
-            throw usage("setup preview [session-id]");
+        boolean details = arguments.getLast().equalsIgnoreCase("details");
+        int effectiveSize = details ? arguments.size() - 1 : arguments.size();
+        if (effectiveSize != 2 && effectiveSize != 3) {
+            throw usage("setup preview [session-id] [details]");
         }
-        return setup.preview(subject, setupSession(subject, arguments, arguments.size() == 3)).thenApply(value -> {
-            ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(value.configuration()));
+        boolean explicitSession = effectiveSize == 3;
+        return setup.preview(subject, setupSession(subject, arguments, explicitSession)).thenApply(value -> {
+            ArrayList<MessageReference> lines = new ArrayList<>(renderPreview(value.configuration(), details));
             lines.addAll(value.playerExperience());
             return CommandResponse.success("setup.preview", lines);
         });
@@ -630,11 +658,25 @@ public final class PhaseSixCommandService {
         }
     }
 
-    private CompletionStage<CommandResponse> doctor(PermissionSubject subject) {
+    private CompletionStage<CommandResponse> doctor(PermissionSubject subject, List<String> arguments) {
+        if (arguments.size() > 2 || arguments.size() == 2 && !arguments.get(1).equalsIgnoreCase("details")) {
+            throw usage("doctor [details]");
+        }
+        boolean details = arguments.size() == 2;
         return doctor.inspect(subject).thenApply(report -> {
             ArrayList<MessageReference> lines = new ArrayList<>();
             lines.add(m("command.doctor.status", "status", report.status()));
-            report.findings().forEach(finding -> lines.addAll(SemanticPresentation.doctorFinding(finding)));
+            lines.add(m("command.doctor.summary", "blocked", count(report.findings(), DiagnosticSeverity.BLOCKED),
+                    "warnings", count(report.findings(), DiagnosticSeverity.WARNING),
+                    "deferred", count(report.findings(), DiagnosticSeverity.DEFERRED),
+                    "healthy", count(report.findings(), DiagnosticSeverity.HEALTHY)));
+            if (details) {
+                report.findings().forEach(finding -> lines.addAll(SemanticPresentation.doctorFinding(finding)));
+            } else {
+                report.findings().stream().filter(finding -> finding.severity() == DiagnosticSeverity.BLOCKED
+                        || finding.severity() == DiagnosticSeverity.WARNING)
+                        .forEach(finding -> lines.add(SemanticPresentation.doctorFindingSummary(finding)));
+            }
             return CommandResponse.success("doctor", lines);
         });
     }
@@ -653,25 +695,35 @@ public final class PhaseSixCommandService {
                                 "lifetime", state.lifetimePrestige(), "revision", state.stateRevision()))));
     }
 
-    private static CommandResponse render(ConfigurationPreview preview) {
-        return CommandResponse.success("config.preview", renderPreview(preview));
+    private static CommandResponse render(ConfigurationPreview preview, boolean details) {
+        return CommandResponse.success("config.preview", renderPreview(preview, details));
     }
 
-    private static List<MessageReference> renderPreview(ConfigurationPreview preview) {
+    private static List<MessageReference> renderPreview(ConfigurationPreview preview, boolean details) {
         ArrayList<MessageReference> lines = new ArrayList<>();
-        lines.add(m("command.config.preview_header", "draft", preview.draftId(), "base",
-                preview.baseRevision().map(ConfigRevisionId::value).orElse("NONE"),
-                "hash", preview.candidateHash().value()));
-        lines.add(m("command.config.preview_version", "version", preview.draftVersion()));
-        lines.add(m("command.config.preview_documents", "value", String.join(", ", preview.changedDocuments())));
-        lines.add(m("command.config.preview_validation", "status",
-                preview.validation().hasErrors() ? "BLOCKED" : "VALID"));
-        preview.validation().findings().forEach(finding ->
-                lines.addAll(SemanticPresentation.validationFinding(finding)));
+        lines.add(m("command.config.preview_summary", "draft", preview.draftId(), "status",
+                preview.validation().hasErrors() ? "BLOCKED" : "VALID", "documents",
+                preview.changedDocuments().size(), "findings", preview.validation().findings().size()));
+        if (details) {
+            lines.add(m("command.config.preview_header", "draft", preview.draftId(), "base",
+                    preview.baseRevision().map(ConfigRevisionId::value).orElse("NONE"),
+                    "hash", preview.candidateHash().value()));
+            lines.add(m("command.config.preview_version", "version", preview.draftVersion()));
+            lines.add(m("command.config.preview_documents", "value", String.join(", ", preview.changedDocuments())));
+            preview.validation().findings().forEach(finding ->
+                    lines.addAll(SemanticPresentation.validationFinding(finding)));
+        } else {
+            preview.validation().findings().forEach(finding -> {
+                lines.add(SemanticPresentation.validationFindingSummary(finding));
+                if (finding.severity() == ValidationSeverity.ERROR) {
+                    lines.addAll(SemanticPresentation.validationFinding(finding).subList(1, 2));
+                }
+            });
+        }
         if (preview.stale()) {
             lines.add(m("command.config.preview_stale"));
         }
-        if (!preview.stageImpact().semanticDiff().entries().isEmpty()) {
+        if (details && !preview.stageImpact().semanticDiff().entries().isEmpty()) {
             preview.stageImpact().semanticDiff().entries().forEach(entry -> lines.add(m("command.config.preview_diff",
                     "kind", entry.kind(), "path", entry.path(), "current",
                     entry.redactedOldValue().orElse("ABSENT"), "value",
@@ -684,6 +736,24 @@ public final class PhaseSixCommandService {
                     preview.stageRemapSeal().map(value -> value.value()).orElse("MISSING")));
         }
         return List.copyOf(lines);
+    }
+
+    private static MessageReference effectiveValue(
+            net.maddkraft.maddprestige.core.admin.config.ConfigurationExplanation value) {
+        return m("command.config.effective", "path", value.canonicalPath(), "value",
+                value.currentValue().or(() -> value.defaultValue()).orElse("NOT_SET"), "source", provenance(value));
+    }
+
+    private static String provenance(
+            net.maddkraft.maddprestige.core.admin.config.ConfigurationExplanation value) {
+        return value.currentValue().isPresent() ? "CONFIGURED"
+                : value.defaultValue().isPresent() ? "INHERITED_DEFAULT" : "NOT_SET";
+    }
+
+    private static long count(
+            List<net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticFinding> findings,
+            DiagnosticSeverity severity) {
+        return findings.stream().filter(finding -> finding.severity() == severity).count();
     }
 
     private static CommandResponse failure(Throwable failure) {

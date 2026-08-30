@@ -1,24 +1,2 @@
+# Optional integrations default to disabled and may be omitted until referenced.
 schema-version: 7
-vault:
-  enabled: false
-mcmmo:
-  enabled: false
-placeholderapi:
-  output:
-    enabled: false
-  inputs: {}
-economyshopgui:
-  compatibility-enabled: false
-  progression-credit:
-    enabled: false
-quickshop:
-  compatibility-enabled: false
-  progression-credit:
-    enabled: false
-griefprevention:
-  enabled: false
-worldguard:
-  enabled: false
-craftengine:
-  enabled: false
-  reward-maximum-quantity: 2304

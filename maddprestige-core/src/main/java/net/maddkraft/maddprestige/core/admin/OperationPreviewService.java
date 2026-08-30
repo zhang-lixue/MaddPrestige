@@ -79,6 +79,7 @@ public final class OperationPreviewService {
                 Optional.of(plan.requirements().explanation()),
                 plan.costs().stream().map(cost -> cost.redactedPreview()).toList(),
                 plan.rewards().stream().map(reward -> reward.redactedPreview()).toList(),
+                List.of(),
                 plan.rankProjectionRequest().map(value -> List.of("External managed rank projection to "
                         + value.desiredGroup().orElse("none"))).orElse(List.of()),
                 plan.blockers(), plan.configRevision(), plan.providerGenerations(), List.of(), details,
@@ -108,6 +109,13 @@ public final class OperationPreviewService {
         simulation.providerActions().stream().filter(value -> value.uncertaintyPossible()).forEach(action ->
                 details.add(m("command.preview.external_uncertainty", "operation", action.actionId(),
                         "provider", action.providerId().value())));
+        simulation.milestoneConsequences().forEach(milestone -> details.add(m("command.preview.milestone",
+                "id", milestone.milestoneId().value(), "repeatability", milestone.repeatabilityKey(),
+                "rewards", milestone.rewardIds().stream().map(value -> value.value()).toList())));
+        List<String> milestones = simulation.milestoneConsequences().stream().map(value -> {
+            int count = value.rewardIds().size();
+            return value.milestoneId().value() + " → " + count + " reward" + (count == 1 ? "" : "s");
+        }).toList();
         List<String> consequences = java.util.stream.Stream.concat(
                 simulation.componentConsequences().stream().map(Object::toString),
                 simulation.currencyChanges().stream().map(Object::toString)).toList();
@@ -116,7 +124,7 @@ public final class OperationPreviewService {
                         + simulation.currentPrestigeAfter(),
                 Optional.of(simulation.requirements().result().explanation()),
                 plan.costs().stream().map(cost -> cost.redactedPreview()).toList(),
-                plan.rewards().stream().map(reward -> reward.redactedPreview()).toList(), consequences,
+                plan.rewards().stream().map(reward -> reward.redactedPreview()).toList(), milestones, consequences,
                 plan.blockers(), plan.configRevision(), plan.providerGenerations(),
                 simulation.uncertainExternalEffects(), details, plan.authorizationBlockers());
     }

@@ -1,4 +1,2 @@
-# MaddPrestige V2 progression remains inactive until a validated draft is explicitly applied.
+# This document is required by the immutable revision format. Omitted fields use dormant safe defaults.
 schema-version: 3
-active: false
-reconciliation-policy: warn-only

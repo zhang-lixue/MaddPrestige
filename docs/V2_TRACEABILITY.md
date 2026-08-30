@@ -1,7 +1,7 @@
 # MaddPrestige V2 acceptance traceability
 
 **Imported matrix:** master specification A01–A76
-**Current classification:** Phase 8 and Phase 9A are owner-accepted and merged. Phase 9B is an uncommitted owner-review candidate that supersedes the old stage-driven product interpretation with numeric Prestige while preserving accepted evidence and stable compatibility surfaces. Real clone qualification and production readiness are not claimed.
+**Current classification:** Phase 8, Phase 9A, and Phase 9B are owner-accepted and merged. Phase 9C is an uncommitted configuration/admin-usability owner-review candidate that preserves numeric Prestige and stable compatibility surfaces. Real clone qualification and production readiness are not claimed.
 **Legend:** `Satisfied` means the acceptance criterion itself is demonstrably satisfied at its authorized engine/provider boundary; `Partial` means a required contract or focused implementation exists but a named later lifecycle/integration/qualification surface remains; `Later` means the criterion belongs wholly to a later phase or explicitly deferred post-release scope.
 **Current totals:** 63 Satisfied, 12 Partial, 1 Later.
 

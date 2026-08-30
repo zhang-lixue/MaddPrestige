@@ -1,6 +1,7 @@
 package net.maddkraft.maddprestige.core.config.phase3;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -193,7 +194,8 @@ public final class PhaseThreeConfigurationCompiler {
             if (treeId == null) {
                 continue;
             }
-            RequirementNode node = parseNode(entry.getValue(), definitions, 1, maximumDepth,
+            Object configuredRoot = rootWithInferredId(entry.getValue(), treeId);
+            RequirementNode node = parseNode(configuredRoot, definitions, 1, maximumDepth,
                     "requirements.trees." + treeId.value(), findings);
             if (node != null) {
                 if (!node.id().equals(treeId)) {
@@ -204,6 +206,15 @@ public final class PhaseThreeConfigurationCompiler {
             }
         }
         return Map.copyOf(result);
+    }
+
+    private static Object rootWithInferredId(Object value, RequirementId treeId) {
+        if (!(value instanceof Map<?, ?> fields) || fields.containsKey("requirement") || fields.containsKey("id")) {
+            return value;
+        }
+        LinkedHashMap<Object, Object> inferred = new LinkedHashMap<>(fields);
+        inferred.put("id", treeId.value());
+        return inferred;
     }
 
     private static RequirementNode parseNode(
@@ -390,12 +401,12 @@ public final class PhaseThreeConfigurationCompiler {
                     "Configure strategy and exact parameters."));
             return ScalingProfile.none();
         }
-        if (fields.containsKey("segments")) {
+        if (fields.containsKey("segments") || fields.containsKey("mode") || fields.containsKey("defaults")) {
             try {
-                return ScalingProfile.segmented(segmentedScaling(fields.get("segments")).segments());
+                return ScalingProfile.segmented(segmentedScaling(fields).segments());
             } catch (IllegalArgumentException exception) {
-                findings.add(error("scaling.segment.invalid", path + ".segments", exception.getMessage(),
-                        "Use contiguous positive Prestige ranges with explicit safe formulas or manual values."));
+                findings.add(error(scalingCode("scaling", exception), path, exception.getMessage(),
+                        "Use one compact mode or contiguous positive Prestige ranges."));
                 return ScalingProfile.none();
             }
         }
@@ -430,59 +441,260 @@ public final class PhaseThreeConfigurationCompiler {
         }
     }
 
-    /** Shared strict parser for Phase 9B cost/reward and requirement segment lists. */
+    /** Shared strict parser for compact and advanced Phase 9B requirement/cost/reward scaling. */
     public static net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile segmentedScaling(Object value) {
+        Object configuredSegments = value;
+        Map<?, ?> defaults = Map.of();
+        if (value instanceof Map<?, ?> profile) {
+            if (profile.containsKey("defaults")) {
+                if (!(profile.get("defaults") instanceof Map<?, ?> configuredDefaults)) {
+                    throw new IllegalArgumentException("Scaling defaults must be a mapping");
+                }
+                defaults = configuredDefaults;
+            }
+            if (profile.containsKey("segments")) {
+                configuredSegments = profile.get("segments");
+            } else {
+                LinkedHashMap<Object, Object> shorthand = new LinkedHashMap<>();
+                profile.forEach((key, configured) -> {
+                    if (!"defaults".equals(key)) {
+                        shorthand.put(key, configured);
+                    }
+                });
+                configuredSegments = List.of(shorthand);
+            }
+        }
         return new net.maddkraft.maddprestige.core.scaling.SegmentedScalingProfile(
-                scalingSegments(value, "segments"));
+                scalingSegments(configuredSegments, "segments", defaults));
     }
 
-    private static List<PrestigeScalingSegment> scalingSegments(Object value, String path) {
+    private static List<PrestigeScalingSegment> scalingSegments(Object value, String path, Map<?, ?> defaults) {
         if (!(value instanceof List<?> configured) || configured.isEmpty()) {
             throw new IllegalArgumentException("Segmented scaling requires a non-empty segment list");
         }
-        ArrayList<PrestigeScalingSegment> result = new ArrayList<>();
+        ArrayList<Map<?, ?>> segmentFields = new ArrayList<>();
         for (int index = 0; index < configured.size(); index++) {
             if (!(configured.get(index) instanceof Map<?, ?> fields)) {
                 throw new IllegalArgumentException("Scaling segment " + index + " must be a mapping");
             }
+            segmentFields.add(fields);
+        }
+        ArrayList<PrestigeScalingSegment> result = new ArrayList<>();
+        for (int index = 0; index < segmentFields.size(); index++) {
+            Map<?, ?> fields = segmentFields.get(index);
             String itemPath = path + "[" + index + "]";
-            long start = Long.parseLong(scalarRequired(fields.get("start-prestige")));
+            long start = fields.containsKey("start-prestige")
+                    ? boundary(fields.get("start-prestige"), itemPath + ".start-prestige")
+                    : inferredStart(result, index);
             String endText = fields.containsKey("end-prestige")
-                    ? scalarRequired(fields.get("end-prestige")) : "unlimited";
+                    ? scalarRequired(fields.get("end-prestige"))
+                    : inferredEnd(segmentFields, index);
             OptionalLong end = "unlimited".equalsIgnoreCase(endText)
-                    ? OptionalLong.empty() : OptionalLong.of(Long.parseLong(endText));
+                    ? OptionalLong.empty() : OptionalLong.of(boundary(endText, itemPath + ".end-prestige"));
+            if (start < 1 || end.isPresent() && end.getAsLong() < start) {
+                throw scaling(ScalingFailure.INVALID_RANGE,
+                        "Scaling " + range(start, end) + " is not a positive inclusive range");
+            }
             SegmentScalingMode mode = Enum.valueOf(SegmentScalingMode.class,
-                    scalarRequired(fields.containsKey("mode") ? fields.get("mode") : "FLAT").toUpperCase(Locale.ROOT)
+                    scalarRequired(inherited(fields, defaults, "mode", "FLAT")).toUpperCase(Locale.ROOT)
                             .replace('-', '_'));
             SegmentTransition transition = Enum.valueOf(SegmentTransition.class,
-                    scalarRequired(fields.containsKey("transition") ? fields.get("transition") : "EXPLICIT_BASE")
+                    scalarRequired(inherited(fields, defaults, "transition", "EXPLICIT_BASE"))
                             .toUpperCase(Locale.ROOT)
                             .replace('-', '_'));
-            ExactDecimal base = ExactDecimal.parse(scalarRequired(
-                    fields.containsKey("base") ? fields.get("base") : "1"));
-            ExactDecimal rate = ExactDecimal.parse(scalarRequired(
-                    fields.containsKey("rate") ? fields.get("rate") : "0"));
+            ExactDecimal base = ExactDecimal.parse(scalarRequired(inherited(fields, defaults, "base", "1")));
+            ExactDecimal rate = ExactDecimal.parse(scalarRequired(inherited(fields, defaults, "rate", "0")));
             TargetRounding rounding = Enum.valueOf(TargetRounding.class,
-                    scalarRequired(fields.containsKey("rounding") ? fields.get("rounding") : "EXACT")
+                    scalarRequired(inherited(fields, defaults, "rounding", "EXACT"))
                             .toUpperCase(Locale.ROOT)
                             .replace('-', '_'));
-            ExactDecimal quantum = ExactDecimal.parse(scalarRequired(
-                    fields.containsKey("quantum") ? fields.get("quantum") : "1"));
-            Optional<ExactDecimal> floor = fields.containsKey("floor")
-                    ? Optional.of(ExactDecimal.parse(scalarRequired(fields.get("floor")))) : Optional.empty();
-            Optional<ExactDecimal> cap = fields.containsKey("cap")
-                    ? Optional.of(ExactDecimal.parse(scalarRequired(fields.get("cap")))) : Optional.empty();
+            ExactDecimal quantum = ExactDecimal.parse(scalarRequired(inherited(fields, defaults, "quantum", "1")));
+            Optional<ExactDecimal> floor = optionalInheritedDecimal(fields, defaults, "floor");
+            Optional<ExactDecimal> cap = optionalInheritedDecimal(fields, defaults, "cap");
+            if (floor.isPresent() && cap.isPresent()
+                    && floor.orElseThrow().asBigDecimal().compareTo(cap.orElseThrow().asBigDecimal()) > 0) {
+                throw scaling(ScalingFailure.INVALID_BOUNDS,
+                        "Scaling " + range(start, end) + ": floor exceeds cap");
+            }
             TreeMap<Long, ExactDecimal> overrides = new TreeMap<>();
             if (fields.get("overrides") instanceof Map<?, ?> values) {
-                values.forEach((level, amount) -> overrides.put(Long.parseLong(scalarRequired(level)),
-                        ExactDecimal.parse(scalarRequired(amount))));
+                for (var override : values.entrySet()) {
+                    long level = boundary(override.getKey(), itemPath + ".overrides");
+                    ExactDecimal amount = ExactDecimal.parse(scalarRequired(override.getValue()));
+                    if (level < start || end.isPresent() && level > end.getAsLong()
+                            || amount.asBigDecimal().signum() < 0) {
+                        throw scaling(ScalingFailure.INVALID_OVERRIDE, "Override P" + level
+                                + " is outside " + range(start, end) + " or negative");
+                    }
+                    overrides.put(level, amount);
+                }
             } else if (fields.containsKey("overrides")) {
-                throw new IllegalArgumentException(itemPath + ".overrides must be a level-to-value mapping");
+                throw scaling(ScalingFailure.INVALID_OVERRIDE,
+                        itemPath + ".overrides must be a level-to-value mapping");
             }
-            result.add(new PrestigeScalingSegment(start, end, mode, transition, base, rate, rounding, quantum,
-                    floor, cap, overrides));
+            if (mode == SegmentScalingMode.MANUAL) {
+                long expectedOverrides;
+                try {
+                    expectedOverrides = end.isPresent()
+                            ? Math.addExact(Math.subtractExact(end.getAsLong(), start), 1) : -1;
+                } catch (ArithmeticException exception) {
+                    throw scaling(ScalingFailure.INVALID_OVERRIDE,
+                            "Manual scaling " + range(start, end) + " exceeds the safe override domain");
+                }
+                if (expectedOverrides < 0 || expectedOverrides != overrides.size()) {
+                    throw scaling(ScalingFailure.INVALID_OVERRIDE,
+                            "Manual scaling " + range(start, end) + " requires one override per Prestige level");
+                }
+            }
+            try {
+                result.add(new PrestigeScalingSegment(start, end, mode, transition, base, rate, rounding, quantum,
+                        floor, cap, overrides));
+            } catch (IllegalArgumentException exception) {
+                throw scaling(ScalingFailure.INVALID_BOUNDS,
+                        "Scaling " + range(start, end) + ": " + exception.getMessage());
+            }
         }
+        validateSegmentTopology(result);
         return List.copyOf(result);
+    }
+
+    private static long inferredStart(List<PrestigeScalingSegment> previous, int index) {
+        if (index == 0) {
+            return 1;
+        }
+        OptionalLong priorEnd = previous.getLast().endLevel();
+        if (priorEnd.isEmpty()) {
+            throw scaling(ScalingFailure.AMBIGUOUS_BOUNDARY,
+                    "A segment after an open-ended range needs an explicit boundary");
+        }
+        try {
+            return Math.addExact(priorEnd.getAsLong(), 1);
+        } catch (ArithmeticException exception) {
+            throw scaling(ScalingFailure.AMBIGUOUS_BOUNDARY,
+                    "Scaling segment start exceeds the safe level domain");
+        }
+    }
+
+    private static String inferredEnd(List<Map<?, ?>> segments, int index) {
+        if (index == segments.size() - 1) {
+            return "unlimited";
+        }
+        Map<?, ?> next = segments.get(index + 1);
+        if (!next.containsKey("start-prestige")) {
+            throw scaling(ScalingFailure.AMBIGUOUS_BOUNDARY,
+                    "A non-final segment needs end-prestige or the next segment needs start-prestige");
+        }
+        try {
+            return Long.toString(Math.subtractExact(Long.parseLong(
+                    scalarRequired(next.get("start-prestige"))), 1));
+        } catch (ArithmeticException | NumberFormatException exception) {
+            throw scaling(ScalingFailure.AMBIGUOUS_BOUNDARY,
+                    "Scaling segment end is not a safe whole-number boundary");
+        }
+    }
+
+    private static void validateSegmentTopology(List<PrestigeScalingSegment> segments) {
+        ArrayList<PrestigeScalingSegment> ordered = new ArrayList<>(segments);
+        ordered.sort(Comparator.comparingLong(PrestigeScalingSegment::startLevel));
+        if (ordered.getFirst().startLevel() != 1) {
+            throw scaling(ScalingFailure.GAP,
+                    "Scaling: gap before P" + ordered.getFirst().startLevel() + "; coverage must begin at P1");
+        }
+        for (int index = 0; index < ordered.size() - 1; index++) {
+            PrestigeScalingSegment current = ordered.get(index);
+            PrestigeScalingSegment next = ordered.get(index + 1);
+            if (current.endLevel().isEmpty()) {
+                throw scaling(ScalingFailure.OVERLAP,
+                        "Scaling " + range(current.startLevel(), current.endLevel()) + " overlaps "
+                                + range(next.startLevel(), next.endLevel()));
+            }
+            long expected;
+            try {
+                expected = Math.addExact(current.endLevel().getAsLong(), 1);
+            } catch (ArithmeticException exception) {
+                throw scaling(ScalingFailure.INVALID_RANGE,
+                        "Scaling finite range exceeds the safe Prestige domain");
+            }
+            if (next.startLevel() < expected) {
+                throw scaling(ScalingFailure.OVERLAP,
+                        "Scaling " + range(current.startLevel(), current.endLevel()) + " overlaps "
+                                + range(next.startLevel(), next.endLevel()));
+            }
+            if (next.startLevel() > expected) {
+                throw scaling(ScalingFailure.GAP, "Scaling: gap P" + expected + "–P"
+                        + (next.startLevel() - 1) + " after P" + current.endLevel().getAsLong());
+            }
+        }
+    }
+
+    private static long boundary(Object value, String path) {
+        try {
+            return Long.parseLong(scalarRequired(value));
+        } catch (NumberFormatException exception) {
+            throw scaling(ScalingFailure.AMBIGUOUS_BOUNDARY,
+                    "Scaling boundary " + path + " must be a whole Prestige level");
+        }
+    }
+
+    private static String range(long start, OptionalLong end) {
+        return "P" + start + "–" + (end.isPresent() ? "P" + end.getAsLong() : "P∞");
+    }
+
+    private static ScalingConfigurationException scaling(ScalingFailure failure, String message) {
+        return new ScalingConfigurationException(failure, message);
+    }
+
+    public static String scalingCode(String prefix, IllegalArgumentException exception) {
+        return exception instanceof ScalingConfigurationException scaling
+                ? prefix + "." + scaling.failure().code() : prefix + ".invalid";
+    }
+
+    public enum ScalingFailure {
+        GAP("gap"),
+        OVERLAP("overlap"),
+        INVALID_RANGE("invalid_range"),
+        AMBIGUOUS_BOUNDARY("ambiguous_boundary"),
+        INVALID_OVERRIDE("invalid_override"),
+        INVALID_BOUNDS("invalid_bounds");
+
+        private final String code;
+
+        ScalingFailure(String code) {
+            this.code = code;
+        }
+
+        public String code() {
+            return code;
+        }
+    }
+
+    public static final class ScalingConfigurationException extends IllegalArgumentException {
+        private static final long serialVersionUID = 1L;
+        private final ScalingFailure failure;
+
+        private ScalingConfigurationException(ScalingFailure failure, String message) {
+            super(message);
+            this.failure = failure;
+        }
+
+        public ScalingFailure failure() {
+            return failure;
+        }
+    }
+
+    private static Object inherited(Map<?, ?> fields, Map<?, ?> defaults, String key, Object fallback) {
+        if (fields.containsKey(key)) {
+            return fields.get(key);
+        }
+        return defaults.containsKey(key) ? defaults.get(key) : fallback;
+    }
+
+    private static Optional<ExactDecimal> optionalInheritedDecimal(
+            Map<?, ?> fields,
+            Map<?, ?> defaults,
+            String key) {
+        Object value = inherited(fields, defaults, key, null);
+        return value == null ? Optional.empty() : Optional.of(ExactDecimal.parse(scalarRequired(value)));
     }
 
     private static CatchUpProfile catchUp(Object value, String path, List<ValidationFinding> findings) {

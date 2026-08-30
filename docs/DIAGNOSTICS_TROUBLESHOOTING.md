@@ -8,9 +8,19 @@ Start with:
 /maddprestige why prestige
 ```
 
+Normal output is intentionally terse. When the summary identifies a problem, request the bounded detailed view:
+
+```text
+/maddprestige doctor details
+/maddprestige why prestige details
+/maddprestige simulate prestige details
+/maddprestige config diff <draft-id>
+```
+
 Doctor aggregates configuration, providers, external groups, requirements, costs/rewards, database, history,
 operations, reconciliation, cache/scheduler, and optional integration state. Findings include a stable machine code,
-exact path/identity, consequence, and remediation. Why uses the same authorization plan as execution and has no side
+exact path/identity, consequence, and remediation in `details` mode. Normal Doctor shows severity counts plus blocked
+and warning identities. Why and simulation use the same authorization/preview plan as execution and have no side
 effects.
 
 ## Common blocked states

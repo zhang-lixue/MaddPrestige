@@ -31,6 +31,15 @@ public final class CanonicalGuiMutationExecutor implements GuiMutationExecutor, 
                     path(context), value(context)).draftId(), "gui.result.list_value_added");
             case REMOVE_CONFIGURATION_VALUE -> completed(configuration.removeListValue(subject, draft(context),
                     path(context), value(context)).draftId(), "gui.result.list_value_removed");
+            case ADD_CONFIGURATION_OBJECT -> completed(configuration.addStructuredObject(subject, draft(context),
+                    path(context), context.objectSelector(), structure(context)).draftId(),
+                    "gui.result.structured_object_added");
+            case EDIT_CONFIGURATION_OBJECT -> completed(configuration.editStructuredObject(subject, draft(context),
+                    path(context), selector(context), structure(context)).draftId(),
+                    "gui.result.structured_object_edited");
+            case REMOVE_CONFIGURATION_OBJECT -> completed(configuration.removeStructuredObject(subject,
+                    draft(context), path(context), selector(context)).draftId(),
+                    "gui.result.structured_object_removed");
             case ADD_STAGE -> completed(configuration.addStage(subject, draft(context),
                     action.targetStage().orElseThrow(() -> missing("stage")), value(context), context.providerId(),
                     context.externalGroup()).draftId(), "gui.result.stage_added");
@@ -123,6 +132,15 @@ public final class CanonicalGuiMutationExecutor implements GuiMutationExecutor, 
 
     private static String value(GuiMutationContext context) {
         return context.value().orElseThrow(() -> missing("value"));
+    }
+
+    private static String selector(GuiMutationContext context) {
+        return context.objectSelector().orElseThrow(() -> missing("object selector"));
+    }
+
+    private static net.maddkraft.maddprestige.core.admin.config.StructuredConfigurationValue structure(
+            GuiMutationContext context) {
+        return context.structuredValue().orElseThrow(() -> missing("structured value"));
     }
 
     private static String reason(GuiMutationContext context) {

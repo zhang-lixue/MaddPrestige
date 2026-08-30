@@ -44,8 +44,26 @@ public final class PhaseFourSchema {
                 "Minimum duration between successful Prestige operations.", AllowedValues.unrestricted(),
                 RiskLevel.MEDIUM);
         register(registry, "prestige_reset_policy", "prestige.reset-policy", SchemaValueType.MAP, Optional.empty(),
-                "Explicit RESET/PRESERVE classification for every lifecycle component.",
+                "RESET/PRESERVE overrides; omitted components inherit canonical safe defaults.",
                 AllowedValues.fixed("RESET", "PRESERVE"), RiskLevel.CRITICAL);
+        resetDisposition(registry, "prestige_reset_progression_stage", "progression-stage", "PRESERVE",
+                "Preserves compatibility-only stage state.");
+        resetDisposition(registry, "prestige_reset_active_requirement_progress", "active-requirement-progress",
+                "RESET", "Resets active requirement progress.");
+        resetDisposition(registry, "prestige_reset_latched_completions", "latched-completions", "RESET",
+                "Resets latched requirement completions.");
+        resetDisposition(registry, "prestige_reset_baselines", "baselines", "RESET",
+                "Resets saved requirement baselines.");
+        resetDisposition(registry, "prestige_reset_scoped_currency", "prestige-scoped-currency", "RESET",
+                "Resets Prestige-scoped internal currency.");
+        resetDisposition(registry, "prestige_reset_purchased_perks", "purchased-perks", "PRESERVE",
+                "Preserves purchased perks.");
+        resetDisposition(registry, "prestige_reset_milestone_history", "milestone-history", "PRESERVE",
+                "Preserves milestone history.");
+        resetDisposition(registry, "prestige_reset_season_progress", "season-progress", "PRESERVE",
+                "Preserves season progress.");
+        resetDisposition(registry, "prestige_reset_historical_statistics", "historical-statistics", "PRESERVE",
+                "Preserves historical statistics.");
         register(registry, "prestige_external_resets", "prestige.external-resets.enabled",
                 SchemaValueType.BOOLEAN, Optional.of("false"),
                 "Dangerous provider reset authority; unsupported and disabled in Phase 4.",
@@ -85,6 +103,17 @@ public final class PhaseFourSchema {
                 AllowedValues.fixed("false"), RiskLevel.CRITICAL);
         return registry;
     }
+
+    private static void resetDisposition(
+            SchemaRegistry registry,
+            String id,
+            String key,
+            String defaultValue,
+            String description) {
+        register(registry, id, "prestige.reset-policy." + key, SchemaValueType.ENUM, Optional.of(defaultValue),
+                description, AllowedValues.fixed("RESET", "PRESERVE"), RiskLevel.CRITICAL);
+    }
+
 
     private static void register(
             SchemaRegistry registry,

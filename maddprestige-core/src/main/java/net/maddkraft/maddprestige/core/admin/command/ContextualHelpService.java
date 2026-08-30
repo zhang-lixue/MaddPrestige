@@ -36,7 +36,7 @@ public final class ContextualHelpService {
                     MessageReference.of("command.help.setup.advanced"));
         }
         if (normalized.equals("measurement")) {
-            SchemaNode node = schema.resolve("requirements.requirements.example.measurement-scope")
+            SchemaNode node = schema.resolve("requirements.requirements.example.scope")
                     .orElseThrow(() -> new IllegalStateException("Measurement schema metadata is absent"));
             return List.of(MessageReference.of("command.help.measurement.title"),
                     MessageReference.of("command.help.measurement.description"),

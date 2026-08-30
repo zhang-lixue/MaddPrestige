@@ -2,6 +2,7 @@ package net.maddkraft.maddprestige.core.yaml;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -9,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -160,6 +162,53 @@ class LosslessYamlDocumentTest {
 
         assertEquals("order: \n  - first\n  - second\ntail: keep\n", edited.render());
         assertEquals(java.util.List.of("first", "second"), edited.sequenceScalars(order));
+    }
+
+    @Test
+    @DisplayName("[Phase 9C] Omitted safe defaults materialize as canonical nested scalars and lists")
+    void materializesOmittedConfigurationPaths() {
+        LosslessYamlDocument edited = LosslessYamlDocument.parse("schema-version: 4\n")
+                .setBoolean(YamlPath.document(0).key("prestige").key("enabled"), true)
+                .setString(YamlPath.document(0).key("prestige").key("maximum"), "unlimited")
+                .appendSequenceString(YamlPath.document(0).key("prestige").key("costs"), "payment")
+                .appendSequenceString(YamlPath.document(0).key("prestige").key("costs"), "second");
+
+        assertEquals("""
+                schema-version: 4
+                prestige:
+                  enabled: true
+                  maximum: unlimited
+                  costs:
+                    - payment
+                    - second
+                """, edited.render());
+    }
+
+    @Test
+    @DisplayName("[Phase 9C correction] Structured map and sequence edits preserve surrounding YAML")
+    void createsEditsAndRemovesStructuredValuesLosslessly() {
+        String source = "# owner\r\nschema-version: 4\r\nprestige:\r\n  enabled: true\r\ntail: keep\r\n";
+        YamlPath segments = YamlPath.document(0).key("prestige").key("cost-scaling")
+                .key("payment").key("segments");
+        LosslessYamlDocument added = LosslessYamlDocument.parse(source).appendSequenceStructure(segments, Map.of(
+                "start-prestige", 1L, "end-prestige", "unlimited", "mode", "LINEAR",
+                "base", new java.math.BigDecimal("10"), "rate", new java.math.BigDecimal("2")));
+
+        assertEquals("1", added.scalar(segments.index(0).key("start-prestige")));
+        assertEquals("2", added.scalar(segments.index(0).key("rate")));
+        assertTrue(added.render().startsWith("# owner\r\n"));
+        assertTrue(added.render().endsWith("tail: keep\r\n"));
+
+        LosslessYamlDocument edited = added.replaceSequenceStructure(segments, 0, Map.of(
+                "start-prestige", 1L, "end-prestige", "unlimited", "mode", "FLAT",
+                "base", new java.math.BigDecimal("25")));
+        assertEquals("25", edited.scalar(segments.index(0).key("base")));
+        assertThrows(IllegalArgumentException.class, () -> edited.scalar(segments.index(0).key("rate")));
+
+        LosslessYamlDocument removed = edited.removeSequenceIndex(segments, 0);
+        assertEquals(List.of(), removed.sequenceScalars(segments));
+        assertTrue(removed.render().startsWith("# owner\r\n"));
+        assertTrue(removed.render().endsWith("tail: keep\r\n"));
     }
 
     @Test

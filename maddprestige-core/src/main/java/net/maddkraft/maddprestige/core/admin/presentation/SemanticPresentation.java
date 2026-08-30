@@ -37,23 +37,46 @@ public final class SemanticPresentation {
                         "code", finding.code(), "component", finding.component()));
     }
 
+    public static MessageReference doctorFindingSummary(DiagnosticFinding finding) {
+        Objects.requireNonNull(finding, "diagnostic finding");
+        return message("command.doctor.finding", "status", finding.severity(), "path", finding.path(),
+                "code", finding.code(), "component", finding.component());
+    }
+
     public static List<MessageReference> validationFinding(ValidationFinding finding) {
         Objects.requireNonNull(finding, "validation finding");
         Keys keys = validationKeys(validationCategory(finding.code()));
         return List.of(message(keys.summary(), "status", finding.severity(), "path", finding.path(),
-                "code", finding.code()), message(keys.remediation(), "status", finding.severity(),
-                        "path", finding.path(), "code", finding.code()));
+                "code", finding.code(), "reason", finding.explanation()),
+                message(keys.remediation(), "status", finding.severity(),
+                        "path", finding.path(), "code", finding.code(), "reason", finding.explanation()));
+    }
+
+    public static MessageReference validationFindingSummary(ValidationFinding finding) {
+        Objects.requireNonNull(finding, "validation finding");
+        if (finding.code().contains("scaling.")) {
+            return message("command.validation.finding.scaling", "status", finding.severity(),
+                    "path", finding.path(), "code", finding.code(), "reason", finding.explanation());
+        }
+        return message("command.validation.finding", "status", finding.severity(), "path", finding.path(),
+                "code", finding.code());
     }
 
     public static List<MessageReference> why(WhyReport report) {
+        return why(report, true);
+    }
+
+    public static List<MessageReference> why(WhyReport report, boolean details) {
         Objects.requireNonNull(report, "why report");
         ArrayList<MessageReference> lines = new ArrayList<>();
         lines.add(message(report.executable() ? "command.why.allowed" : "command.why.blocked",
                 "blockers", report.blockers().size()));
         report.authorizationBlockers().forEach(blocker -> lines.add(authorizationBlocker(blocker)));
-        report.requirementExplanation().ifPresent(value -> appendRequirement(value, lines));
-        report.configRevision().ifPresent(value -> lines.add(message("command.why.revision",
-                "revision", value.value())));
+        if (details) {
+            report.requirementExplanation().ifPresent(value -> appendRequirement(value, lines));
+            report.configRevision().ifPresent(value -> lines.add(message("command.why.revision",
+                    "revision", value.value())));
+        }
         return List.copyOf(lines);
     }
 
@@ -65,16 +88,30 @@ public final class SemanticPresentation {
     }
 
     public static List<MessageReference> preview(String summaryKey, OperationPreview preview) {
+        return preview(summaryKey, preview, true);
+    }
+
+    public static List<MessageReference> preview(String summaryKey, OperationPreview preview, boolean details) {
         Objects.requireNonNull(summaryKey, "preview summary key");
         Objects.requireNonNull(preview, "operation preview");
         ArrayList<MessageReference> lines = new ArrayList<>();
         lines.add(message(summaryKey, "kind", preview.kind(), "player", preview.playerId(),
                 "status", preview.executable() ? "ELIGIBLE" : "BLOCKED",
                 "blockers", preview.blockers().size(), "revision", preview.configRevision().value()));
-        lines.addAll(preview.semanticDetails());
-        preview.requirements().ifPresent(value -> appendRequirement(value, lines));
+        lines.add(message("command.preview.transition", "value", preview.stateChange()));
+        preview.requirements().ifPresent(value -> appendEffectiveRequirements(value, lines));
+        preview.costs().forEach(value -> lines.add(message("command.preview.effective_cost", "value", value)));
+        preview.rewards().forEach(value -> lines.add(message("command.preview.effective_reward", "value", value)));
+        preview.milestones().forEach(value ->
+                lines.add(message("command.preview.effective_milestone", "value", value)));
         preview.authorizationBlockers().forEach(blocker -> lines.add(authorizationBlocker(blocker)));
-        lines.add(message("command.preview.revision", "revision", preview.configRevision().value()));
+        if (details) {
+            lines.addAll(preview.semanticDetails());
+            preview.requirements().ifPresent(value -> appendRequirement(value, lines));
+            preview.externalUncertainty().forEach(value ->
+                    lines.add(message("command.preview.effective_uncertainty", "value", value)));
+            lines.add(message("command.preview.revision", "revision", preview.configRevision().value()));
+        }
         return List.copyOf(lines);
     }
 
@@ -122,7 +159,36 @@ public final class SemanticPresentation {
                 "metric", node.facts().getOrDefault("metric", "NONE"),
                 "current", node.facts().getOrDefault("current", "UNAVAILABLE"),
                 "target", node.facts().getOrDefault("target", "UNAVAILABLE")));
+        if (node.facts().containsKey("provider")) {
+            lines.add(message("command.preview.requirement_provenance",
+                    "id", node.facts().getOrDefault("requirement", node.code()),
+                    "provider", node.facts().getOrDefault("provider", "NONE"),
+                    "scope", node.facts().getOrDefault("scope", "DEFAULT"),
+                    "completion", node.facts().getOrDefault("completion", "DEFAULT"),
+                    "operator", node.facts().getOrDefault("operator", "DEFAULT"),
+                    "formula", node.facts().getOrDefault("effective-formula", "COMPILED_TARGET"),
+                    "source", "COMPILED_EFFECTIVE_CONFIGURATION"));
+        }
         node.children().forEach(child -> appendRequirement(child, lines));
+    }
+
+    private static void appendEffectiveRequirements(ExplanationNode root, List<MessageReference> lines) {
+        lines.add(message("command.preview.requirement_mode", "mode",
+                root.facts().getOrDefault("mode", "SINGLE")));
+        appendEffectiveRequirementLeaves(root, lines);
+    }
+
+    private static void appendEffectiveRequirementLeaves(ExplanationNode node, List<MessageReference> lines) {
+        if (node.children().isEmpty()) {
+            lines.add(message("command.preview.effective_requirement", "status", node.status(),
+                    "id", node.facts().getOrDefault("requirement", node.code()),
+                    "metric", node.facts().getOrDefault("metric", "NONE"),
+                    "current", node.facts().getOrDefault("current", "UNAVAILABLE"),
+                    "target", node.facts().getOrDefault("target", "UNAVAILABLE"),
+                    "scaling", node.facts().getOrDefault("effective-formula", "COMPILED_TARGET")));
+            return;
+        }
+        node.children().forEach(child -> appendEffectiveRequirementLeaves(child, lines));
     }
 
     private static String doctorCategory(DiagnosticFinding finding) {
@@ -209,6 +275,9 @@ public final class SemanticPresentation {
     }
 
     private static String validationCategory(String code) {
+        if (code.contains("scaling.")) {
+            return "scaling";
+        }
         if (code.contains("provider") || code.startsWith("phase3.provider")
                 || code.startsWith("phase4.provider") || code.startsWith("phase5.")) {
             return "provider";
@@ -248,6 +317,8 @@ public final class SemanticPresentation {
 
     private static Keys validationKeys(String category) {
         return switch (category) {
+            case "scaling" -> new Keys("command.validation.finding.scaling.summary",
+                    "command.validation.finding.scaling.remediation");
             case "provider" -> new Keys("command.validation.finding.provider.summary",
                     "command.validation.finding.provider.remediation");
             case "stage" -> new Keys("command.validation.finding.stage.summary",
@@ -318,6 +389,13 @@ public final class SemanticPresentation {
         register(result, "config_rollback_unknown", "config.rollback.unknown");
         register(result, "config_snapshot_activate_failed", "config.snapshot.activate_failed");
         register(result, "config_snapshot_prepare_failed", "config.snapshot.prepare_failed");
+        register(result, "config_structured_add_rejected", "config.structured.add_rejected");
+        register(result, "config_structured_edit_rejected", "config.structured.edit_rejected");
+        register(result, "config_structured_index_invalid", "config.structured.index_invalid");
+        register(result, "config_structured_key_invalid", "config.structured.key_invalid");
+        register(result, "config_structured_key_required", "config.structured.key_required");
+        register(result, "config_structured_key_unexpected", "config.structured.key_unexpected");
+        register(result, "config_structured_remove_rejected", "config.structured.remove_rejected");
         register(result, "config_validation_blocked", "config.validation.blocked");
         register(result, "config_value_not_allowed", "config.value.not_allowed");
         register(result, "confirmation_actor_mismatch", "confirmation.actor_mismatch");
