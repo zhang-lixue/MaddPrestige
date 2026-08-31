@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 
 import com.gmail.nossr50.api.ExperienceAPI;
 import com.gmail.nossr50.api.exceptions.InvalidPlayerException;
@@ -40,7 +41,7 @@ class OfficialMcMmoExperienceAccessTest {
 
             assertEquals(23, new OfficialMcMmoExperienceAccess().powerLevel(PLAYER_ID));
             experience.verify(() -> ExperienceAPI.getPowerLevel(player));
-            experience.verify(() -> ExperienceAPI.getPowerLevelOffline(PLAYER_ID), org.mockito.Mockito.never());
+            experience.verify(() -> ExperienceAPI.getPowerLevelOffline(PLAYER_ID), never());
         }
     }
 

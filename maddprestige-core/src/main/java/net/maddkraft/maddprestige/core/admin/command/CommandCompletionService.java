@@ -21,6 +21,13 @@ import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 
 public final class CommandCompletionService {
     private static final int MAX_SUGGESTIONS = 50;
+    private static final String SETUP = "setup";
+    private static final String PRESTIGE = "prestige";
+    private static final String DETAILS = "details";
+    private static final String CONFIRM = "confirm";
+    private static final String CANCEL = "cancel";
+    private static final String APPLY = "apply";
+    private static final String ACKNOWLEDGE = "acknowledge";
     private final AtomicReference<CompletionCatalog> catalog = new AtomicReference<>(CompletionCatalog.empty());
     private final SetupWizardService setup;
     private final OperationConfirmationService confirmations;
@@ -31,12 +38,12 @@ public final class CommandCompletionService {
     }
 
     public CommandCompletionService(SetupWizardService setup) {
-        this.setup = Objects.requireNonNull(setup, "setup");
+        this.setup = Objects.requireNonNull(setup, SETUP);
         this.confirmations = null;
     }
 
     public CommandCompletionService(SetupWizardService setup, OperationConfirmationService confirmations) {
-        this.setup = Objects.requireNonNull(setup, "setup");
+        this.setup = Objects.requireNonNull(setup, SETUP);
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
     }
 
@@ -99,34 +106,42 @@ public final class CommandCompletionService {
             return configCandidates(subject, tokens);
         }
         if (root.equals("simulate") && subject.has(PhaseSixPermissions.SIMULATE)) {
-            return tokens.size() == 2 ? List.of("prestige")
-                    : tokens.size() == 3 || tokens.size() == 4 ? List.of("details") : List.of();
+            return prestigeDetailsCandidates(tokens);
         }
         if (root.equals("why") && (subject.has(PhaseSixPermissions.USE)
                 || subject.has(PhaseSixPermissions.PLAYER_VIEW))) {
-            return tokens.size() == 2 ? List.of("prestige")
-                    : tokens.size() == 3 || tokens.size() == 4 ? List.of("details") : List.of();
+            return prestigeDetailsCandidates(tokens);
         }
-        if (root.equals("confirm") && tokens.size() == 2 && confirmations != null
+        if (root.equals(CONFIRM) && tokens.size() == 2 && confirmations != null
                 && subject.has(PhaseSixPermissions.PRESTIGE)) {
             return confirmations.validConfirmationIds(subject).stream().map(UUID::toString).toList();
         }
         if (root.equals("help")) {
-            return List.of("overview", "setup", "measurement", "requirements", "scaling", "providers");
+            return List.of("overview", SETUP, "measurement", "requirements", "scaling", "providers");
         }
         if (root.equals("doctor") && subject.has(PhaseSixPermissions.DOCTOR)) {
-            return tokens.size() == 2 ? List.of("details") : List.of();
+            return tokens.size() == 2 ? List.of(DETAILS) : List.of();
         }
-        if (root.equals("setup") && subject.has(PhaseSixPermissions.SETUP)) {
-            return setupCandidates(subject, tokens);
+        if (root.equals(SETUP) && subject.has(PhaseSixPermissions.SETUP)) {
+            return setupCandidates(tokens);
         }
         if (root.equals("staff") && subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT)) {
             if (tokens.size() == 2) {
-                return List.of("prestige");
+                return List.of(PRESTIGE);
             }
-            if (tokens.size() == 3 && tokens.get(1).equalsIgnoreCase("prestige")) {
+            if (tokens.size() == 3 && tokens.get(1).equalsIgnoreCase(PRESTIGE)) {
                 return List.of("set");
             }
+        }
+        return List.of();
+    }
+
+    private static List<String> prestigeDetailsCandidates(List<String> tokens) {
+        if (tokens.size() == 2) {
+            return List.of(PRESTIGE);
+        }
+        if (tokens.size() == 3 || tokens.size() == 4) {
+            return List.of(DETAILS);
         }
         return List.of();
     }
@@ -139,14 +154,14 @@ public final class CommandCompletionService {
             }
             if (subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
                 subcommands.addAll(List.of("draft", "set", "add", "remove", "segment-add", "segment-edit",
-                        "segment-remove", "cancel"));
+                        "segment-remove", CANCEL));
             }
             if (subject.has(PhaseSixPermissions.CONFIG_APPLY)) {
-                subcommands.addAll(List.of("apply", "acknowledge", "confirm"));
+                subcommands.addAll(List.of(APPLY, ACKNOWLEDGE, CONFIRM));
             }
             if (subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)) {
-                subcommands.addAll(List.of("rollback", "rollback-apply", "acknowledge", "confirm",
-                        "validate", "diff", "cancel"));
+                subcommands.addAll(List.of("rollback", "rollback-apply", ACKNOWLEDGE, CONFIRM,
+                        "validate", "diff", CANCEL));
             }
             return subcommands;
         }
@@ -177,16 +192,14 @@ public final class CommandCompletionService {
             }
         }
         if (Set.of("segment-add", "segment-edit", "segment-remove").contains(operation)
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
-            if (tokens.size() == 3) {
-                return catalog.get().draftIds();
-            }
+                && subject.has(PhaseSixPermissions.CONFIG_EDIT) && tokens.size() == 3) {
+            return catalog.get().draftIds();
         }
-        if (Set.of("validate", "diff", "cancel", "acknowledge").contains(operation)
+        if (Set.of("validate", "diff", CANCEL, ACKNOWLEDGE).contains(operation)
                 && tokens.size() == 3) {
             return catalog.get().draftIds();
         }
-        if (Set.of("apply", "rollback-apply").contains(operation)) {
+        if (Set.of(APPLY, "rollback-apply").contains(operation)) {
             if (tokens.size() == 3) {
                 return catalog.get().draftIds();
             }
@@ -202,58 +215,64 @@ public final class CommandCompletionService {
         return List.of();
     }
 
-    private List<String> setupCandidates(PermissionSubject subject, List<String> tokens) {
+    private List<String> setupCandidates(List<String> tokens) {
         if (tokens.size() == 2) {
             return List.of("discover", "start", "provider", "requirement", "cost",
-                    "reward", "prestige", "preview", "acknowledge", "confirm", "apply", "cancel");
+                    "reward", PRESTIGE, "preview", ACKNOWLEDGE, CONFIRM, APPLY, CANCEL);
         }
         String operation = tokens.get(1).toLowerCase(Locale.ROOT);
         boolean explicit = tokens.size() > 2 && looksLikeUuid(tokens.get(2));
         int first = explicit ? 3 : 2;
-        if (operation.equals("provider") && tokens.size() == first + 1) {
-            ArrayList<String> values = new ArrayList<>(catalog.get().providerIds());
-            values.add("internal");
-            return values;
+        return switch (operation) {
+            case "provider" -> setupProviderCandidates(tokens, first);
+            case "requirement" -> setupRequirementCandidates(tokens, first);
+            case "cost", "reward" -> setupCostOrRewardCandidates(tokens);
+            case PRESTIGE -> setupPrestigeCandidates(tokens, first);
+            default -> List.of();
+        };
+    }
+
+    private List<String> setupProviderCandidates(List<String> tokens, int first) {
+        if (tokens.size() != first + 1) {
+            return List.of();
         }
-        if (operation.equals("requirement")) {
-            int provider = first + 1;
-            if (tokens.size() == provider + 1) {
-                return catalog.get().providerIds();
-            }
-            if (tokens.size() == provider + 2) {
-                return catalog.get().metricsByProvider().getOrDefault(tokens.get(provider), List.of());
-            }
-            if (tokens.size() == provider + 3) {
-                return List.of("EQUAL", "GREATER_OR_EQUAL", "LESS_OR_EQUAL");
-            }
-            if (tokens.size() == provider + 4 && tokens.get(provider).equalsIgnoreCase("paper_statistics")
-                    && tokens.get(provider + 1).equalsIgnoreCase("play_one_minute")) {
-                return List.of("PT1M", "PT3M", "1m", "3m");
-            }
-            if (tokens.size() == provider + 5) {
-                return List.of("ABSOLUTE", "LIFETIME", "SINCE_PRESTIGE_START",
-                        "SINCE_SEASON_START");
-            }
-            if (tokens.size() == provider + 6) {
-                return List.of("LIVE", "LATCHED");
-            }
-        }
-        if (Set.of("cost", "reward").contains(operation) && tokens.size() == 5) {
-            return catalog.get().providerIds();
-        }
-        if (operation.equals("prestige")) {
-            if (tokens.size() == first + 1) {
-                return List.of("disabled", "enabled");
-            }
-        }
-        return List.of();
+        ArrayList<String> values = new ArrayList<>(catalog.get().providerIds());
+        values.add("internal");
+        return values;
+    }
+
+    private List<String> setupRequirementCandidates(List<String> tokens, int first) {
+        int provider = first + 1;
+        return switch (tokens.size() - provider) {
+            case 1 -> catalog.get().providerIds();
+            case 2 -> catalog.get().metricsByProvider().getOrDefault(tokens.get(provider), List.of());
+            case 3 -> List.of("EQUAL", "GREATER_OR_EQUAL", "LESS_OR_EQUAL");
+            case 4 -> playTimeRequirement(tokens, provider)
+                    ? List.of("PT1M", "PT3M", "1m", "3m") : List.of();
+            case 5 -> List.of("ABSOLUTE", "LIFETIME", "SINCE_PRESTIGE_START", "SINCE_SEASON_START");
+            case 6 -> List.of("LIVE", "LATCHED");
+            default -> List.of();
+        };
+    }
+
+    private static boolean playTimeRequirement(List<String> tokens, int provider) {
+        return tokens.get(provider).equalsIgnoreCase("paper_statistics")
+                && tokens.get(provider + 1).equalsIgnoreCase("play_one_minute");
+    }
+
+    private List<String> setupCostOrRewardCandidates(List<String> tokens) {
+        return tokens.size() == 5 ? catalog.get().providerIds() : List.of();
+    }
+
+    private static List<String> setupPrestigeCandidates(List<String> tokens, int first) {
+        return tokens.size() == first + 1 ? List.of("disabled", "enabled") : List.of();
     }
 
     private static boolean looksLikeUuid(String value) {
         try {
             UUID.fromString(value);
             return true;
-        } catch (IllegalArgumentException exception) {
+        } catch (IllegalArgumentException _) {
             return false;
         }
     }
@@ -276,10 +295,8 @@ public final class CommandCompletionService {
             commands.addAll(List.of("help", "status", "why"));
         }
         if (player && subject.has(PhaseSixPermissions.PRESTIGE)) {
-            commands.add("prestige");
-        }
-        if (player && subject.has(PhaseSixPermissions.PRESTIGE)) {
-            commands.add("confirm");
+            commands.add(PRESTIGE);
+            commands.add(CONFIRM);
         }
         if (subject.has(PhaseSixPermissions.CONFIG_VIEW) || subject.has(PhaseSixPermissions.CONFIG_EDIT)
                 || subject.has(PhaseSixPermissions.CONFIG_APPLY) || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)) {
@@ -292,7 +309,7 @@ public final class CommandCompletionService {
             commands.add("simulate");
         }
         if (subject.has(PhaseSixPermissions.SETUP)) {
-            commands.add("setup");
+            commands.add(SETUP);
         }
         if (player && (subject.has(PhaseSixPermissions.ADMIN_GUI) || subject.has(PhaseSixPermissions.USE))) {
             commands.add("gui");

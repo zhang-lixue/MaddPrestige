@@ -5,6 +5,18 @@ import java.util.Optional;
 import net.maddkraft.maddprestige.api.id.FieldId;
 
 public final class PhaseSixSchema {
+    private static final String INTEGER_COUNT = "INTEGER_COUNT";
+    private static final String EXACT_DECIMAL = "EXACT_DECIMAL";
+    private static final String DURATION = "DURATION";
+    private static final String CURRENCY_AMOUNT = "CURRENCY_AMOUNT";
+    private static final String BOOLEAN_TRUE = "true";
+    private static final String BOOLEAN_FALSE = "false";
+    private static final String ROUNDING_EXACT = "EXACT";
+    private static final String ROUNDING_FLOOR = "FLOOR";
+    private static final String ROUNDING_CEILING = "CEILING";
+    private static final String ROUNDING_HALF_UP = "HALF_UP";
+    private static final String EXPLICIT_BASE = "EXPLICIT_BASE";
+
     private PhaseSixSchema() {
     }
 
@@ -27,7 +39,7 @@ public final class PhaseSixSchema {
                 AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, "requirement_value_type", "requirements.requirements.*.value-type",
                 SchemaValueType.ENUM, Optional.empty(), "Exact target value type.",
-                AllowedValues.fixed("INTEGER_COUNT", "EXACT_DECIMAL", "DURATION", "CURRENCY_AMOUNT"),
+                AllowedValues.fixed(INTEGER_COUNT, EXACT_DECIMAL, DURATION, CURRENCY_AMOUNT),
                 RiskLevel.HIGH);
         register(registry, "requirement_operator", "requirements.requirements.*.operator",
                 SchemaValueType.ENUM, Optional.of("GREATER_OR_EQUAL"), "Typed target comparison operator.",
@@ -60,8 +72,8 @@ public final class PhaseSixSchema {
                 SchemaValueType.STRING, Optional.empty(), "One presentation metadata value.",
                 AllowedValues.unrestricted(), RiskLevel.MEDIUM);
         register(registry, "requirement_hidden", "requirements.requirements.*.hidden", SchemaValueType.BOOLEAN,
-                Optional.of("false"), "Hides a requirement from normal presentation without disabling it.",
-                AllowedValues.fixed("true", "false"), RiskLevel.MEDIUM);
+                Optional.of(BOOLEAN_FALSE), "Hides a requirement from normal presentation without disabling it.",
+                AllowedValues.fixed(BOOLEAN_TRUE, BOOLEAN_FALSE), RiskLevel.MEDIUM);
         catchUpFamily(registry);
         costAndRewardFamilies(registry);
         lifecycleObjectFamilies(registry);
@@ -114,16 +126,16 @@ public final class PhaseSixSchema {
         register(registry, "requirement_catch_up", path, SchemaValueType.MAP, Optional.empty(),
                 "Bounded optional catch-up policy.", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, "requirement_catch_up_enabled", path + ".enabled", SchemaValueType.BOOLEAN,
-                Optional.of("false"), "Enables this explicit catch-up policy.",
-                AllowedValues.fixed("true", "false"), RiskLevel.HIGH);
+                Optional.of(BOOLEAN_FALSE), "Enables this explicit catch-up policy.",
+                AllowedValues.fixed(BOOLEAN_TRUE, BOOLEAN_FALSE), RiskLevel.HIGH);
         for (String key : List.of("start-threshold", "reduction-rate", "maximum-reduction", "floor", "quantum")) {
             register(registry, "requirement_catch_up_" + key.replace('-', '_'), path + "." + key,
                     SchemaValueType.DECIMAL, Optional.empty(), "Exact bounded catch-up value.",
                     AllowedValues.unrestricted(), RiskLevel.HIGH);
         }
         register(registry, "requirement_catch_up_rounding", path + ".rounding", SchemaValueType.ENUM,
-                Optional.of("EXACT"), "Catch-up result rounding policy.",
-                AllowedValues.fixed("EXACT", "FLOOR", "CEILING", "HALF_UP"), RiskLevel.HIGH);
+                Optional.of(ROUNDING_EXACT), "Catch-up result rounding policy.",
+                AllowedValues.fixed(ROUNDING_EXACT, ROUNDING_FLOOR, ROUNDING_CEILING, ROUNDING_HALF_UP), RiskLevel.HIGH);
     }
 
     private static void costAndRewardFamilies(SchemaRegistry registry) {
@@ -152,8 +164,8 @@ public final class PhaseSixSchema {
         register(registry, id + "_type", path + ".type", SchemaValueType.STRING, Optional.of("value"),
                 "Provider-owned action type.", AllowedValues.unrestricted(), risk);
         register(registry, id + "_value_type", path + ".value-type", SchemaValueType.ENUM,
-                Optional.of("EXACT_DECIMAL"), "Exact provider value type.",
-                AllowedValues.fixed("INTEGER_COUNT", "EXACT_DECIMAL", "DURATION", "CURRENCY_AMOUNT"), risk);
+                Optional.of(EXACT_DECIMAL), "Exact provider value type.",
+                AllowedValues.fixed(INTEGER_COUNT, EXACT_DECIMAL, DURATION, CURRENCY_AMOUNT), risk);
         register(registry, id + "_" + valueKey, path + "." + valueKey, SchemaValueType.STRING, Optional.empty(),
                 "Canonical typed " + id + " " + valueKey + ".", AllowedValues.unrestricted(), risk);
         register(registry, id + "_display_name", path + ".display-name", SchemaValueType.STRING, Optional.empty(),
@@ -175,7 +187,8 @@ public final class PhaseSixSchema {
                 "Exact internal currency decimal scale.", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, "currency_rounding", "currencies.*.rounding-mode", SchemaValueType.ENUM,
                 Optional.of("UNNECESSARY"), "Exact internal currency rounding policy.",
-                AllowedValues.fixed("UP", "DOWN", "CEILING", "FLOOR", "HALF_UP", "HALF_DOWN", "HALF_EVEN",
+                AllowedValues.fixed("UP", "DOWN", ROUNDING_CEILING, ROUNDING_FLOOR, ROUNDING_HALF_UP,
+                        "HALF_DOWN", "HALF_EVEN",
                         "UNNECESSARY"), RiskLevel.HIGH);
         register(registry, "currency_maximum_precision", "currencies.*.maximum-precision",
                 SchemaValueType.INTEGER, Optional.of("38"), "Maximum exact currency precision.",
@@ -183,23 +196,23 @@ public final class PhaseSixSchema {
         register(registry, "currency_maximum_balance", "currencies.*.maximum-balance", SchemaValueType.DECIMAL,
                 Optional.empty(), "Maximum exact internal balance.", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, "currency_prestige_scoped", "currencies.*.prestige-scoped", SchemaValueType.BOOLEAN,
-                Optional.of("false"), "Whether Prestige reset policy may reset this currency.",
-                AllowedValues.fixed("true", "false"), RiskLevel.CRITICAL);
+                Optional.of(BOOLEAN_FALSE), "Whether Prestige reset policy may reset this currency.",
+                AllowedValues.fixed(BOOLEAN_TRUE, BOOLEAN_FALSE), RiskLevel.CRITICAL);
 
         register(registry, "milestone_definition", "milestones.*", SchemaValueType.MAP, Optional.empty(),
                 "One stable Prestige milestone definition.", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, "milestone_display_name", "milestones.*.display-name", SchemaValueType.STRING,
                 Optional.empty(), "Milestone display name.", AllowedValues.unrestricted(), RiskLevel.MEDIUM);
         register(registry, "milestone_enabled", "milestones.*.enabled", SchemaValueType.BOOLEAN,
-                Optional.of("true"), "Enables this milestone.", AllowedValues.fixed("true", "false"),
+                Optional.of(BOOLEAN_TRUE), "Enables this milestone.", AllowedValues.fixed(BOOLEAN_TRUE, BOOLEAN_FALSE),
                 RiskLevel.HIGH);
         register(registry, "milestone_trigger", "milestones.*.trigger", SchemaValueType.ENUM,
                 Optional.of("CURRENT_PRESTIGE"), "Canonical numeric Prestige milestone trigger.",
                 AllowedValues.fixed("CURRENT_PRESTIGE", "LIFETIME_PRESTIGE", "SEASON_PROGRESS",
                         "PROVIDER_METRIC"), RiskLevel.HIGH);
         register(registry, "milestone_value_type", "milestones.*.value-type", SchemaValueType.ENUM,
-                Optional.of("INTEGER_COUNT"), "Exact milestone threshold type.",
-                AllowedValues.fixed("INTEGER_COUNT", "EXACT_DECIMAL", "DURATION", "CURRENCY_AMOUNT"),
+                Optional.of(INTEGER_COUNT), "Exact milestone threshold type.",
+                AllowedValues.fixed(INTEGER_COUNT, EXACT_DECIMAL, DURATION, CURRENCY_AMOUNT),
                 RiskLevel.HIGH);
         register(registry, "milestone_threshold", "milestones.*.threshold", SchemaValueType.STRING,
                 Optional.empty(), "Canonical typed milestone threshold.", AllowedValues.unrestricted(),
@@ -252,15 +265,15 @@ public final class PhaseSixSchema {
                 "Bounded segment formula.", AllowedValues.fixed("FLAT", "LINEAR", "EXPONENTIAL", "MANUAL"),
                 RiskLevel.HIGH);
         register(registry, id + "_transition", path + ".segments.*.transition", SchemaValueType.ENUM,
-                Optional.of("EXPLICIT_BASE"), "Explicit base or continuity from the preceding segment.",
-                AllowedValues.fixed("EXPLICIT_BASE", "CONTINUE"), RiskLevel.HIGH);
+                Optional.of(EXPLICIT_BASE), "Explicit base or continuity from the preceding segment.",
+                AllowedValues.fixed(EXPLICIT_BASE, "CONTINUE"), RiskLevel.HIGH);
         register(registry, id + "_base", path + ".segments.*.base", SchemaValueType.DECIMAL, Optional.of("1"),
                 "Non-negative segment base.", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, id + "_rate", path + ".segments.*.rate", SchemaValueType.DECIMAL, Optional.of("0"),
                 "Non-negative linear delta or exponential factor.", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, id + "_rounding", path + ".segments.*.rounding", SchemaValueType.ENUM,
-                Optional.of("EXACT"), "Post-formula target rounding policy.",
-                AllowedValues.fixed("EXACT", "FLOOR", "CEILING", "HALF_UP"), RiskLevel.HIGH);
+                Optional.of(ROUNDING_EXACT), "Post-formula target rounding policy.",
+                AllowedValues.fixed(ROUNDING_EXACT, ROUNDING_FLOOR, ROUNDING_CEILING, ROUNDING_HALF_UP), RiskLevel.HIGH);
         register(registry, id + "_quantum", path + ".segments.*.quantum", SchemaValueType.DECIMAL,
                 Optional.of("1"), "Positive bounded rounding quantum.", AllowedValues.unrestricted(),
                 RiskLevel.HIGH);
@@ -280,16 +293,16 @@ public final class PhaseSixSchema {
                 "Formula mode for this " + label + ".",
                 AllowedValues.fixed("FLAT", "LINEAR", "EXPONENTIAL", "MANUAL"), RiskLevel.HIGH);
         register(registry, id + "_transition", path + ".transition", SchemaValueType.ENUM,
-                Optional.of("EXPLICIT_BASE"), "Base or continuity rule for this " + label + ".",
-                AllowedValues.fixed("EXPLICIT_BASE", "CONTINUE"), RiskLevel.HIGH);
+                Optional.of(EXPLICIT_BASE), "Base or continuity rule for this " + label + ".",
+                AllowedValues.fixed(EXPLICIT_BASE, "CONTINUE"), RiskLevel.HIGH);
         register(registry, id + "_base", path + ".base", SchemaValueType.DECIMAL, Optional.of("1"),
                 "Non-negative base for this " + label + ".", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, id + "_rate", path + ".rate", SchemaValueType.DECIMAL, Optional.of("0"),
                 "Non-negative linear delta or exponential factor for this " + label + ".",
                 AllowedValues.unrestricted(), RiskLevel.HIGH);
-        register(registry, id + "_rounding", path + ".rounding", SchemaValueType.ENUM, Optional.of("EXACT"),
+        register(registry, id + "_rounding", path + ".rounding", SchemaValueType.ENUM, Optional.of(ROUNDING_EXACT),
                 "Post-formula rounding for this " + label + ".",
-                AllowedValues.fixed("EXACT", "FLOOR", "CEILING", "HALF_UP"), RiskLevel.HIGH);
+                AllowedValues.fixed(ROUNDING_EXACT, ROUNDING_FLOOR, ROUNDING_CEILING, ROUNDING_HALF_UP), RiskLevel.HIGH);
         register(registry, id + "_quantum", path + ".quantum", SchemaValueType.DECIMAL, Optional.of("1"),
                 "Positive rounding quantum for this " + label + ".", AllowedValues.unrestricted(), RiskLevel.HIGH);
         register(registry, id + "_floor", path + ".floor", SchemaValueType.DECIMAL, Optional.empty(),
