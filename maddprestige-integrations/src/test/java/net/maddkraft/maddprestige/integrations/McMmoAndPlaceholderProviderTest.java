@@ -44,6 +44,7 @@ class McMmoAndPlaceholderProviderTest {
     void verifiesMcMmoPublicApiContract() throws ReflectiveOperationException {
         assertEquals(int.class, ExperienceAPI.class.getMethod("getLevelOffline", UUID.class, String.class)
                 .getReturnType());
+        assertEquals(int.class, ExperienceAPI.class.getMethod("getPowerLevel", Player.class).getReturnType());
         assertEquals(int.class, ExperienceAPI.class.getMethod("getPowerLevelOffline", UUID.class).getReturnType());
         assertEquals(boolean.class, ExperienceAPI.class.getMethod("isValidSkillType", String.class).getReturnType());
         assertFalse(java.util.Arrays.stream(ExperienceAPI.class.getMethods())

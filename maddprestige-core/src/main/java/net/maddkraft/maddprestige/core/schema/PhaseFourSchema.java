@@ -43,6 +43,10 @@ public final class PhaseFourSchema {
         register(registry, "prestige_cooldown", "prestige.cooldown", SchemaValueType.DURATION, Optional.of("PT0S"),
                 "Minimum duration between successful Prestige operations.", AllowedValues.unrestricted(),
                 RiskLevel.MEDIUM);
+        register(registry, "prestige_confirmation_maximum_lifetime", "prestige.confirmation-maximum-lifetime",
+                SchemaValueType.DURATION, Optional.of("PT12H"),
+                "Secondary one-hour-to-seven-day cap for login-session-bound Prestige confirmations.",
+                AllowedValues.unrestricted(), RiskLevel.MEDIUM);
         register(registry, "prestige_reset_policy", "prestige.reset-policy", SchemaValueType.MAP, Optional.empty(),
                 "RESET/PRESERVE overrides; omitted components inherit canonical safe defaults.",
                 AllowedValues.fixed("RESET", "PRESERVE"), RiskLevel.CRITICAL);

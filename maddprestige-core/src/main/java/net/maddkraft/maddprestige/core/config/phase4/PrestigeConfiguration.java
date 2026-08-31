@@ -24,7 +24,10 @@ public record PrestigeConfiguration(
         Optional<String> scalingProfileId,
         Optional<String> catchUpProfileId,
         ResetPreservePolicy resetPolicy,
-        boolean externalResetsEnabled) {
+        boolean externalResetsEnabled,
+        Duration confirmationMaximumLifetime) {
+    public static final Duration DEFAULT_CONFIRMATION_MAXIMUM_LIFETIME = Duration.ofHours(12);
+
     public PrestigeConfiguration {
         requiredStages = Set.copyOf(Objects.requireNonNull(requiredStages, "required stages"));
         resetStage = Objects.requireNonNull(resetStage, "reset stage");
@@ -42,6 +45,13 @@ public record PrestigeConfiguration(
         scalingProfileId = Objects.requireNonNull(scalingProfileId, "scaling profile ID");
         catchUpProfileId = Objects.requireNonNull(catchUpProfileId, "catch-up profile ID");
         resetPolicy = Objects.requireNonNull(resetPolicy, "reset policy");
+        confirmationMaximumLifetime = Objects.requireNonNull(
+                confirmationMaximumLifetime, "confirmation maximum lifetime");
+        if (confirmationMaximumLifetime.compareTo(Duration.ofHours(1)) < 0
+                || confirmationMaximumLifetime.compareTo(Duration.ofDays(7)) > 0) {
+            throw new IllegalArgumentException(
+                    "Confirmation maximum lifetime must be between one hour and seven days");
+        }
         if (costIds.stream().distinct().count() != costIds.size()
                 || rewardIds.stream().distinct().count() != rewardIds.size()) {
             throw new IllegalArgumentException("Prestige cost and reward references must be unique");
@@ -51,10 +61,31 @@ public record PrestigeConfiguration(
         }
     }
 
+    public PrestigeConfiguration(
+            boolean enabled,
+            Set<StageId> requiredStages,
+            StageId resetStage,
+            long currentCountIncrement,
+            long lifetimeCountIncrement,
+            PrestigeLimit limit,
+            Duration cooldown,
+            Optional<RequirementId> requirementTreeId,
+            List<CostId> costIds,
+            List<RewardId> rewardIds,
+            Optional<String> scalingProfileId,
+            Optional<String> catchUpProfileId,
+            ResetPreservePolicy resetPolicy,
+            boolean externalResetsEnabled) {
+        this(enabled, requiredStages, resetStage, currentCountIncrement, lifetimeCountIncrement, limit, cooldown,
+                requirementTreeId, costIds, rewardIds, scalingProfileId, catchUpProfileId, resetPolicy,
+                externalResetsEnabled, DEFAULT_CONFIRMATION_MAXIMUM_LIFETIME);
+    }
+
     public static PrestigeConfiguration disabled() {
         return new PrestigeConfiguration(false, Set.of(), new StageId("disabled"), 1, 1,
                 PrestigeLimit.unlimited(), Duration.ZERO, Optional.empty(), List.of(), List.of(), Optional.empty(),
-                Optional.empty(), ResetPreservePolicy.safeDefaults(), false);
+                Optional.empty(), ResetPreservePolicy.safeDefaults(), false,
+                DEFAULT_CONFIRMATION_MAXIMUM_LIFETIME);
     }
 
     /**

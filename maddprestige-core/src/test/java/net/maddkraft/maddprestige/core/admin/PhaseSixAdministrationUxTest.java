@@ -114,15 +114,19 @@ class PhaseSixAdministrationUxTest {
         var details = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .preview("command.preview.summary", preview, true);
 
-        assertEquals(List.of("command.preview.summary", "command.preview.transition",
-                "command.preview.requirement_mode", "command.preview.effective_requirement",
-                "command.preview.effective_cost", "command.preview.effective_reward",
-                "command.preview.effective_milestone"),
+        assertEquals(List.of("command.concise.transition", "command.concise.requirements_not_met",
+                "command.concise.requirement", "command.concise.cost_text", "command.concise.reward_text"),
                 normal.stream().map(value -> value.key()).toList());
-        assertEquals(Optional.of("Prestige 7 → 8"), normal.get(1).argument("value"));
-        assertEquals(Optional.of("ALL"), normal.get(2).argument("mode"));
-        assertEquals(Optional.of("18000000"), normal.get(3).argument("current"));
-        assertEquals(Optional.of("25000000"), normal.get(3).argument("target"));
+        assertEquals(Optional.of("Prestige 7 → 8"), normal.getFirst().argument("value"));
+        assertEquals(Optional.of("Money"), normal.get(2).argument("label"));
+        assertEquals(Optional.of("18000000"), normal.get(2).argument("current"));
+        assertEquals(Optional.of("25000000"), normal.get(2).argument("target"));
+        assertTrue(normal.size() <= 8);
+        assertFalse(normal.stream().anyMatch(value -> value.arguments().containsKey("id")
+                || value.arguments().containsKey("provider") || value.arguments().containsKey("revision")
+                || value.arguments().containsKey("source") || value.arguments().containsKey("formula")));
+        assertTrue(details.stream().anyMatch(value -> value.key().equals("command.details.section.requirements")));
+        assertTrue(details.stream().anyMatch(value -> value.key().equals("command.details.section.provenance")));
         assertTrue(details.stream().anyMatch(value -> value.key()
                 .equals("command.preview.requirement_provenance")
                 && value.argument("source").filter("COMPILED_EFFECTIVE_CONFIGURATION"::equals).isPresent()));
@@ -178,6 +182,8 @@ class PhaseSixAdministrationUxTest {
                 .noneMatch("requirement"::equals));
 
         PermissionSubject editor = subject(PhaseSixPermissions.CONFIG_EDIT);
+        assertTrue(completion.suggest(editor, List.of("config", "")).containsAll(
+                List.of("segment-add", "segment-edit", "segment-remove")));
         List<String> addPaths = completion.suggest(editor, List.of("config", "add", "draft", ""));
         List<String> removePaths = completion.suggest(editor, List.of("config", "remove", "draft", ""));
         assertFalse(addPaths.contains("progression.stages"));

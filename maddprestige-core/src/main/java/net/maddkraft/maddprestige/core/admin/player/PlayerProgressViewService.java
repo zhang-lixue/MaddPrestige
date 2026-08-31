@@ -14,9 +14,7 @@ public final class PlayerProgressViewService {
     }
 
     public CompletionStage<PlayerProgressView> view(PermissionSubject subject, UUID playerId) {
-        var rankUp = previews.simulateRankUp(subject, playerId);
-        var prestige = previews.simulatePrestige(subject, playerId);
-        return rankUp.thenCombine(prestige, (rank, lifecycle) ->
-                new PlayerProgressView(playerId, rank, lifecycle));
+        return previews.simulatePrestige(subject, playerId)
+                .thenApply(prestige -> new PlayerProgressView(playerId, prestige));
     }
 }

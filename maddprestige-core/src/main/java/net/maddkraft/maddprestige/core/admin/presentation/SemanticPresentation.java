@@ -21,6 +21,8 @@ import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
  * prose is deliberately not accepted here: the selected catalog owns every public explanation and remediation.
  */
 public final class SemanticPresentation {
+    private static final int MAX_NORMAL_REQUIREMENTS = 3;
+    private static final int MAX_NORMAL_LINES = 8;
     private static final Map<String, Keys> ADMINISTRATION_KEYS = administrationMappings();
     private static final Map<AdministrationSemanticVariant, Keys> ADMINISTRATION_VARIANT_KEYS =
             administrationVariantMappings();
@@ -68,15 +70,24 @@ public final class SemanticPresentation {
 
     public static List<MessageReference> why(WhyReport report, boolean details) {
         Objects.requireNonNull(report, "why report");
+        if (!details) {
+            return conciseWhy(report);
+        }
         ArrayList<MessageReference> lines = new ArrayList<>();
         lines.add(message(report.executable() ? "command.why.allowed" : "command.why.blocked",
                 "blockers", report.blockers().size()));
-        report.authorizationBlockers().forEach(blocker -> lines.add(authorizationBlocker(blocker)));
-        if (details) {
-            report.requirementExplanation().ifPresent(value -> appendRequirement(value, lines));
-            report.configRevision().ifPresent(value -> lines.add(message("command.why.revision",
-                    "revision", value.value())));
+        if (!report.authorizationBlockers().isEmpty()) {
+            lines.add(message("command.details.section.safety"));
+            report.authorizationBlockers().forEach(blocker -> lines.add(authorizationBlocker(blocker)));
         }
+        report.requirementExplanation().ifPresent(value -> {
+            lines.add(message("command.details.section.requirements"));
+            appendRequirement(value, lines);
+        });
+        report.configRevision().ifPresent(value -> {
+            lines.add(message("command.details.section.provenance"));
+            lines.add(message("command.why.revision", "revision", value.value()));
+        });
         return List.copyOf(lines);
     }
 
@@ -94,25 +105,49 @@ public final class SemanticPresentation {
     public static List<MessageReference> preview(String summaryKey, OperationPreview preview, boolean details) {
         Objects.requireNonNull(summaryKey, "preview summary key");
         Objects.requireNonNull(preview, "operation preview");
+        if (!details) {
+            return concisePreview(preview);
+        }
         ArrayList<MessageReference> lines = new ArrayList<>();
         lines.add(message(summaryKey, "kind", preview.kind(), "player", preview.playerId(),
                 "status", preview.executable() ? "ELIGIBLE" : "BLOCKED",
                 "blockers", preview.blockers().size(), "revision", preview.configRevision().value()));
         lines.add(message("command.preview.transition", "value", preview.stateChange()));
-        preview.requirements().ifPresent(value -> appendEffectiveRequirements(value, lines));
+        preview.requirements().ifPresent(value -> {
+            lines.add(message("command.details.section.requirements"));
+            appendEffectiveRequirements(value, lines);
+        });
+        if (!preview.costs().isEmpty() || !preview.rewards().isEmpty() || !preview.milestones().isEmpty()) {
+            lines.add(message("command.details.section.changes"));
+        }
         preview.costs().forEach(value -> lines.add(message("command.preview.effective_cost", "value", value)));
         preview.rewards().forEach(value -> lines.add(message("command.preview.effective_reward", "value", value)));
         preview.milestones().forEach(value ->
                 lines.add(message("command.preview.effective_milestone", "value", value)));
-        preview.authorizationBlockers().forEach(blocker -> lines.add(authorizationBlocker(blocker)));
-        if (details) {
-            lines.addAll(preview.semanticDetails());
-            preview.requirements().ifPresent(value -> appendRequirement(value, lines));
-            preview.externalUncertainty().forEach(value ->
-                    lines.add(message("command.preview.effective_uncertainty", "value", value)));
-            lines.add(message("command.preview.revision", "revision", preview.configRevision().value()));
+        if (!preview.authorizationBlockers().isEmpty()) {
+            lines.add(message("command.details.section.safety"));
+            preview.authorizationBlockers().forEach(blocker -> lines.add(authorizationBlocker(blocker)));
         }
+        lines.add(message("command.details.section.provenance"));
+        lines.addAll(preview.semanticDetails());
+        preview.requirements().ifPresent(value -> appendRequirement(value, lines));
+        preview.externalUncertainty().forEach(value ->
+                lines.add(message("command.preview.effective_uncertainty", "value", value)));
+        lines.add(message("command.preview.revision", "revision", preview.configRevision().value()));
         return List.copyOf(lines);
+    }
+
+    /** Three-line player status projection with no diagnostic or implementation vocabulary. */
+    public static List<MessageReference> player(OperationPreview preview) {
+        Objects.requireNonNull(preview, "Prestige preview");
+        Map<String, String> transition = detail(preview, "command.preview.prestige_state_change")
+                .map(MessageReference::arguments).orElse(Map.of());
+        String current = transition.getOrDefault("current_prestige", prestigePart(preview.stateChange(), false));
+        String target = transition.getOrDefault("target_prestige", prestigePart(preview.stateChange(), true));
+        return List.of(
+                message("command.player.concise.prestige", "current", current),
+                message("command.player.concise.next", "target", target),
+                message(preview.executable() ? "command.player.concise.ready" : "command.player.concise.not_ready"));
     }
 
     public static List<MessageReference> administration(AdministrationException exception) {
@@ -170,6 +205,152 @@ public final class SemanticPresentation {
                     "source", "COMPILED_EFFECTIVE_CONFIGURATION"));
         }
         node.children().forEach(child -> appendRequirement(child, lines));
+    }
+
+    private static List<MessageReference> conciseWhy(WhyReport report) {
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        lines.add(message(report.executable() ? "command.concise.ready" : "command.concise.not_ready"));
+        report.requirementExplanation().ifPresent(root -> appendConciseRequirementLeaves(root, lines,
+                MAX_NORMAL_REQUIREMENTS));
+        for (AuthorizationBlocker blocker : report.authorizationBlockers()) {
+            if (lines.size() >= MAX_NORMAL_LINES || blocker.kind().catalogIdentity().contains("requirement")) {
+                continue;
+            }
+            MessageReference summary = conciseBlocker(blocker);
+            if (lines.stream().noneMatch(summary::equals)) {
+                lines.add(summary);
+            }
+        }
+        if (!report.executable() && lines.size() == 1) {
+            lines.add(message("command.concise.blocker.unavailable"));
+        }
+        return List.copyOf(lines);
+    }
+
+    private static List<MessageReference> concisePreview(OperationPreview preview) {
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        lines.add(message("command.concise.transition", "value", preview.stateChange()));
+        preview.requirements().ifPresent(root -> {
+            lines.add(message(root.status() == net.maddkraft.maddprestige.api.explanation.ExplanationStatus.SATISFIED
+                    ? "command.concise.requirements_met" : "command.concise.requirements_not_met"));
+            appendConciseRequirementLeaves(root, lines, 2);
+        });
+        List<MessageReference> costs = details(preview, "command.preview.cost");
+        if (!costs.isEmpty()) {
+            lines.add(message("command.concise.cost", "amount",
+                    costs.stream().map(SemanticPresentation::gameplayAmount)
+                            .collect(java.util.stream.Collectors.joining(" + "))));
+        } else if (!preview.costs().isEmpty()) {
+            lines.add(message("command.concise.cost_text", "value", String.join(" + ", preview.costs())));
+        }
+        List<MessageReference> rewards = details(preview, "command.preview.reward");
+        if (!rewards.isEmpty()) {
+            lines.add(message("command.concise.reward", "amount",
+                    rewards.stream().map(SemanticPresentation::gameplayAmount)
+                            .collect(java.util.stream.Collectors.joining(" + "))));
+        } else if (!preview.rewards().isEmpty()) {
+            lines.add(message("command.concise.reward_text", "value", String.join(" + ", preview.rewards())));
+        }
+        for (AuthorizationBlocker blocker : preview.authorizationBlockers()) {
+            if (lines.size() >= MAX_NORMAL_LINES || blocker.kind().catalogIdentity().contains("requirement")) {
+                continue;
+            }
+            MessageReference summary = conciseBlocker(blocker);
+            if (lines.stream().noneMatch(summary::equals)) {
+                lines.add(summary);
+            }
+        }
+        return List.copyOf(lines.subList(0, Math.min(lines.size(), MAX_NORMAL_LINES)));
+    }
+
+    private static void appendConciseRequirementLeaves(
+            ExplanationNode root,
+            List<MessageReference> lines,
+            int maximum) {
+        ArrayList<ExplanationNode> leaves = new ArrayList<>();
+        collectLeaves(root, leaves);
+        leaves.stream().limit(maximum).forEach(leaf -> lines.add(message("command.concise.requirement",
+                "label", gameplayLabel(leaf),
+                "current", leaf.facts().getOrDefault("current", "Unavailable"),
+                "target", leaf.facts().getOrDefault("target", "Unavailable"),
+                "indicator", leaf.status()
+                        == net.maddkraft.maddprestige.api.explanation.ExplanationStatus.SATISFIED ? "✓" : "✗")));
+    }
+
+    private static void collectLeaves(ExplanationNode node, List<ExplanationNode> leaves) {
+        if (node.children().isEmpty()) {
+            leaves.add(node);
+            return;
+        }
+        node.children().forEach(child -> collectLeaves(child, leaves));
+    }
+
+    private static String gameplayLabel(ExplanationNode node) {
+        String metric = node.facts().getOrDefault("metric", "progress").toLowerCase(java.util.Locale.ROOT);
+        if (metric.equals("balance") || metric.contains("money")) {
+            return "Money";
+        }
+        if (metric.equals("total_level") || metric.contains("mcmmo")) {
+            return "mcMMO";
+        }
+        if (metric.contains("mobcoin")) {
+            return "MobCoins";
+        }
+        String[] words = metric.replace('-', '_').split("_+");
+        return java.util.Arrays.stream(words).filter(value -> !value.isBlank())
+                .map(value -> Character.toUpperCase(value.charAt(0)) + value.substring(1))
+                .collect(java.util.stream.Collectors.joining(" "));
+    }
+
+    private static String gameplayAmount(MessageReference reference) {
+        String amount = reference.arguments().getOrDefault("canonical",
+                reference.arguments().getOrDefault("amount", "0"));
+        String provider = reference.arguments().getOrDefault("provider", "").toLowerCase(java.util.Locale.ROOT);
+        String type = reference.arguments().getOrDefault("type", "").toLowerCase(java.util.Locale.ROOT);
+        if (provider.contains("vault") || type.contains("money") || type.contains("withdraw")
+                || type.contains("deposit")) {
+            return "$" + amount;
+        }
+        String display = reference.arguments().getOrDefault("value", "");
+        return display.isBlank() ? amount : amount + " " + display;
+    }
+
+    private static java.util.Optional<MessageReference> detail(OperationPreview preview, String key) {
+        return preview.semanticDetails().stream().filter(reference -> reference.key().equals(key)).findFirst();
+    }
+
+    private static List<MessageReference> details(OperationPreview preview, String key) {
+        return preview.semanticDetails().stream().filter(reference -> reference.key().equals(key)).toList();
+    }
+
+    private static MessageReference conciseBlocker(AuthorizationBlocker blocker) {
+        String code = blocker.kind().catalogIdentity();
+        if (code.contains("cooldown")) {
+            return message("command.concise.blocker.cooldown", "value",
+                    blocker.facts().getOrDefault("cooldown_remaining", "active"));
+        }
+        if (code.contains("maximum")) {
+            return message("command.concise.blocker.maximum");
+        }
+        if (code.contains("cost")) {
+            return message("command.concise.blocker.cost");
+        }
+        if (code.contains("provider") || code.contains("boundary") || code.contains("projection")) {
+            return message("command.concise.blocker.provider");
+        }
+        if (code.contains("state") || code.contains("revision") || code.contains("context")) {
+            return message("command.concise.blocker.state");
+        }
+        return message("command.concise.blocker.unavailable");
+    }
+
+    private static String prestigePart(String value, boolean target) {
+        int arrow = value.indexOf('→');
+        if (arrow < 0) {
+            return value;
+        }
+        String part = target ? value.substring(arrow + 1) : value.substring(0, arrow);
+        return part.replace("Prestige", "").trim();
     }
 
     private static void appendEffectiveRequirements(ExplanationNode root, List<MessageReference> lines) {
@@ -401,7 +582,11 @@ public final class SemanticPresentation {
         register(result, "confirmation_actor_mismatch", "confirmation.actor_mismatch");
         register(result, "confirmation_already_used", "confirmation.already_used");
         register(result, "confirmation_config_stale", "confirmation.config_stale");
+        register(result, "confirmation_ambiguous", "confirmation.ambiguous");
         register(result, "confirmation_expired", "confirmation.expired");
+        register(result, "confirmation_none_pending", "confirmation.none_pending");
+        register(result, "confirmation_revalidation_failed", "confirmation.revalidation_failed");
+        register(result, "confirmation_session_ended", "confirmation.session_ended");
         register(result, "confirmation_unknown", "confirmation.unknown");
         register(result, "gui_action_forged", "gui.action.forged");
         register(result, "gui_action_stale", "gui.action.stale");

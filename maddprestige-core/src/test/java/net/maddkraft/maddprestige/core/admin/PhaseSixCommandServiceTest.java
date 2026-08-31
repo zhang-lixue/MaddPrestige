@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -36,6 +37,7 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationSnapshotStore;
 import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationWorkflow;
 import net.maddkraft.maddprestige.core.admin.config.PreparedConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
+import net.maddkraft.maddprestige.core.admin.config.StructuredConfigurationValue;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
@@ -324,6 +326,8 @@ class PhaseSixCommandServiceTest {
 
         var why = fixture.commands.execute(new CommandInvocation(owner,
                 List.of("why", "prestige", player.toString()))).toCompletableFuture().join();
+        var whyDetails = fixture.commands.execute(new CommandInvocation(owner,
+                List.of("why", "prestige", player.toString(), "details"))).toCompletableFuture().join();
         var rankUp = fixture.commands.execute(new CommandInvocation(owner, List.of("rankup")))
                 .toCompletableFuture().join();
         var doctor = fixture.commands.execute(new CommandInvocation(owner, List.of("doctor")))
@@ -333,6 +337,10 @@ class PhaseSixCommandServiceTest {
 
         assertTrue(why.successful());
         assertTrue(why.messages().stream().anyMatch(message ->
+                message.key().equals("command.concise.not_ready")));
+        assertTrue(why.messages().stream().noneMatch(message ->
+                message.key().startsWith("command.why.blocker.")));
+        assertTrue(whyDetails.messages().stream().anyMatch(message ->
                 message.key().equals("command.why.blocker.no_active_prestige_configuration")));
         assertEquals("rankup.compatibility_only", rankUp.code());
         assertTrue(doctor.successful());
@@ -382,6 +390,75 @@ class PhaseSixCommandServiceTest {
         assertEquals(direct.candidateHash(), gui.candidateHash());
         assertEquals(direct.changedDocuments(), command.changedDocuments());
         assertEquals(direct.changedDocuments(), gui.changedDocuments());
+    }
+
+    @Test
+    @DisplayName("[Phase 9D] Scaling segment commands use the canonical structured mutation path")
+    void scalingSegmentCommandsUseCanonicalStructuredMutationPath() {
+        Fixture fixture = new Fixture();
+        PermissionSubject owner = subject(PhaseSixPermissions.all().toArray(String[]::new));
+        UUID directDraft = fixture.configuration.beginDraft(owner, "direct-segment");
+        UUID commandDraft = fixture.configuration.beginDraft(owner, "command-segment");
+        String scalingPath = "requirements.requirements.phase9d_vault_balance.scaling";
+        String segmentsPath = scalingPath + ".segments";
+        StructuredConfigurationValue manual = new StructuredConfigurationValue(Map.of(
+                "start-prestige", 1L,
+                "end-prestige", "3",
+                "mode", "MANUAL",
+                "transition", "EXPLICIT_BASE",
+                "base", BigDecimal.ONE,
+                "rate", BigDecimal.ZERO,
+                "overrides", Map.of("1", BigDecimal.ONE, "2", new BigDecimal("2"),
+                        "3", new BigDecimal("3"))));
+
+        fixture.configuration.addStructuredObject(owner, directDraft, segmentsPath, Optional.empty(), manual);
+        var added = fixture.commands.execute(new CommandInvocation(owner, List.of(
+                "config", "segment-add", commandDraft.toString(), scalingPath,
+                "1", "3", "MANUAL", "EXPLICIT_BASE", "1", "0", "1=1,2=2,3=3")))
+                .toCompletableFuture().join();
+
+        assertTrue(added.successful());
+        assertEquivalentDrafts(fixture, owner, directDraft, commandDraft);
+
+        StructuredConfigurationValue tail = new StructuredConfigurationValue(Map.of(
+                "start-prestige", 4L,
+                "end-prestige", "unlimited",
+                "mode", "FLAT",
+                "transition", "CONTINUE",
+                "base", BigDecimal.ONE,
+                "rate", BigDecimal.ZERO));
+        fixture.configuration.addStructuredObject(owner, directDraft, segmentsPath, Optional.empty(), tail);
+        var tailAdded = fixture.commands.execute(new CommandInvocation(owner, List.of(
+                "config", "segment-add", commandDraft.toString(), scalingPath,
+                "4", "unlimited", "FLAT", "CONTINUE", "1", "0")))
+                .toCompletableFuture().join();
+
+        assertTrue(tailAdded.successful());
+        assertEquivalentDrafts(fixture, owner, directDraft, commandDraft);
+
+        StructuredConfigurationValue continued = new StructuredConfigurationValue(Map.of(
+                "start-prestige", 1L,
+                "end-prestige", "unlimited",
+                "mode", "LINEAR",
+                "transition", "EXPLICIT_BASE",
+                "base", BigDecimal.ONE,
+                "rate", new BigDecimal("0.5")));
+        fixture.configuration.editStructuredObject(owner, directDraft, segmentsPath, "0", continued);
+        var edited = fixture.commands.execute(new CommandInvocation(owner, List.of(
+                "config", "segment-edit", commandDraft.toString(), scalingPath, "0",
+                "1", "unlimited", "LINEAR", "EXPLICIT_BASE", "1", "0.5", "-")))
+                .toCompletableFuture().join();
+
+        assertTrue(edited.successful());
+        assertEquivalentDrafts(fixture, owner, directDraft, commandDraft);
+
+        fixture.configuration.removeStructuredObject(owner, directDraft, segmentsPath, "0");
+        var removed = fixture.commands.execute(new CommandInvocation(owner, List.of(
+                "config", "segment-remove", commandDraft.toString(), scalingPath, "0")))
+                .toCompletableFuture().join();
+
+        assertTrue(removed.successful());
+        assertEquivalentDrafts(fixture, owner, directDraft, commandDraft);
     }
 
     @Test
@@ -697,6 +774,17 @@ class PhaseSixCommandServiceTest {
 
     private static Map<String, String> activeDocuments(Fixture fixture) {
         return fixture.canonical.active().orElseThrow().compiled().documents();
+    }
+
+    private static void assertEquivalentDrafts(
+            Fixture fixture,
+            PermissionSubject owner,
+            UUID directDraft,
+            UUID commandDraft) {
+        var direct = fixture.configuration.preview(owner, directDraft).toCompletableFuture().join();
+        var command = fixture.configuration.preview(owner, commandDraft).toCompletableFuture().join();
+        assertEquals(direct.candidateHash(), command.candidateHash());
+        assertEquals(direct.changedDocuments(), command.changedDocuments());
     }
 
     private static UUID acknowledgementId(

@@ -5,6 +5,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
@@ -59,21 +62,32 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
         var invocation = new CommandInvocation(PaperPermissionSubjects.from(sender), Arrays.asList(arguments));
         commands.execute(invocation).whenComplete((response, failure) -> scheduler.submit(
                 ExecutionThread.PAPER_SERVER_THREAD, () -> {
-                    if (failure != null) {
+                    try {
+                        deliver(sender, response, failure);
+                    } catch (RuntimeException exception) {
                         sender.sendMessage(messages.render("command.failed"));
-                    } else {
-                        if (response.guiView().isPresent() && sender instanceof org.bukkit.entity.Player player) {
-                            if (guiController == null) {
-                                sender.sendMessage(messages.render("gui.unavailable"));
-                            } else {
-                                guiController.open(player, response.guiView().orElseThrow());
-                            }
-                        }
-                        renderResponse(response, messages).forEach(sender::sendMessage);
                     }
                     return null;
                 }));
         return true;
+    }
+
+    private void deliver(
+            CommandSender sender,
+            net.maddkraft.maddprestige.core.admin.command.CommandResponse response,
+            Throwable failure) {
+        if (failure != null) {
+            sender.sendMessage(messages.render("command.failed"));
+            return;
+        }
+        if (response.guiView().isPresent() && sender instanceof org.bukkit.entity.Player player) {
+            if (guiController == null) {
+                sender.sendMessage(messages.render("gui.unavailable"));
+            } else {
+                guiController.open(player, response.guiView().orElseThrow());
+            }
+        }
+        renderResponse(response, messages).forEach(sender::sendMessage);
     }
 
     @Override
@@ -115,6 +129,29 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
             PaperMessageService messages) {
         Objects.requireNonNull(response, "command response");
         Objects.requireNonNull(messages, "messages");
-        return response.messages().stream().map(messages::render).toList();
+        boolean playerStatusPresent = response.messages().stream().anyMatch(reference ->
+                reference.key().equals("command.player.concise.ready")
+                        || reference.key().equals("command.player.concise.not_ready"));
+        return response.messages().stream()
+                .filter(reference -> !playerStatusPresent
+                        || !reference.key().equals("command.concise.ready")
+                                && !reference.key().equals("command.concise.not_ready"))
+                .map(reference -> renderReference(reference, messages)).toList();
+    }
+
+    private static Component renderReference(MessageReference reference, PaperMessageService messages) {
+        if (!reference.key().equals("command.preview.confirmation_controls")) {
+            return messages.render(reference);
+        }
+        String confirmation = reference.arguments().get("confirmation");
+        if (confirmation == null || confirmation.isBlank()) {
+            return messages.render(reference);
+        }
+        Component confirm = messages.render("command.preview.confirm_action")
+                .clickEvent(ClickEvent.runCommand("/maddprestige confirm " + confirmation));
+        Component copy = messages.render("command.preview.copy_action")
+                .clickEvent(ClickEvent.copyToClipboard(confirmation));
+        return confirm.append(Component.space()).append(copy).append(Component.space())
+                .append(messages.render("command.preview.session_validity"));
     }
 }

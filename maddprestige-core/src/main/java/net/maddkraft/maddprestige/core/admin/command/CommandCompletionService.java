@@ -10,6 +10,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.metric.MetricProvider;
+import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
@@ -22,13 +23,26 @@ public final class CommandCompletionService {
     private static final int MAX_SUGGESTIONS = 50;
     private final AtomicReference<CompletionCatalog> catalog = new AtomicReference<>(CompletionCatalog.empty());
     private final SetupWizardService setup;
+    private final OperationConfirmationService confirmations;
 
     public CommandCompletionService() {
         this.setup = null;
+        this.confirmations = null;
     }
 
     public CommandCompletionService(SetupWizardService setup) {
         this.setup = Objects.requireNonNull(setup, "setup");
+        this.confirmations = null;
+    }
+
+    public CommandCompletionService(SetupWizardService setup, OperationConfirmationService confirmations) {
+        this.setup = Objects.requireNonNull(setup, "setup");
+        this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
+    }
+
+    public CommandCompletionService(OperationConfirmationService confirmations) {
+        this.setup = null;
+        this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
     }
 
     public void refresh(ProviderRegistry providers, SchemaRegistry schema, StageConfiguration stages) {
@@ -93,6 +107,10 @@ public final class CommandCompletionService {
             return tokens.size() == 2 ? List.of("prestige")
                     : tokens.size() == 3 || tokens.size() == 4 ? List.of("details") : List.of();
         }
+        if (root.equals("confirm") && tokens.size() == 2 && confirmations != null
+                && (subject.has(PhaseSixPermissions.PRESTIGE) || subject.has(PhaseSixPermissions.RANK_UP))) {
+            return confirmations.validConfirmationIds(subject).stream().map(UUID::toString).toList();
+        }
         if (root.equals("help")) {
             return List.of("overview", "setup", "measurement", "requirements", "scaling", "providers");
         }
@@ -120,7 +138,8 @@ public final class CommandCompletionService {
                 subcommands.addAll(List.of("get", "list", "search", "explain", "history", "validate", "diff"));
             }
             if (subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
-                subcommands.addAll(List.of("draft", "set", "add", "remove", "cancel"));
+                subcommands.addAll(List.of("draft", "set", "add", "remove", "segment-add", "segment-edit",
+                        "segment-remove", "cancel"));
             }
             if (subject.has(PhaseSixPermissions.CONFIG_APPLY)) {
                 subcommands.addAll(List.of("apply", "acknowledge", "confirm"));
@@ -155,6 +174,12 @@ public final class CommandCompletionService {
             if (tokens.size() == 5) {
                 String path = tokens.get(3);
                 return valuesForPath(path);
+            }
+        }
+        if (Set.of("segment-add", "segment-edit", "segment-remove").contains(operation)
+                && subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
+            if (tokens.size() == 3) {
+                return catalog.get().draftIds();
             }
         }
         if (Set.of("validate", "diff", "cancel", "acknowledge").contains(operation)

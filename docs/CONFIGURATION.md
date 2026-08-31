@@ -105,10 +105,13 @@ authoring path.
 
 1. `config draft` creates a private resumable draft.
 2. `config get`, `config explain`, `config search`, and `config list` inspect effective schema-owned paths.
-3. `config set`, `config add`, and `config remove` edit scalar/list paths. The same schema-confined administration
-   service also creates, replaces, and removes structured draft objects such as requirement groups, costs, rewards,
-   milestones, currencies, scaling segments, and overrides. A future GUI must use this service and gains new object
-   types only after their canonical schema is registered.
+3. `config set`, `config add`, and `config remove` edit scalar/list paths. Scaling segments use the bounded
+   `config segment-add`, `config segment-edit`, and `config segment-remove` commands; each accepts typed
+   start/end, formula, transition, base/rate, and optional `level=value,...` MANUAL overrides. These commands and
+   visual editors use the same schema-confined administration service, which also creates, replaces, and removes
+   structured draft objects such as requirement groups, costs, rewards, milestones, currencies, scaling segments,
+   and overrides. New object types require a registered canonical schema before any command or visual editor may
+   expose them.
 4. `config validate <draft-id>` gives a concise result; `config diff <draft-id>` adds hash, provenance, every finding,
    and semantic diff.
 5. A risky change uses `config acknowledge <draft-id>` and `config confirm <token> <reason>`.

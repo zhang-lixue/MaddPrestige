@@ -137,6 +137,9 @@ public final class PhaseFourConfigurationCompiler {
                 "prestige.lifetime-count-increment", findings);
         PrestigeLimit limit = prestigeLimit(fields.get("maximum"), findings);
         Duration cooldown = duration(fields.get("cooldown"), Duration.ZERO, "prestige.cooldown", findings);
+        Duration confirmationMaximumLifetime = duration(fields.get("confirmation-maximum-lifetime"),
+                PrestigeConfiguration.DEFAULT_CONFIRMATION_MAXIMUM_LIFETIME,
+                "prestige.confirmation-maximum-lifetime", findings);
         Optional<RequirementId> requirement = optionalId(fields.get("requirement-tree"), RequirementId::new,
                 "prestige.requirement-tree", findings);
         List<CostId> costs = idList(fields.get("costs"), CostId::new, "prestige.costs", findings);
@@ -153,7 +156,7 @@ public final class PhaseFourConfigurationCompiler {
         try {
             return new PrestigeConfiguration(enabled, requiredStages, resetStage, currentIncrement,
                     lifetimeIncrement, limit, cooldown, requirement, costs, rewards, scaling, catchUp, resetPolicy,
-                    externalEnabled);
+                    externalEnabled, confirmationMaximumLifetime);
         } catch (IllegalArgumentException exception) {
             findings.add(error("phase4.prestige.invalid", "prestige", exception.getMessage(),
                     "Use positive increments, valid limits/cooldowns, and a complete safe reset policy."));

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Map;
+import java.time.Duration;
 import net.maddkraft.maddprestige.api.id.CostId;
 import net.maddkraft.maddprestige.api.id.CurrencyId;
 import net.maddkraft.maddprestige.api.id.EntitlementId;
@@ -26,6 +27,8 @@ class PhaseFourConfigurationCompilerTest {
 
         assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
         assertTrue(compilation.configuration().prestige().enabled());
+        assertEquals(Duration.ofHours(12),
+                compilation.configuration().prestige().confirmationMaximumLifetime());
         assertEquals(ExactDecimal.parse("3"), compilation.configuration().valueScaling().costs()
                 .get(new CostId("prestige_cost")).valueAt(3));
         assertEquals(ExactDecimal.parse("2"), compilation.configuration().valueScaling().rewards()
@@ -39,6 +42,20 @@ class PhaseFourConfigurationCompilerTest {
         assertEquals(ResetDisposition.PRESERVE, compilation.configuration().seasons()
                 .get(new SeasonId("chapter_one")).progressPolicy());
         assertFalse(compilation.configuration().competition().enabled());
+    }
+
+    @Test
+    @DisplayName("[Phase 9D UX] Confirmation safety cap is configurable but cannot recreate a short timer")
+    void confirmationMaximumLifetimeIsLongAndBounded() {
+        String configured = validLifecycle().replace("  cooldown: PT1H\n",
+                "  cooldown: PT1H\n  confirmation-maximum-lifetime: PT6H\n");
+        PhaseFourConfigurationCompilation sixHours = compile(configured);
+        assertFalse(sixHours.validation().hasErrors(), sixHours.validation().toString());
+        assertEquals(Duration.ofHours(6), sixHours.configuration().prestige().confirmationMaximumLifetime());
+
+        PhaseFourConfigurationCompilation tooShort = compile(configured.replace("PT6H", "PT30M"));
+        assertTrue(tooShort.validation().findings().stream().anyMatch(finding ->
+                finding.code().equals("phase4.prestige.invalid")));
     }
 
     @Test

@@ -25,7 +25,7 @@ required and square brackets are optional.
 | `/maddprestige setup ...` | `maddprestige.admin.setup` |
 | `/maddprestige setup preview [session-id] [details]` | `maddprestige.admin.setup` |
 | `/maddprestige config get\|list\|search\|explain\|history ...` | `maddprestige.admin.config.view` |
-| `/maddprestige config draft\|set\|add\|remove\|remap\|unmap\|validate\|diff\|cancel ...` | `maddprestige.admin.config.edit` |
+| `/maddprestige config draft\|set\|add\|remove\|segment-add\|segment-edit\|segment-remove\|remap\|unmap\|validate\|diff\|cancel ...` | `maddprestige.admin.config.edit` |
 | `/maddprestige config apply\|acknowledge\|confirm ...` | `maddprestige.admin.config.apply` |
 | `/maddprestige config rollback\|rollback-apply ...` | `maddprestige.admin.config.rollback` |
 | `/maddprestige locale reload` | `maddprestige.admin.locale.reload` |

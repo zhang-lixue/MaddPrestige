@@ -158,12 +158,18 @@ public final class PhaseThreeConfigurationCompiler {
             Map<?, ?> fields,
             MetricDescriptor descriptor,
             String path,
-            List<ValidationFinding> findings) {
+        List<ValidationFinding> findings) {
         if (descriptor != null) {
+            Object configuredValue = fields.get("value-type");
             MetricValueType configured = fields.containsKey("value-type")
-                    ? enumValue(fields.get("value-type"), MetricValueType.class, descriptor.valueType(),
-                            path + ".value-type", findings)
-                    : descriptor.valueType();
+                    && isIntegerCountAlias(configuredValue)
+                    && (descriptor.valueType() == MetricValueType.INTEGER
+                            || descriptor.valueType() == MetricValueType.COUNT)
+                    ? descriptor.valueType()
+                    : fields.containsKey("value-type")
+                            ? enumValue(configuredValue, MetricValueType.class, descriptor.valueType(),
+                                    path + ".value-type", findings)
+                            : descriptor.valueType();
             if (configured != descriptor.valueType()) {
                 findings.add(error("requirement.value_type.mismatch", path + ".value-type",
                         "Configured value type does not match the provider-advertised metric type.",
@@ -180,6 +186,14 @@ public final class PhaseThreeConfigurationCompiler {
         }
         return enumValue(fields.get("value-type"), MetricValueType.class, MetricValueType.EXACT_DECIMAL,
                 path + ".value-type", findings);
+    }
+
+    private static boolean isIntegerCountAlias(Object value) {
+        try {
+            return scalarRequired(value).toUpperCase(Locale.ROOT).replace('-', '_').equals("INTEGER_COUNT");
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 
     private static Map<RequirementId, RequirementNode> trees(
@@ -841,7 +855,11 @@ public final class PhaseThreeConfigurationCompiler {
             return fallback;
         }
         try {
-            return Enum.valueOf(type, scalarRequired(value).toUpperCase(Locale.ROOT).replace('-', '_'));
+            String normalized = scalarRequired(value).toUpperCase(Locale.ROOT).replace('-', '_');
+            if (type == MetricValueType.class && normalized.equals("INTEGER_COUNT")) {
+                return type.cast(MetricValueType.COUNT);
+            }
+            return Enum.valueOf(type, normalized);
         } catch (RuntimeException exception) {
             findings.add(error("phase3.enum.invalid", path, "Invalid " + type.getSimpleName() + " value.",
                     "Use one of " + java.util.Arrays.toString(type.getEnumConstants()) + "."));

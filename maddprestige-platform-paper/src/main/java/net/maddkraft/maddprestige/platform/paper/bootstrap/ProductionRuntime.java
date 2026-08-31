@@ -146,6 +146,7 @@ public final class ProductionRuntime implements AutoCloseable {
     private final ProductionMaddPrestigeService service;
     private final PhaseSixCommandService commands;
     private final CommandCompletionService completion;
+    private final OperationConfirmationService confirmations;
     private final GuiSessionService gui;
     private final AtomicReference<ConfigRevisionId> publishedRevision = new AtomicReference<>();
     private final AtomicReference<StoredConfigurationRevision> authoritativeRevision = new AtomicReference<>();
@@ -212,11 +213,13 @@ public final class ProductionRuntime implements AutoCloseable {
                 ignored -> CompletableFuture.completedFuture(RankUpAuthorizationResult.rejected(
                         "Rank-up is compatibility-only; use numeric Prestige")),
                 intent -> CompletableFuture.supplyAsync(() -> authorizePrestige(intent), worker));
-        OperationConfirmationService confirmations = new OperationConfirmationService(previews,
+        confirmations = new OperationConfirmationService(previews,
                 ignored -> CompletableFuture.failedFuture(new IllegalStateException(
                         "Rank-up execution is compatibility-only")),
                 plan -> CompletableFuture.supplyAsync(() -> prestigeExecutor.execute(plan), worker),
-                this::activeRevision, Duration.ofMinutes(2), clock);
+                this::activeRevision, () -> configuration.active()
+                        .map(active -> active.phaseFour().configuration().prestige().confirmationMaximumLifetime())
+                        .orElse(OperationConfirmationService.DEFAULT_MAXIMUM_LIFETIME), clock);
         var databaseProbe = new DatabaseDiagnosticProbe(() -> CompletableFuture.supplyAsync(() -> {
             var validation = SqliteDatabaseValidator.validate(
                     foundation.databaseFile(), SqliteMigrations.phaseNineB());
@@ -244,7 +247,7 @@ public final class ProductionRuntime implements AutoCloseable {
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
                 doctor, why, previews, confirmations, playerViews, setupWizard,
                 manualPrestige, gui, this::activeRevision, worker);
-        completion = new CommandCompletionService(setupWizard);
+        completion = new CommandCompletionService(setupWizard, confirmations);
 
         providerLifecycle = providers.addLifecycleListener(ignored -> recomposeForProviderLifecycle());
         startup.ifPresent(this::publishStartup);
@@ -286,6 +289,14 @@ public final class ProductionRuntime implements AutoCloseable {
 
     public GuiSessionService gui() {
         return gui;
+    }
+
+    public void beginPlayerConfirmationSession(UUID playerId) {
+        confirmations.beginPlayerSession(playerId);
+    }
+
+    public void endPlayerConfirmationSession(UUID playerId) {
+        confirmations.endPlayerSession(playerId);
     }
 
     private PhaseSixOperationalSnapshot operationalDiagnosticSnapshot() {
@@ -843,6 +854,7 @@ public final class ProductionRuntime implements AutoCloseable {
 
     @Override
     public void close() {
+        confirmations.close();
         service.close();
         publishedRevision.set(null);
         authoritativeRevision.set(null);

@@ -55,6 +55,7 @@ import net.maddkraft.maddprestige.platform.paper.integration.PhaseSevenOptionalI
 import net.maddkraft.maddprestige.platform.paper.i18n.PaperMessageService;
 import net.maddkraft.maddprestige.platform.paper.admin.PaperGuiInventoryGuard;
 import net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter;
+import net.maddkraft.maddprestige.platform.paper.admin.PaperConfirmationSessionListener;
 import net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixGuiController;
 import net.maddkraft.maddprestige.platform.paper.placeholder.MaddPrestigePlaceholderCache;
 import net.maddkraft.maddprestige.platform.paper.provider.PaperProviderBridge;
@@ -273,6 +274,10 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
                 runtime.completion(), scheduler, guiController, messages);
         command.setExecutor(adapter);
         command.setTabCompleter(adapter);
+        getServer().getOnlinePlayers().forEach(player ->
+                runtime.beginPlayerConfirmationSession(player.getUniqueId()));
+        getServer().getPluginManager().registerEvents(new PaperConfirmationSessionListener(
+                runtime::beginPlayerConfirmationSession, runtime::endPlayerConfirmationSession), this);
     }
 
     private void shutdownOwnedState() {
