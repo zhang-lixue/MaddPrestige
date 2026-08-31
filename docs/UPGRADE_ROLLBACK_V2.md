@@ -1,7 +1,7 @@
 # Upgrading and rolling back MaddPrestige V2
 
-These instructions apply to the `2.0.0-rc.1` Phase 8 release candidate on the qualified Java 25 / Paper 26.1.2 build
-74 platform. They prepare a safe release path; they are not Phase 9 authorization to migrate the live MaddKraft server.
+These instructions apply to the `2.0.0-rc.1` candidate on the qualified Java 25 / Paper 26.1.2 build 74 platform.
+They prepare a safe release path and are not authorization to migrate the live MaddKraft server.
 
 ## Before any candidate upgrade
 
@@ -36,7 +36,9 @@ do not delete evidence to make startup continue.
 The historical 1.x runtime and V2 use materially different genericity, configuration, persistence, and operation
 contracts. V1 player/configuration data is not imported: fresh V2 player state starts at Prestige 0 unless an
 administrator later uses an audited V2 function. Keep old artifacts/data read-only only for archive or rollback; a
-future clone qualification must prove isolation and durability, not execute a player mapping.
+Phase 9D clone qualification proved isolation/durability without executing a player mapping. Phase 9E's populated V2
+schema-11 rehearsal likewise archived stage-era state and initialized safe numeric authority; production remains a
+separate explicitly authorized deployment.
 
 ## Rollback and recovery
 

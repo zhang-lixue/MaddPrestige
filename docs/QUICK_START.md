@@ -89,7 +89,10 @@ and `setup confirm`; otherwise use the normal setup apply path. Then run `/maddp
 
 ## Operate and inspect
 
-Players use `/maddprestige prestige` and confirm the returned ID. Normal preview includes the Prestige transition,
+Players use `/maddprestige prestige`, click `[Confirm]`, or run `/maddprestige confirm` when exactly one owned
+confirmation is valid. `[Copy ID]` and the explicit UUID form remain available. Confirmations belong to the current
+login session, expire on logout/restart/replacement/revision change, and revalidate state before execution; the
+configurable maximum lifetime is only a secondary cap. Normal preview includes the Prestige transition,
 effective requirements, costs, rewards, and blockers without provider internals. Add `details` to Doctor, Why, setup
 preview, or simulation when provenance is needed; use `config diff` for the detailed draft view:
 

@@ -77,7 +77,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 final class PaperPhaseSixNumericCommandRoutingTest {
-    private static final UUID PLAYER_ID = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+    private static final UUID PLAYER_ID = UUID.fromString("22222222-2222-4222-8222-222222222222");
     private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9d-command-routing");
 
     @TempDir
@@ -217,6 +217,16 @@ final class PaperPhaseSixNumericCommandRoutingTest {
         verify(fixture.previews, never()).simulateRankUp(any(PermissionSubject.class), any(UUID.class));
         verify(fixture.why, never()).rankUp(any(PermissionSubject.class), any(UUID.class));
         verifyNoInteractions(fixture.rankUpExecutor);
+    }
+
+    @Test
+    @DisplayName("[Phase 9E] Compatibility-only rank permission cannot discover Prestige confirmations")
+    void compatibilityRankPermissionCannotDiscoverPrestigeConfirmations() throws IOException {
+        Fixture fixture = fixture(Set.of(PhaseSixPermissions.RANK_UP), numericPreview());
+
+        assertFalse(fixture.completions("").contains("confirm"));
+        assertEquals(List.of(), fixture.completions("confirm", ""));
+        verify(fixture.confirmations, never()).validConfirmationIds(any(PermissionSubject.class));
     }
 
     @Test

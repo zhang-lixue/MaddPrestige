@@ -32,12 +32,19 @@ class StartupConfigurationLoaderTest {
     Path temporaryDirectory;
 
     @Test
-    @DisplayName("[OR8B-04] Production administration exposes integration reconciliation settings")
-    void productionSchemaIncludesIntegrationReconciliationSettings() {
+    @DisplayName("[Phase 9E] Production administration exposes only reachable numeric configuration")
+    void productionSchemaContainsReachableNumericConfigurationOnly() {
         var schema = ProductionRuntime.productionSchema();
         assertTrue(schema.resolve("integrations.placeholderapi.output.enabled").isPresent());
         assertTrue(schema.resolve("integrations.mcmmo.enabled").isPresent());
         assertTrue(schema.resolve("integrations.craftengine.reward-maximum-quantity").isPresent());
+        for (String unreachable : List.of("integrations.rank.reconciliation-policy", "competitions.enabled",
+                "integrations.quickshop.progression-income-weight", "database.credentials.password",
+                "prestige.reset-policy.progression-stage")) {
+            assertTrue(schema.resolve(unreachable).isEmpty(), unreachable);
+        }
+        assertFalse(schema.resolve("milestones.*.trigger").orElseThrow()
+                .allowedValues().staticValues().contains("STAGE_REACHED"));
         assertTrue(ProductionRuntime.providerLifecycleRelated(List.of("phase3.provider.unavailable")));
         assertTrue(ProductionRuntime.providerLifecycleRelated(List.of(
                 "requirement.value_type.required", "requirement.reference.unknown", "requirement.group.empty")));

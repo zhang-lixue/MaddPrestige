@@ -10,7 +10,7 @@ safe defaults:
 
 | Document | Required content | Important inherited behavior |
 |---|---|---|
-| `progression.yml` | `schema-version: 3` | stage/rank progression inactive; reconciliation `warn-only` |
+| `progression.yml` | `schema-version: 3` | no active stage/rank progression fields |
 | `requirements.yml` | `schema-version: 3` | no definitions/trees/costs; maximum tree depth 16 |
 | `rewards.yml` | `schema-version: 3` | no rewards; external command actions disabled with the safe policy |
 | `lifecycle.yml` | `schema-version: 4` | numeric Prestige disabled, unlimited maximum, zero cooldown, no costs/rewards/scaling |
@@ -23,7 +23,10 @@ list only when an administrator explicitly changes it. `config get` resolves an 
 The safe Prestige reset defaults are:
 
 - RESET: active requirement progress, latched completions, saved baselines, Prestige-scoped currency.
-- PRESERVE: compatibility stage state, purchased perks, milestone history, season progress, historical statistics.
+- PRESERVE: purchased perks, milestone history, season progress, historical statistics.
+
+Archived stage-era state is outside the production authoring schema and is always non-authoritative; normal
+configuration does not expose stage reset or reconciliation controls.
 
 Write only reset-policy entries that intentionally differ. Provider-owned values remain external and are never mirrored
 into configuration.
@@ -120,6 +123,16 @@ authoring path.
 
 A stale base revision, provider generation change, missing capability, absent acknowledgement, or validation error fails
 closed and leaves the last known-good revision active.
+
+## Confirmation and compatibility policy
+
+Player confirmations are login-session-bound and are cleared on logout, restart, replacement, or configuration
+revision change. Execution consumes an owned ID once and revalidates requirements, cost/provider state, target,
+identity/session, revision, and authorization. `prestige.confirmation-maximum-lifetime` is an optional secondary cap:
+it defaults to `PT12H` and accepts `PT1H` through `P7D`; it is not a short primary UX timer.
+
+PlaceholderAPI output/input composition accepts exact plugin versions 2.12.2 and 2.12.3. Unlisted versions fail
+closed. Guided mcMMO authoring advertises `total_level`; `power_level` remains deprecated compatibility input only.
 
 ## Locale configuration
 

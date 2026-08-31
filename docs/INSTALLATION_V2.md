@@ -36,5 +36,6 @@ rollback, follow [Upgrading and rolling back V2](UPGRADE_ROLLBACK_V2.md) in a di
 ## Deployment boundary
 
 MaddPrestige 2.0 supports one Paper process using its local SQLite database. Network/proxy synchronization,
-multi-process/shared-database use, MySQL, and MariaDB are unsupported and deferred post-2.0. Phase 9 must still qualify
-the real deployment and migration before any production-ready claim.
+multi-process/shared-database use, MySQL, and MariaDB are unsupported and deferred post-2.0. Phase 9D qualified the
+isolated 42-plugin clone and Phase 9E qualified a retained populated pre-Phase-9B V2 database copy. Neither result is
+permission to deploy live. Follow the [deployment runbook](DEPLOYMENT_RUNBOOK.md) only after explicit owner approval.

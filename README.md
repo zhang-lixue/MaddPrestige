@@ -5,9 +5,10 @@ player progression state is a durable non-negative integer: a successful operati
 to administrator-configured requirements, independent costs, rewards, cooldown, and optional maximum. Stages, ranks,
 LuckPerms groups, seasons, and world resets are not intrinsic to Prestige.
 
-This repository is a Phase 9C configuration/admin-usability owner-review candidate, not a production-ready or GA
-release. It has not undergone real
-clone qualification and authorizes no live deployment, V1 player import, or production balance.
+Phase 9D is accepted and merged: the candidate passed an isolated 42-plugin MaddKraft clone, genuine player P0→P1
+and P1→P2 operations, provider/scaling/session checks, and deterministic exactly-once crash recovery. Phase 9E is the
+uncommitted production-readiness/backend-freeze review. It is not GA or production-ready and authorizes no live
+deployment, V1 player import, or production balance.
 
 ## Final Phase 8 release candidate
 
@@ -28,6 +29,7 @@ Optional providers are required only when an active configuration references the
 3. Keep [commands and permissions](docs/COMMANDS_PERMISSIONS.md) and
    [diagnostics](docs/DIAGNOSTICS_TROUBLESHOOTING.md) available to operators.
 4. Read [configuration](docs/CONFIGURATION.md) before making later revisions.
+5. Use the [deployment/rollback runbook](docs/DEPLOYMENT_RUNBOOK.md) for a separately authorized release rehearsal.
 
 The active stage-free example is under [examples/numeric-prestige](examples/numeric-prestige). The former
 [stage-ladder example](examples/member-adventurer-veteran) is retained as compatibility evidence only. A minimal
@@ -42,6 +44,7 @@ external API consumer is under [examples/provider-sdk](examples/provider-sdk).
 - [Currencies and entitlements](docs/CURRENCIES_ENTITLEMENTS.md)
 - [Seasons and milestones](docs/SEASONS_MILESTONES.md)
 - [Providers and integrations](docs/PROVIDERS_INTEGRATIONS.md)
+- [Provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md)
 - [Migrations, backups, and recovery](docs/MIGRATIONS_BACKUPS_RECOVERY.md)
 - [Upgrade and rollback](docs/UPGRADE_ROLLBACK_V2.md)
 - [Public API and SDK](docs/API_SDK.md)
@@ -58,4 +61,5 @@ installation or configuration instructions.
 
 The shaded release candidate is `maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar`; the public API
 coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.1`, and the aggregate CycloneDX SBOM is
-`target/bom.json`. This candidate is not GA or production-ready; Phase 9 deployment/migration qualification remains.
+`target/bom.json`. The Phase 9E review freezes the non-GUI backend; final GUI/UI work, owner deployment approval, and
+production balance selection remain outside this checkpoint.

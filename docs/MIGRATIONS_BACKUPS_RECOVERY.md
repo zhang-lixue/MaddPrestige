@@ -14,6 +14,12 @@ Only a complete database/manifest pair with PASS validation and rehearsal is pro
 Future/gapped/duplicate/mismatched history, corrupt/truncated databases or backups, missing pointer authority, and
 failed rehearsal block service publication. MaddPrestige does not opportunistically mark a partial schema current.
 
+Migration 12 is the accepted pre-Phase-9B V2 boundary. It labels legacy operation/history rows, removes stage-era rows
+from active authority, preserves audit/provider-owned data, and initializes active numeric Prestige at P0 without
+mapping stage position. Phase 9E qualified this path backup-first against a genuine retained populated schema-11 copy,
+including idempotent restart and schema-11 rollback restore; see
+[`PHASE9E_A63_POPULATED_PRE_PHASE9B_UPGRADE.md`](evidence/phase9e/PHASE9E_A63_POPULATED_PRE_PHASE9B_UPGRADE.md).
+
 ## Operator workflow
 
 1. Stop Paper cleanly before host-level backup or restore work.
