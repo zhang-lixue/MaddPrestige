@@ -21,7 +21,7 @@ import net.maddkraft.maddprestige.core.stage.StageConfiguration;
 
 public final class CommandCompletionService {
     private static final int MAX_SUGGESTIONS = 50;
-    private static final String SETUP = "setup";
+    private static final String SETUP_COMMAND = "setup";
     private static final String PRESTIGE = "prestige";
     private static final String DETAILS = "details";
     private static final String CONFIRM = "confirm";
@@ -38,12 +38,12 @@ public final class CommandCompletionService {
     }
 
     public CommandCompletionService(SetupWizardService setup) {
-        this.setup = Objects.requireNonNull(setup, SETUP);
+        this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = null;
     }
 
     public CommandCompletionService(SetupWizardService setup, OperationConfirmationService confirmations) {
-        this.setup = Objects.requireNonNull(setup, SETUP);
+        this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
     }
 
@@ -117,12 +117,12 @@ public final class CommandCompletionService {
             return confirmations.validConfirmationIds(subject).stream().map(UUID::toString).toList();
         }
         if (root.equals("help")) {
-            return List.of("overview", SETUP, "measurement", "requirements", "scaling", "providers");
+            return List.of("overview", SETUP_COMMAND, "measurement", "requirements", "scaling", "providers");
         }
         if (root.equals("doctor") && subject.has(PhaseSixPermissions.DOCTOR)) {
             return tokens.size() == 2 ? List.of(DETAILS) : List.of();
         }
-        if (root.equals(SETUP) && subject.has(PhaseSixPermissions.SETUP)) {
+        if (root.equals(SETUP_COMMAND) && subject.has(PhaseSixPermissions.SETUP)) {
             return setupCandidates(tokens);
         }
         if (root.equals("staff") && subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT)) {
@@ -309,7 +309,7 @@ public final class CommandCompletionService {
             commands.add("simulate");
         }
         if (subject.has(PhaseSixPermissions.SETUP)) {
-            commands.add(SETUP);
+            commands.add(SETUP_COMMAND);
         }
         if (player && (subject.has(PhaseSixPermissions.ADMIN_GUI) || subject.has(PhaseSixPermissions.USE))) {
             commands.add("gui");
