@@ -229,12 +229,16 @@ class PhaseSixAdministrationUxTest {
 
         assertTrue(schema.find("requirements.trees.*.mode").orElseThrow()
                 .allowedValues().staticValues().contains("X_OF_N"));
-        for (String retired : List.of("progression.stages.*.enabled", "progression.order",
+        for (String retired : List.of("integrations.rank.reconciliation-policy", "competitions.enabled",
+                "integrations.quickshop.progression-income-weight", "database.credentials.password",
+                "progression.stages.*.enabled", "progression.order",
                 "prestige.required-stages", "prestige.reset-stage", "prestige.current-count-increment",
-                "prestige.lifetime-count-increment")) {
+                "prestige.lifetime-count-increment", "prestige.reset-policy.progression-stage")) {
             assertTrue(schema.find(retired).isEmpty(), retired);
         }
         assertTrue(schema.find("prestige.maximum").isPresent());
+        assertFalse(schema.find("milestones.*.trigger").orElseThrow()
+                .allowedValues().staticValues().contains("STAGE_REACHED"));
         assertTrue(schema.find("prestige.cost-scaling.*.segments.*.mode").orElseThrow()
                 .allowedValues().staticValues().containsAll(List.of("FLAT", "LINEAR", "EXPONENTIAL", "MANUAL")));
     }

@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
 class OfficialMcMmoExperienceAccessTest {
-    private static final UUID PLAYER_ID = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+    private static final UUID PLAYER_ID = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-30T10:03:26Z"), ZoneOffset.UTC);
 
     @Test

@@ -8,7 +8,9 @@ Entitlements are declarative provider-owned capabilities with explicit grant/rev
 from progression stages and paid/store ranks. Optional integration absence makes a referenced entitlement unavailable;
 it must not corrupt unrelated progression.
 
-The numeric example uses `currencies: {}` and `entitlements: {}`. Currency display name, precision, limits, and scope
-are administrator configuration; the feature may remain disabled. A configurable first-party Prestige shop is
+The numeric example uses `currencies: {}` and `entitlements: {}`. Currency ID, display name, symbol, precision, limits,
+and scope are administrator configuration; core hardcodes no server-specific currency identity and imports no V1
+currency balance.
+The feature may remain disabled. A configurable first-party Prestige shop is
 authorized later Phase 9 work but is not implemented, so there are currently no shop entries, prices, purchases,
 discounts, or shop GUI to configure.

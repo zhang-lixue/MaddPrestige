@@ -108,7 +108,7 @@ public final class CommandCompletionService {
                     : tokens.size() == 3 || tokens.size() == 4 ? List.of("details") : List.of();
         }
         if (root.equals("confirm") && tokens.size() == 2 && confirmations != null
-                && (subject.has(PhaseSixPermissions.PRESTIGE) || subject.has(PhaseSixPermissions.RANK_UP))) {
+                && subject.has(PhaseSixPermissions.PRESTIGE)) {
             return confirmations.validConfirmationIds(subject).stream().map(UUID::toString).toList();
         }
         if (root.equals("help")) {
@@ -278,7 +278,7 @@ public final class CommandCompletionService {
         if (player && subject.has(PhaseSixPermissions.PRESTIGE)) {
             commands.add("prestige");
         }
-        if (player && (subject.has(PhaseSixPermissions.RANK_UP) || subject.has(PhaseSixPermissions.PRESTIGE))) {
+        if (player && subject.has(PhaseSixPermissions.PRESTIGE)) {
             commands.add("confirm");
         }
         if (subject.has(PhaseSixPermissions.CONFIG_VIEW) || subject.has(PhaseSixPermissions.CONFIG_EDIT)

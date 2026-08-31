@@ -19,3 +19,7 @@ External plugins register the Stable `ProviderDeclaration` service through Paper
 attests the owning plugin and assigns the namespace/generation. See the compilable
 [`examples/provider-sdk`](../examples/provider-sdk). That example is API documentation; the accepted Phase 8E evidence separately proves the independent multi-provider and
 dependency/fault matrix.
+
+The exact requirement/cost/reward/condition/coexistence split—including the explicit absence of native MobCoins
+balance or cost support—is frozen in the [provider capability matrix](PROVIDER_CAPABILITY_MATRIX.md). PlaceholderAPI
+2.12.2 and 2.12.3 are the exact accepted versions; an unlisted version is unavailable rather than optimistically used.

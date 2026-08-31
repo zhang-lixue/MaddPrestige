@@ -194,8 +194,8 @@ public final class PhaseSixSchema {
                 Optional.of("true"), "Enables this milestone.", AllowedValues.fixed("true", "false"),
                 RiskLevel.HIGH);
         register(registry, "milestone_trigger", "milestones.*.trigger", SchemaValueType.ENUM,
-                Optional.of("CURRENT_PRESTIGE"), "Canonical milestone trigger.",
-                AllowedValues.fixed("CURRENT_PRESTIGE", "LIFETIME_PRESTIGE", "STAGE_REACHED", "SEASON_PROGRESS",
+                Optional.of("CURRENT_PRESTIGE"), "Canonical numeric Prestige milestone trigger.",
+                AllowedValues.fixed("CURRENT_PRESTIGE", "LIFETIME_PRESTIGE", "SEASON_PROGRESS",
                         "PROVIDER_METRIC"), RiskLevel.HIGH);
         register(registry, "milestone_value_type", "milestones.*.value-type", SchemaValueType.ENUM,
                 Optional.of("INTEGER_COUNT"), "Exact milestone threshold type.",
@@ -218,12 +218,15 @@ public final class PhaseSixSchema {
     }
 
     private static void removeLegacyStageSchema(SchemaRegistry registry) {
-        List.of("progression.active", "progression.baseline", "progression.order",
+        List.of("integrations.rank.reconciliation-policy", "competitions.enabled",
+                "integrations.quickshop.progression-income-weight", "database.credentials.password",
+                "progression.active", "progression.baseline", "progression.order",
                 "progression.stages.*.enabled", "progression.stages.*.display-name",
                 "progression.stages.*.projection", "progression.stages.*.requirements",
                 "progression.stages.*.costs", "progression.stages.*.rewards",
                 "prestige.required-stages", "prestige.reset-stage", "prestige.current-count-increment",
-                "prestige.lifetime-count-increment", "prestige.scaling-profile", "prestige.catch-up-profile")
+                "prestige.lifetime-count-increment", "prestige.scaling-profile", "prestige.catch-up-profile",
+                "prestige.reset-policy.progression-stage")
                 .forEach(registry::unregister);
     }
 
