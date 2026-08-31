@@ -67,11 +67,12 @@ public final class OperationPreviewService {
                 "target_stage", plan.targetStage().value()));
         plan.costs().forEach(cost -> details.add(m("command.preview.cost", "id", cost.definition().id().value(),
                 "provider", cost.definition().providerId().value(), "type", cost.definition().type(),
-                "amount", cost.definition().amount(), "value", cost.definition().displayName())));
+                "amount", cost.definition().amount(), "canonical", cost.definition().amount().canonical(),
+                "value", cost.definition().displayName())));
         plan.rewards().forEach(reward -> details.add(m("command.preview.reward", "id",
                 reward.definition().id().value(), "provider", reward.definition().providerId().value(),
-                "type", reward.definition().type(), "amount", reward.definition().value(),
-                "value", reward.definition().displayName())));
+                "type", reward.definition().type(), "amount", reward.definition().value(), "canonical",
+                reward.definition().value().canonical(), "value", reward.definition().displayName())));
         plan.rankProjectionRequest().ifPresent(projection -> details.add(m("command.preview.rank_projection",
                 "rank", projection.desiredGroup().orElse("NONE"))));
         return new OperationPreview(OperationKind.RANK_UP, plan.playerId(), plan.executionAllowed(),
@@ -95,11 +96,12 @@ public final class OperationPreviewService {
                 simulation.lifetimePrestigeAfter()));
         plan.costs().forEach(cost -> details.add(m("command.preview.cost", "id", cost.definition().id().value(),
                 "provider", cost.definition().providerId().value(), "type", cost.definition().type(),
-                "amount", cost.definition().amount(), "value", cost.definition().displayName())));
+                "amount", cost.definition().amount(), "canonical", cost.definition().amount().canonical(),
+                "value", cost.definition().displayName())));
         plan.rewards().forEach(reward -> details.add(m("command.preview.reward", "id",
                 reward.definition().id().value(), "provider", reward.definition().providerId().value(),
-                "type", reward.definition().type(), "amount", reward.definition().value(),
-                "value", reward.definition().displayName())));
+                "type", reward.definition().type(), "amount", reward.definition().value(), "canonical",
+                reward.definition().value().canonical(), "value", reward.definition().displayName())));
         simulation.componentConsequences().forEach(consequence -> details.add(m(
                 "command.preview.component_consequence", "component", consequence.component(),
                 "disposition", consequence.disposition())));

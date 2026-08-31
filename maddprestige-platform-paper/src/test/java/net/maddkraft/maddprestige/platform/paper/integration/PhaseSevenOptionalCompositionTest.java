@@ -67,10 +67,11 @@ class PhaseSevenOptionalCompositionTest {
         assertTrue(plan.economyShopGuiCompatibility());
         assertTrue(plan.quickShopCompatibility());
         assertEquals(Map.of(
-                "Vault", "2.20.2", "mcMMO", "2.2.053", "PlaceholderAPI", "2.12.2",
-                "EconomyShopGUI", "7.2.0", "QuickShop-Hikari", "6.2.0.11",
-                "GriefPrevention", "16.18.7", "WorldGuard", "7.0.18+2392-fa605e6",
-                "CraftEngine", "26.7.4"),
+                "Vault", List.of("2.20.2"), "mcMMO", List.of("2.2.053"),
+                "PlaceholderAPI", List.of("2.12.2", "2.12.3"),
+                "EconomyShopGUI", List.of("7.2.0"), "QuickShop-Hikari", List.of("6.2.0.11"),
+                "GriefPrevention", List.of("16.18.7"), "WorldGuard", List.of("7.0.18+2392-fa605e6"),
+                "CraftEngine", List.of("26.7.4")),
                 PhaseSevenOptionalIntegrationManager.qualifiedDependencies());
     }
 

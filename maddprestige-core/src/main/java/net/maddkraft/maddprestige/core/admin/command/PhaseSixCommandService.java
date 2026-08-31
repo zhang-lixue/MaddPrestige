@@ -1,7 +1,10 @@
 package net.maddkraft.maddprestige.core.admin.command;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -30,6 +33,7 @@ import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationPreview;
+import net.maddkraft.maddprestige.core.admin.config.StructuredConfigurationValue;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticSeverity;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyReport;
@@ -44,6 +48,8 @@ import net.maddkraft.maddprestige.core.admin.setup.SetupReward;
 import net.maddkraft.maddprestige.core.admin.setup.SetupStage;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
+import net.maddkraft.maddprestige.core.scaling.SegmentScalingMode;
+import net.maddkraft.maddprestige.core.scaling.SegmentTransition;
 
 /**
  * Bounded, platform-neutral V2 command surface. Callers pass tokenized arguments; synchronous history and
@@ -144,16 +150,21 @@ public final class PhaseSixCommandService {
         return (prestige ? confirmations.preparePrestige(subject, playerId)
                 : confirmations.prepareRankUp(subject, playerId)).thenApply(value -> {
                     ArrayList<MessageReference> lines = new ArrayList<>(SemanticPresentation.preview(
-                            "command.preview.summary", value.preview()));
-                    lines.add(m("command.preview.confirmation", "confirmation", value.confirmationId()));
-                    lines.add(m("command.preview.expires", "expires", value.expiresAt()));
+                            "command.preview.summary", value.preview(), false));
+                    lines.add(m("command.preview.confirmation_controls",
+                            "confirmation", value.confirmationId()));
                     return CommandResponse.success(prestige ? "prestige.preview" : "rankup.preview", lines);
                 });
     }
 
     private CompletionStage<CommandResponse> confirm(PermissionSubject subject, List<String> arguments) {
-        requireSize(arguments, 2, "confirm <confirmation-id>");
-        return confirmations.confirm(subject, uuid(arguments.get(1), "confirmation ID"))
+        if (arguments.size() < 1 || arguments.size() > 2) {
+            throw usage("confirm [confirmation-id]");
+        }
+        CompletionStage<net.maddkraft.maddprestige.core.admin.OperationExecutionResult> confirmation =
+                arguments.size() == 1 ? confirmations.confirmOnly(subject)
+                        : confirmations.confirm(subject, uuid(arguments.get(1), "confirmation ID"));
+        return confirmation
                 .thenApply(result -> CommandResponse.success("operation.executed", List.of(
                         m("command.operation.executed", "operation", result.operationId(),
                                 "status", result.status()))));
@@ -202,9 +213,7 @@ public final class PhaseSixCommandService {
         }
         UUID target = arguments.size() == 2 ? uuid(arguments.get(1), "player UUID") : self(subject);
         return playerViews.view(subject, target).thenApply(view -> {
-            ArrayList<MessageReference> lines = new ArrayList<>(SemanticPresentation.preview(
-                    "command.player.prestige", view.prestige(), false));
-            return CommandResponse.success("player.progress", lines);
+            return CommandResponse.success("player.progress", SemanticPresentation.player(view.prestige()));
         });
     }
 
@@ -218,7 +227,8 @@ public final class PhaseSixCommandService {
 
     private CompletionStage<CommandResponse> config(PermissionSubject subject, List<String> arguments) {
         if (arguments.size() < 2) {
-            throw usage("config <get|list|search|explain|draft|set|add|remove|validate|diff|acknowledge|confirm|"
+            throw usage("config <get|list|search|explain|draft|set|add|remove|segment-add|segment-edit|"
+                    + "segment-remove|validate|diff|acknowledge|confirm|"
                     + "cancel|history|rollback|apply> ...");
         }
         return switch (arguments.get(1).toLowerCase(java.util.Locale.ROOT)) {
@@ -230,6 +240,9 @@ public final class PhaseSixCommandService {
             case "set" -> configSet(subject, arguments);
             case "add" -> configAdd(subject, arguments);
             case "remove" -> configRemove(subject, arguments);
+            case "segment-add" -> configSegmentAdd(subject, arguments);
+            case "segment-edit" -> configSegmentEdit(subject, arguments);
+            case "segment-remove" -> configSegmentRemove(subject, arguments);
             case "remap", "unmap" -> throw retiredStageSurface();
             case "validate" -> configPreview(subject, arguments, false);
             case "diff" -> configPreview(subject, arguments, true);
@@ -240,7 +253,8 @@ public final class PhaseSixCommandService {
             case "rollback" -> configRollback(subject, arguments);
             case "apply" -> configApply(subject, arguments, false);
             case "rollback-apply" -> configApply(subject, arguments, true);
-            default -> throw usage("config <get|list|search|explain|draft|set|add|remove|validate|diff|"
+            default -> throw usage("config <get|list|search|explain|draft|set|add|remove|segment-add|segment-edit|"
+                    + "segment-remove|validate|diff|"
                     + "acknowledge|"
                     + "confirm|cancel|history|rollback|apply> ...");
         };
@@ -336,6 +350,54 @@ public final class PhaseSixCommandService {
             requireSize(arguments, 5, "config remove <draft-id> <list-path> <value>");
             configuration.removeListValue(subject, draft, path, arguments.get(4));
         }
+        return completed(CommandResponse.success("config.draft.structure_removed", List.of(
+                m("command.config.structure_removed", "draft", draft),
+                m("command.config.preview_guidance"))));
+    }
+
+    private CompletionStage<CommandResponse> configSegmentAdd(
+            PermissionSubject subject,
+            List<String> arguments) {
+        if (arguments.size() < 10 || arguments.size() > 11) {
+            throw usage("config segment-add <draft-id> <scaling-path> <start> <end|unlimited> "
+                    + "<FLAT|LINEAR|EXPONENTIAL|MANUAL> <CONTINUE|EXPLICIT_BASE> <base> <rate> "
+                    + "[level=value,...]");
+        }
+        UUID draft = uuid(arguments.get(2), "draft ID");
+        String path = scalingSegmentsPath(arguments.get(3));
+        configuration.addStructuredObject(subject, draft, path, Optional.empty(),
+                scalingSegment(arguments, 4, 10));
+        return completed(CommandResponse.success("config.draft.structure_added", List.of(
+                m("command.config.structure_added", "draft", draft),
+                m("command.config.production_unchanged"))));
+    }
+
+    private CompletionStage<CommandResponse> configSegmentEdit(
+            PermissionSubject subject,
+            List<String> arguments) {
+        if (arguments.size() < 11 || arguments.size() > 12) {
+            throw usage("config segment-edit <draft-id> <scaling-path> <index> <start> <end|unlimited> "
+                    + "<FLAT|LINEAR|EXPONENTIAL|MANUAL> <CONTINUE|EXPLICIT_BASE> <base> <rate> "
+                    + "[level=value,...]");
+        }
+        UUID draft = uuid(arguments.get(2), "draft ID");
+        String path = scalingSegmentsPath(arguments.get(3));
+        String selector = Long.toString(nonNegativeLong(arguments.get(4), "segment index"));
+        configuration.editStructuredObject(subject, draft, path, selector,
+                scalingSegment(arguments, 5, 11));
+        return completed(CommandResponse.success("config.draft.edited", List.of(
+                m("command.config.draft_edited", "draft", draft, "path", path + "." + selector),
+                m("command.config.production_unchanged"))));
+    }
+
+    private CompletionStage<CommandResponse> configSegmentRemove(
+            PermissionSubject subject,
+            List<String> arguments) {
+        requireSize(arguments, 5, "config segment-remove <draft-id> <scaling-path> <index>");
+        UUID draft = uuid(arguments.get(2), "draft ID");
+        String path = scalingSegmentsPath(arguments.get(3));
+        String selector = Long.toString(nonNegativeLong(arguments.get(4), "segment index"));
+        configuration.removeStructuredObject(subject, draft, path, selector);
         return completed(CommandResponse.success("config.draft.structure_removed", List.of(
                 m("command.config.structure_removed", "draft", draft),
                 m("command.config.preview_guidance"))));
@@ -804,6 +866,79 @@ public final class PhaseSixCommandService {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Invalid " + label + ": " + value);
         }
+    }
+
+    private static long positiveLong(String value, String label) {
+        try {
+            long parsed = Long.parseLong(value);
+            if (parsed < 1) {
+                throw new NumberFormatException();
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Invalid " + label + ": " + value);
+        }
+    }
+
+    private static BigDecimal configurationDecimal(String value, String label) {
+        if (!value.matches("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?")) {
+            throw new IllegalArgumentException("Invalid " + label + ": " + value);
+        }
+        return new BigDecimal(value);
+    }
+
+    private static String scalingSegmentsPath(String scalingPath) {
+        if (!scalingPath.matches("requirements\\.requirements\\.[a-z][a-z0-9_-]{0,63}\\.scaling")) {
+            throw new IllegalArgumentException("Invalid requirement scaling path: " + scalingPath);
+        }
+        return scalingPath + ".segments";
+    }
+
+    private static StructuredConfigurationValue scalingSegment(
+            List<String> arguments,
+            int offset,
+            int overridesIndex) {
+        long start = positiveLong(arguments.get(offset), "segment start Prestige");
+        String end = arguments.get(offset + 1).toLowerCase(java.util.Locale.ROOT);
+        if (!end.equals("unlimited")) {
+            end = Long.toString(positiveLong(end, "segment end Prestige"));
+        }
+        if (!end.equals("unlimited") && Long.parseLong(end) < start) {
+            throw new IllegalArgumentException("Segment end Prestige must not precede its start");
+        }
+        String mode = arguments.get(offset + 2).toUpperCase(java.util.Locale.ROOT);
+        String transition = arguments.get(offset + 3).toUpperCase(java.util.Locale.ROOT);
+        SegmentScalingMode.valueOf(mode);
+        SegmentTransition.valueOf(transition);
+
+        LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
+        fields.put("start-prestige", start);
+        fields.put("end-prestige", end);
+        fields.put("mode", mode);
+        fields.put("transition", transition);
+        fields.put("base", configurationDecimal(arguments.get(offset + 4), "segment base"));
+        fields.put("rate", configurationDecimal(arguments.get(offset + 5), "segment rate"));
+        if (arguments.size() > overridesIndex && !arguments.get(overridesIndex).equals("-")) {
+            fields.put("overrides", scalingOverrides(arguments.get(overridesIndex)));
+        }
+        return new StructuredConfigurationValue(fields);
+    }
+
+    private static Map<String, Object> scalingOverrides(String value) {
+        LinkedHashMap<String, Object> overrides = new LinkedHashMap<>();
+        for (String entry : value.split(",", -1)) {
+            String[] parts = entry.split("=", -1);
+            if (parts.length != 2) {
+                throw new IllegalArgumentException("Invalid MANUAL override: " + entry);
+            }
+            String level = Long.toString(positiveLong(parts[0], "MANUAL override Prestige"));
+            Object prior = overrides.put(level,
+                    configurationDecimal(parts[1], "MANUAL override value"));
+            if (prior != null) {
+                throw new IllegalArgumentException("Duplicate MANUAL override Prestige: " + level);
+            }
+        }
+        return overrides;
     }
 
     private static long nonNegativeLong(String value, String label) {

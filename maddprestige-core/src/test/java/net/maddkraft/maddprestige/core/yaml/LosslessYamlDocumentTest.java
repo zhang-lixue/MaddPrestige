@@ -199,16 +199,103 @@ class LosslessYamlDocumentTest {
         assertTrue(added.render().startsWith("# owner\r\n"));
         assertTrue(added.render().endsWith("tail: keep\r\n"));
 
-        LosslessYamlDocument edited = added.replaceSequenceStructure(segments, 0, Map.of(
+        LosslessYamlDocument appended = added.appendSequenceStructure(segments, Map.of(
+                "start-prestige", 4L, "end-prestige", "unlimited", "mode", "FLAT",
+                "transition", "CONTINUE", "base", java.math.BigDecimal.ONE));
+        assertEquals("1", appended.scalar(segments.index(0).key("start-prestige")));
+        assertEquals("4", appended.scalar(segments.index(1).key("start-prestige")));
+        assertEquals("CONTINUE", appended.scalar(segments.index(1).key("transition")));
+
+        LosslessYamlDocument edited = appended.replaceSequenceStructure(segments, 0, Map.of(
                 "start-prestige", 1L, "end-prestige", "unlimited", "mode", "FLAT",
                 "base", new java.math.BigDecimal("25")));
         assertEquals("25", edited.scalar(segments.index(0).key("base")));
         assertThrows(IllegalArgumentException.class, () -> edited.scalar(segments.index(0).key("rate")));
 
-        LosslessYamlDocument removed = edited.removeSequenceIndex(segments, 0);
-        assertEquals(List.of(), removed.sequenceScalars(segments));
-        assertTrue(removed.render().startsWith("# owner\r\n"));
-        assertTrue(removed.render().endsWith("tail: keep\r\n"));
+        LosslessYamlDocument removedFirst = edited.removeSequenceIndex(segments, 0);
+        assertEquals("4", removedFirst.scalar(segments.index(0).key("start-prestige")));
+        assertEquals("CONTINUE", removedFirst.scalar(segments.index(0).key("transition")));
+
+        LosslessYamlDocument removedLast = removedFirst.removeSequenceIndex(segments, 0);
+        assertEquals(List.of(), removedLast.sequenceScalars(segments));
+        assertTrue(removedLast.render().startsWith("# owner\r\n"));
+        assertTrue(removedLast.render().endsWith("tail: keep\r\n"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9D] Two scaling segments append before an existing sibling requirement")
+    void appendsTwoScalingSegmentsBeforeExistingSiblingRequirement() {
+        String source = """
+                schema-version: 3
+                requirements:
+                  phase9d_vault_balance:
+                    completion: LIVE
+                    metric: balance
+                    provider: vault_balance
+                    scope: ABSOLUTE
+                    target: "2"
+                    value-type: CURRENCY_AMOUNT
+                    scaling:
+                      mode: MANUAL
+                      base: 1
+                      rate: 0
+                  phase9d_mcmmo_total_level:
+                    completion: LIVE
+                    metric: total_level
+                    provider: mcmmo
+                    scope: ABSOLUTE
+                    target: "1"
+                    value-type: INTEGER_COUNT
+                """;
+        YamlPath segments = YamlPath.document(0).key("requirements").key("phase9d_vault_balance")
+                .key("scaling").key("segments");
+
+        LosslessYamlDocument first = LosslessYamlDocument.parse(source).appendSequenceStructure(segments,
+                new java.util.LinkedHashMap<>(Map.of(
+                        "start-prestige", 1L,
+                        "end-prestige", "3",
+                        "mode", "MANUAL",
+                        "transition", "EXPLICIT_BASE",
+                        "base", java.math.BigDecimal.ONE,
+                        "rate", java.math.BigDecimal.ZERO,
+                        "overrides", Map.of("1", java.math.BigDecimal.ONE,
+                                "2", new java.math.BigDecimal("2"),
+                                "3", new java.math.BigDecimal("3")))));
+        LosslessYamlDocument second = first.appendSequenceStructure(segments, new java.util.LinkedHashMap<>(Map.of(
+                "start-prestige", 4L,
+                "end-prestige", "unlimited",
+                "mode", "FLAT",
+                "transition", "CONTINUE",
+                "base", java.math.BigDecimal.ONE,
+                "rate", java.math.BigDecimal.ZERO)));
+
+        assertEquals("1", second.scalar(segments.index(0).key("start-prestige")));
+        assertEquals("3", second.scalar(segments.index(0).key("overrides").key("3")));
+        assertEquals("4", second.scalar(segments.index(1).key("start-prestige")));
+        assertEquals("CONTINUE", second.scalar(segments.index(1).key("transition")));
+        assertEquals("mcmmo", second.scalar(YamlPath.document(0).key("requirements")
+                .key("phase9d_mcmmo_total_level").key("provider")));
+
+        LosslessYamlDocument firstReplaced = second.replaceSequenceStructure(segments, 0, Map.of(
+                "start-prestige", 1L,
+                "end-prestige", "2",
+                "mode", "FLAT",
+                "transition", "EXPLICIT_BASE",
+                "base", new java.math.BigDecimal("2"),
+                "rate", java.math.BigDecimal.ZERO));
+        LosslessYamlDocument bothReplaced = firstReplaced.replaceSequenceStructure(segments, 1, Map.of(
+                "start-prestige", 3L,
+                "end-prestige", "unlimited",
+                "mode", "LINEAR",
+                "transition", "CONTINUE",
+                "base", java.math.BigDecimal.ONE,
+                "rate", java.math.BigDecimal.ONE));
+
+        assertEquals("2", bothReplaced.scalar(segments.index(0).key("end-prestige")));
+        assertEquals("3", bothReplaced.scalar(segments.index(1).key("start-prestige")));
+        assertEquals("CONTINUE", bothReplaced.scalar(segments.index(1).key("transition")));
+        assertEquals("mcmmo", bothReplaced.scalar(YamlPath.document(0).key("requirements")
+                .key("phase9d_mcmmo_total_level").key("provider")));
     }
 
     @Test

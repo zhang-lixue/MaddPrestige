@@ -29,6 +29,10 @@ class PhaseThreeConfigurationCompilerTest {
             MetricOperator.compatibleWith(MetricValueType.COUNT),
             Set.of(MetricReadMode.CURRENT, MetricReadMode.LIFETIME), true, MetricMonotonicity.MONOTONIC,
             MetricResetPolicy.FAIL_RECONCILIATION, Map.of(), "Progress", "Progress", "count", "test");
+    private static final MetricDescriptor INTEGER_DESCRIPTOR = new MetricDescriptor(PROVIDER, METRIC,
+            MetricValueType.INTEGER, MetricOperator.compatibleWith(MetricValueType.INTEGER),
+            Set.of(MetricReadMode.CURRENT), false, MetricMonotonicity.NON_MONOTONIC,
+            MetricResetPolicy.FAIL_RECONCILIATION, Map.of(), "Total level", "Total level", "levels", "test");
 
     @Test
     @DisplayName("[A09-A26] Canonical requirements/rewards documents compile stable references and typed definitions")
@@ -83,6 +87,27 @@ class PhaseThreeConfigurationCompilerTest {
         assertEquals(MetricValueType.COUNT,
                 compilation.configuration().requirements().get(new net.maddkraft.maddprestige.api.id.RequirementId(
                         "play")).target().lower().type());
+    }
+
+    @Test
+    @DisplayName("[Phase 9D] Schema-canonical INTEGER_COUNT compiles to provider COUNT or INTEGER type")
+    void compilesSchemaCanonicalIntegerCount() {
+        String requirements = validRequirements().replace(
+                "metric: progress", "metric: progress\n    value-type: INTEGER_COUNT");
+        String integerRequirements = requirements.replace("scope: since-stage-start", "scope: absolute")
+                .replace("completion: latched", "completion: live");
+
+        var compilation = compile(requirements, validRewards());
+        var integerCompilation = compile(integerRequirements, validRewards(), INTEGER_DESCRIPTOR);
+
+        assertFalse(compilation.validation().hasErrors(), compilation.validation().toString());
+        assertFalse(integerCompilation.validation().hasErrors(), integerCompilation.validation().toString());
+        assertEquals(MetricValueType.COUNT,
+                compilation.configuration().requirements().get(new net.maddkraft.maddprestige.api.id.RequirementId(
+                        "play")).target().lower().type());
+        assertEquals(MetricValueType.INTEGER,
+                integerCompilation.configuration().requirements().get(
+                        new net.maddkraft.maddprestige.api.id.RequirementId("play")).target().lower().type());
     }
 
     @Test
@@ -154,10 +179,17 @@ class PhaseThreeConfigurationCompilerTest {
     }
 
     private static PhaseThreeConfigurationCompilation compile(String requirements, String rewards) {
+        return compile(requirements, rewards, DESCRIPTOR);
+    }
+
+    private static PhaseThreeConfigurationCompilation compile(
+            String requirements,
+            String rewards,
+            MetricDescriptor descriptor) {
         Map<String, String> documents = Map.of("requirements.yml", requirements, "rewards.yml", rewards);
         return new PhaseThreeConfigurationCompiler().compile(
                 new CompiledConfiguration(RevisionHasher.hashDocuments(documents), documents),
-                Map.of(new MetricBinding(PROVIDER, METRIC), DESCRIPTOR));
+                Map.of(new MetricBinding(PROVIDER, METRIC), descriptor));
     }
 
     private static String validRequirements() {

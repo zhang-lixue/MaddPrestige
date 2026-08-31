@@ -33,15 +33,15 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
     private static final List<String> RECONCILIATION_ORDER = List.of(
             "Vault", "mcMMO", "PlaceholderAPI", "EconomyShopGUI", "QuickShop-Hikari",
             "GriefPrevention", "WorldGuard", "CraftEngine");
-    private static final Map<String, String> SUPPORTED = Map.of(
-            "Vault", "2.20.2",
-            "mcMMO", "2.2.053",
-            "PlaceholderAPI", "2.12.2",
-            "EconomyShopGUI", "7.2.0",
-            "QuickShop-Hikari", "6.2.0.11",
-            "GriefPrevention", "16.18.7",
-            "WorldGuard", "7.0.18+2392-fa605e6",
-            "CraftEngine", "26.7.4");
+    private static final Map<String, List<String>> SUPPORTED = Map.of(
+            "Vault", List.of("2.20.2"),
+            "mcMMO", List.of("2.2.053"),
+            "PlaceholderAPI", List.of("2.12.2", "2.12.3"),
+            "EconomyShopGUI", List.of("7.2.0"),
+            "QuickShop-Hikari", List.of("6.2.0.11"),
+            "GriefPrevention", List.of("16.18.7"),
+            "WorldGuard", List.of("7.0.18+2392-fa605e6"),
+            "CraftEngine", List.of("26.7.4"));
     private static final String VAULT_ECONOMY_SERVICE = "net.milkbowl.vault.economy.Economy";
 
     private final Plugin owner;
@@ -133,7 +133,7 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
                 "[integration.optional] bound=" + String.join(",", bindings.keySet()));
     }
 
-    static Map<String, String> qualifiedDependencies() {
+    static Map<String, List<String>> qualifiedDependencies() {
         return SUPPORTED;
     }
 
@@ -208,9 +208,9 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
             return;
         }
         String detected = dependency.getPluginMeta().getVersion();
-        if (!SUPPORTED.get(name).equals(detected)) {
+        if (!supportsVersion(name, detected)) {
             owner.getLogger().warning("Optional " + name + " " + detected + " is unsupported; expected "
-                    + SUPPORTED.get(name) + ". Its capabilities remain unavailable.");
+                    + expectedVersions(name) + ". Its capabilities remain unavailable.");
             return;
         }
         try {
@@ -343,9 +343,9 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
             return null;
         }
         String detected = dependency.getPluginMeta().getVersion();
-        if (!SUPPORTED.get("CraftEngine").equals(detected)) {
+        if (!supportsVersion("CraftEngine", detected)) {
             owner.getLogger().warning("Optional CraftEngine " + detected + " is unsupported; expected "
-                    + SUPPORTED.get("CraftEngine") + ". Its capabilities remain unavailable.");
+                    + expectedVersions("CraftEngine") + ". Its capabilities remain unavailable.");
             return null;
         }
         return dependency;
@@ -399,7 +399,17 @@ public final class PhaseSevenOptionalIntegrationManager implements Listener {
             craftEngine.bindingFailed();
             return;
         }
-        bindings.put("CraftEngine", createBinding("CraftEngine", dependency, SUPPORTED.get("CraftEngine")));
+        bindings.put("CraftEngine", createBinding(
+                "CraftEngine", dependency, dependency.getPluginMeta().getVersion()));
+    }
+
+    static boolean supportsVersion(String name, String detected) {
+        List<String> versions = SUPPORTED.get(name);
+        return versions != null && versions.contains(detected);
+    }
+
+    private static String expectedVersions(String name) {
+        return String.join(" or ", SUPPORTED.get(name));
     }
 
     private void disableCraftEngine(String reason) {

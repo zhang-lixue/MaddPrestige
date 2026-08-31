@@ -34,16 +34,19 @@ public final class PaperMessageService {
     private static final Pattern KEY = Pattern.compile("[a-z0-9][a-z0-9_.-]{0,127}");
     private static final MiniMessage STRICT_MINI_MESSAGE = MiniMessage.builder().strict(true).build();
     private static final Set<String> TEMPLATE_ARGUMENTS = Set.of(
-            "acknowledgement", "active", "after", "allowed", "amount", "base", "before", "blockers", "code",
+            "acknowledgement", "active", "after", "allowed", "amount", "base", "before", "blockers", "canonical",
+            "code",
             "completion", "component", "confirmation", "configured_cost", "configured_reward", "count", "counter",
             "cooldown_remaining", "currency", "current", "current_lifetime",
             "current_prestige", "current_stage", "delta", "detail", "disposition", "document", "draft", "expires",
-            "eligible_at", "errors", "findings", "group", "hash", "healthy", "id", "intended_target", "kind",
-            "lifetime",
-            "locale", "metric", "metrics",
+            "eligible_at", "errors", "findings", "formula", "group", "hash", "healthy", "id", "intended_target",
+            "kind",
+            "indicator", "label", "lifetime",
+            "locale", "metric", "metrics", "mode",
             "operation", "operator", "path", "permission", "player", "prestige_status", "provider", "purpose", "rank",
             "rankup_status",
-            "prestige_maximum", "reason", "remediation", "requirement", "revision", "risk", "scope", "stage",
+            "prestige_maximum", "reason", "remediation", "repeatability", "requirement", "revision", "rewards", "risk",
+            "scaling", "scope", "stage",
             "source", "status", "target",
             "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "value", "variant",
             "version");

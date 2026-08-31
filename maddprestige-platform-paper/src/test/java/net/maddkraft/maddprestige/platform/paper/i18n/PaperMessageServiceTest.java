@@ -316,8 +316,9 @@ class PaperMessageServiceTest {
                 "config.structured.key_required", "config.structured.key_unexpected",
                 "config.structured.remove_rejected",
                 "config.validation.blocked", "config.value.not_allowed", "confirmation.actor_mismatch",
-                "confirmation.already_used", "confirmation.config_stale", "confirmation.expired",
-                "confirmation.unknown", "gui.action.forged", "gui.action.stale",
+                "confirmation.already_used", "confirmation.ambiguous", "confirmation.config_stale",
+                "confirmation.expired", "confirmation.none_pending", "confirmation.revalidation_failed",
+                "confirmation.session_ended", "confirmation.unknown", "gui.action.forged", "gui.action.stale",
                 "gui.mutation.context_missing", "gui.mutation.kind_invalid", "gui.session.actor_mismatch",
                 "gui.session.expired", "gui.target.missing", "operation.preview.blocked", "permission.denied",
                 "rankup.compatibility_only",
@@ -347,8 +348,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(98, identities.size());
-        assertEquals(98, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(102, identities.size());
+        assertEquals(102, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -482,7 +483,7 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(77, singleSource.size());
+        assertEquals(81, singleSource.size());
         assertEquals(21, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");

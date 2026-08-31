@@ -101,7 +101,13 @@ public final class McMmoMetricProvider implements MetricProvider {
         }
         if ((TOTAL_LEVEL.equals(query.metricId()) || POWER_LEVEL.equals(query.metricId()))
                 && query.filters().isEmpty()) {
-            return MetricSample.available(MetricValue.integer(access.powerLevel(playerId)), generation, now, "mcmmo");
+            try {
+                return MetricSample.available(MetricValue.integer(access.powerLevel(playerId)), generation, now,
+                        "mcmmo");
+            } catch (RuntimeException exception) {
+                return unavailable(generation, now, "mcMMO player profile read failed: "
+                        + exception.getClass().getSimpleName());
+            }
         }
         String skill = query.filters().get("skill");
         if (SKILL_LEVEL.equals(query.metricId()) && query.filters().size() == 1 && skill != null

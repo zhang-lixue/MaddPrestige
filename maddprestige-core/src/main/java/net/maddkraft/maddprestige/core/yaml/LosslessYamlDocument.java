@@ -188,7 +188,7 @@ public final class LosslessYamlDocument {
             return expandEmptyCollection(node, sequenceStructure(parentIndent(node) + 2, value));
         }
         Node last = sequence.getValue().getLast();
-        int indent = lineIndent(utf16Offset(last.getStartMark().orElseThrow()));
+        int indent = lineIndent(sequenceItemStart(last));
         return insert(nodeLineEnd(last), sequenceStructure(indent, value) + lineEnding());
     }
 
@@ -201,7 +201,7 @@ public final class LosslessYamlDocument {
         Node item = sequence.getValue().get(index);
         int start = sequenceItemStart(item);
         int end = index + 1 < sequence.getValue().size()
-                ? lineStart(utf16Offset(sequence.getValue().get(index + 1).getStartMark().orElseThrow()))
+                ? sequenceItemStart(sequence.getValue().get(index + 1))
                 : nodeLineEnd(item);
         return replaceRange(start, end, sequenceStructure(lineIndent(start), value) + lineEnding());
     }
@@ -217,7 +217,7 @@ public final class LosslessYamlDocument {
         Node item = sequence.getValue().get(index);
         int start = sequenceItemStart(item);
         int end = index + 1 < sequence.getValue().size()
-                ? lineStart(utf16Offset(sequence.getValue().get(index + 1).getStartMark().orElseThrow()))
+                ? sequenceItemStart(sequence.getValue().get(index + 1))
                 : nodeLineEnd(item);
         return replaceRange(start, end, "");
     }
@@ -631,7 +631,8 @@ public final class LosslessYamlDocument {
 
     private int nodeLineEnd(Node node) {
         int end = utf16Offset(node.getEndMark().orElseThrow());
-        return end == lineStart(end) ? end : lineEnd(end);
+        int lineStart = lineStart(end);
+        return source.substring(lineStart, end).isBlank() ? lineStart : lineEnd(end);
     }
 
     private String lineEnding() {
