@@ -43,11 +43,13 @@ public final class PaperMessageService {
             "kind",
             "indicator", "label", "lifetime",
             "locale", "metric", "metrics", "mode",
-            "operation", "operator", "path", "permission", "player", "prestige_status", "provider", "purpose", "rank",
+            "operation", "operator", "path", "permission", "player", "prestige_status", "progress", "projected",
+            "provider",
+            "purpose", "rank",
             "rankup_status",
             "prestige_maximum", "reason", "remediation", "repeatability", "requirement", "revision", "rewards", "risk",
             "scaling", "scope", "stage",
-            "source", "status", "target",
+            "source", "status", "target", "threshold", "total",
             "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "value", "variant",
             "version");
     private static final TagResolver VALIDATION_ARGUMENTS = TagResolver.resolver(TEMPLATE_ARGUMENTS.stream()

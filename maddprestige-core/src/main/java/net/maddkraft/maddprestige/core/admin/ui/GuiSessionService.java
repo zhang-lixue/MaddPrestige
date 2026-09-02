@@ -19,7 +19,7 @@ import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationApplyKind;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
-public final class GuiSessionService {
+public final class GuiSessionService implements AutoCloseable {
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
     private final GuiActionExecutor executor;
     private final GuiConfigurationAuthority configurationAuthority;
@@ -213,16 +213,68 @@ public final class GuiSessionService {
             PermissionSubject subject,
             UUID sessionId,
             UUID actionId) {
+        return executor.execute(subject, authorize(subject, sessionId, actionId, false));
+    }
+
+    /**
+     * Validates and consumes one player action. Consuming the server-owned session prevents click replay and stale
+     * inventory instances from carrying authority into a later screen.
+     */
+    GuiAction authorizePlayerClick(
+            PermissionSubject subject,
+            UUID sessionId,
+            UUID actionId) {
+        return authorize(subject, sessionId, actionId, true);
+    }
+
+    GuiSessionView storePlayerScreen(
+            PermissionSubject subject,
+            UUID playerId,
+            MessageReference title,
+            List<GuiAction> actions,
+            GuiScreenKind screen,
+            int inventorySize,
+            List<GuiDisplayItem> items) {
+        requirePlayerAccess(subject, playerId);
+        return store(subject, GuiAudience.PLAYER, title, actions, screen, inventorySize, items);
+    }
+
+    public void invalidate(UUID sessionId) {
+        sessions.remove(Objects.requireNonNull(sessionId, "session ID"));
+    }
+
+    public void invalidatePlayer(UUID playerId) {
+        UUID player = Objects.requireNonNull(playerId, "player ID");
+        sessions.entrySet().removeIf(entry -> entry.getValue().audience() == GuiAudience.PLAYER
+                && entry.getValue().actor().uuid().filter(player::equals).isPresent());
+    }
+
+    @Override
+    public void close() {
+        sessions.clear();
+    }
+
+    private GuiAction authorize(
+            PermissionSubject subject,
+            UUID sessionId,
+            UUID actionId,
+            boolean consume) {
         pruneExpired();
-        Session session = sessions.get(Objects.requireNonNull(sessionId, "session ID"));
+        UUID id = Objects.requireNonNull(sessionId, "session ID");
+        Session session = sessions.get(id);
         if (session == null || Instant.now(clock).isAfter(session.expiresAt())) {
-            sessions.remove(sessionId);
+            sessions.remove(id);
             throw new AdministrationException("gui.session.expired", "GUI session is absent or expired.",
                     "Reopen the GUI to obtain current server-owned controls.");
         }
         if (!session.actor().equals(subject.actor())) {
             throw new AdministrationException("gui.session.actor_mismatch",
                     "A GUI session cannot be used by another actor.", "Open a separate GUI session.");
+        }
+        if (consume && session.audience() != GuiAudience.PLAYER) {
+            throw new AdministrationException("gui.action.player_invalid",
+                    "A staff GUI session cannot be routed through the Player GUI.",
+                    "Reopen the intended GUI surface.");
         }
         GuiAction action = session.actions().get(actionId);
         if (action == null) {
@@ -231,7 +283,8 @@ public final class GuiSessionService {
                     "Close and reopen the GUI; player-supplied items carry no authority.");
         }
         subject.require(action.requiredPermission());
-        if (action.mutating() && !activeRevision.get().equals(action.expectedConfigRevision())) {
+        if (action.expectedConfigRevision().isPresent()
+                && !activeRevision.get().equals(action.expectedConfigRevision())) {
             throw new AdministrationException("gui.action.stale",
                     "The active configuration changed after this GUI rendered.",
                     "Reopen the GUI and generate a fresh preview before changing state.");
@@ -241,7 +294,12 @@ public final class GuiSessionService {
                     "A referenced stage cannot be deleted without an explicit replacement/migration.",
                     "Select a replacement and complete the atomic remap before applying stage deletion.");
         }
-        return executor.execute(subject, action);
+        if (consume && !sessions.remove(id, session)) {
+            throw new AdministrationException("gui.action.replayed",
+                    "This server-owned GUI action was already consumed.",
+                    "Reopen the GUI to obtain a fresh single-use action.");
+        }
+        return action;
     }
 
     private GuiSessionView mutationSession(
@@ -266,13 +324,33 @@ public final class GuiSessionService {
             GuiAudience audience,
             MessageReference title,
             List<GuiAction> actions) {
+        int size = Math.max(9, Math.min(54, ((actions.size() + 8) / 9) * 9));
+        return store(subject, audience, title, actions, GuiScreenKind.LEGACY, size, List.of());
+    }
+
+    private GuiSessionView store(
+            PermissionSubject subject,
+            GuiAudience audience,
+            MessageReference title,
+            List<GuiAction> actions,
+            GuiScreenKind screen,
+            int inventorySize,
+            List<GuiDisplayItem> items) {
         pruneExpired();
+        if (audience == GuiAudience.PLAYER) {
+            subject.actor().uuid().ifPresent(this::invalidatePlayer);
+        }
         UUID id = UUID.randomUUID();
         Instant expiresAt = Instant.now(clock).plus(lifetime);
         LinkedHashMap<UUID, GuiAction> byId = new LinkedHashMap<>();
         actions.forEach(action -> byId.put(action.actionId(), action));
         sessions.put(id, new Session(subject.actor(), audience, Map.copyOf(byId), expiresAt));
-        return new GuiSessionView(id, audience, title, actions, expiresAt);
+        return new GuiSessionView(id, audience, title, actions, expiresAt, screen, inventorySize, items);
+    }
+
+    private static void requirePlayerAccess(PermissionSubject subject, UUID playerId) {
+        boolean self = subject.actor().uuid().filter(playerId::equals).isPresent();
+        subject.require(self ? PhaseSixPermissions.USE : PhaseSixPermissions.PLAYER_VIEW);
     }
 
     private static GuiAction action(

@@ -75,6 +75,7 @@ import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.CanonicalGuiActionExecutor;
 import net.maddkraft.maddprestige.core.admin.ui.CanonicalGuiMutationExecutor;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
+import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiService;
 import net.maddkraft.maddprestige.core.config.BackupMetadata;
 import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.ConfigurationService;
@@ -148,6 +149,7 @@ public final class ProductionRuntime implements AutoCloseable {
     private final CommandCompletionService completion;
     private final OperationConfirmationService confirmations;
     private final GuiSessionService gui;
+    private final PlayerGuiService playerGui;
     private final AtomicReference<ConfigRevisionId> publishedRevision = new AtomicReference<>();
     private final AtomicReference<StoredConfigurationRevision> authoritativeRevision = new AtomicReference<>();
     private final AtomicBoolean providerRecompositionQueued = new AtomicBoolean();
@@ -243,10 +245,11 @@ public final class ProductionRuntime implements AutoCloseable {
         CanonicalGuiActionExecutor guiActions = new CanonicalGuiActionExecutor(playerViews, previews, confirmations,
                 doctor, administration, mutations);
         gui = new GuiSessionService(this::activeRevision, guiActions, mutations, Duration.ofMinutes(5), clock);
+        playerGui = new PlayerGuiService(gui, playerViews, previews, confirmations);
         SetupWizardService setupWizard = new SetupWizardService(administration, providers);
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
                 doctor, why, previews, confirmations, playerViews, setupWizard,
-                manualPrestige, gui, this::activeRevision, worker);
+                manualPrestige, gui, playerGui, this::activeRevision, worker);
         completion = new CommandCompletionService(setupWizard, confirmations);
 
         providerLifecycle = providers.addLifecycleListener(ignored -> recomposeForProviderLifecycle());
@@ -291,12 +294,18 @@ public final class ProductionRuntime implements AutoCloseable {
         return gui;
     }
 
+    public PlayerGuiService playerGui() {
+        return playerGui;
+    }
+
     public void beginPlayerConfirmationSession(UUID playerId) {
         confirmations.beginPlayerSession(playerId);
+        playerGui.invalidatePlayer(playerId);
     }
 
     public void endPlayerConfirmationSession(UUID playerId) {
         confirmations.endPlayerSession(playerId);
+        playerGui.invalidatePlayer(playerId);
     }
 
     private PhaseSixOperationalSnapshot operationalDiagnosticSnapshot() {
@@ -854,6 +863,7 @@ public final class ProductionRuntime implements AutoCloseable {
 
     @Override
     public void close() {
+        gui.close();
         confirmations.close();
         service.close();
         publishedRevision.set(null);

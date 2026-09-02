@@ -589,11 +589,15 @@ public final class SemanticPresentation {
         register(result, "confirmation_session_ended", "confirmation.session_ended");
         register(result, "confirmation_unknown", "confirmation.unknown");
         register(result, "gui_action_forged", "gui.action.forged");
+        register(result, "gui_action_player_invalid", "gui.action.player_invalid");
+        register(result, "gui_action_replayed", "gui.action.replayed");
         register(result, "gui_action_stale", "gui.action.stale");
         register(result, "gui_mutation_context_missing", "gui.mutation.context_missing");
         register(result, "gui_mutation_kind_invalid", "gui.mutation.kind_invalid");
         register(result, "gui_session_actor_mismatch", "gui.session.actor_mismatch");
         register(result, "gui_session_expired", "gui.session.expired");
+        register(result, "gui_player_self_required", "gui.player.self_required");
+        register(result, "gui_player_target_missing", "gui.player.target_missing");
         register(result, "gui_target_missing", "gui.target.missing");
         register(result, "operation_preview_blocked", "operation.preview.blocked");
         register(result, "permission_denied", "permission.denied");

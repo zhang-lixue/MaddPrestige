@@ -102,6 +102,9 @@ public final class OperationPreviewService {
                 reward.definition().id().value(), "provider", reward.definition().providerId().value(),
                 "type", reward.definition().type(), "amount", reward.definition().value(), "canonical",
                 reward.definition().value().canonical(), "value", reward.definition().displayName())));
+        PrestigeBalanceProjection.from(plan).ifPresent(balance -> details.add(m(
+                "command.preview.balance_projection", "current", balance.current().canonical(),
+                "projected", balance.projected().canonical())));
         simulation.componentConsequences().forEach(consequence -> details.add(m(
                 "command.preview.component_consequence", "component", consequence.component(),
                 "disposition", consequence.disposition())));

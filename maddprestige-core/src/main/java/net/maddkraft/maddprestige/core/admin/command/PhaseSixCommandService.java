@@ -48,6 +48,7 @@ import net.maddkraft.maddprestige.core.admin.setup.SetupReward;
 import net.maddkraft.maddprestige.core.admin.setup.SetupStage;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
+import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiService;
 import net.maddkraft.maddprestige.core.scaling.SegmentScalingMode;
 import net.maddkraft.maddprestige.core.scaling.SegmentTransition;
 
@@ -67,6 +68,7 @@ public final class PhaseSixCommandService {
     private final SetupWizardService setup;
     private final ManualPrestigeAdministrationService prestigeAdministration;
     private final GuiSessionService gui;
+    private final Optional<PlayerGuiService> playerGui;
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
     private final Executor worker;
 
@@ -84,6 +86,25 @@ public final class PhaseSixCommandService {
             GuiSessionService gui,
             Supplier<Optional<ConfigRevisionId>> activeRevision,
             Executor worker) {
+        this(help, introspection, configuration, doctor, why, previews, confirmations, playerViews, setup,
+                prestigeAdministration, gui, null, activeRevision, worker);
+    }
+
+    public PhaseSixCommandService(
+            ContextualHelpService help,
+            ConfigurationIntrospectionService introspection,
+            ConfigurationAdministrationService configuration,
+            DoctorService doctor,
+            WhyService why,
+            OperationPreviewService previews,
+            OperationConfirmationService confirmations,
+            PlayerProgressViewService playerViews,
+            SetupWizardService setup,
+            ManualPrestigeAdministrationService prestigeAdministration,
+            GuiSessionService gui,
+            PlayerGuiService playerGui,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            Executor worker) {
         this.help = Objects.requireNonNull(help, "help");
         this.introspection = Objects.requireNonNull(introspection, "introspection");
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -95,6 +116,7 @@ public final class PhaseSixCommandService {
         this.setup = Objects.requireNonNull(setup, "setup");
         this.prestigeAdministration = Objects.requireNonNull(prestigeAdministration, "Prestige administration");
         this.gui = Objects.requireNonNull(gui, "GUI");
+        this.playerGui = Optional.ofNullable(playerGui);
         this.activeRevision = Objects.requireNonNull(activeRevision, "active revision");
         this.worker = Objects.requireNonNull(worker, "worker");
     }
@@ -109,7 +131,7 @@ public final class PhaseSixCommandService {
     private CompletionStage<CommandResponse> dispatch(CommandInvocation invocation) {
         List<String> arguments = invocation.arguments();
         if (arguments.isEmpty()) {
-            return completed(CommandResponse.failure("command.usage", m("command.usage.root")));
+            return gui(invocation.subject());
         }
         PermissionSubject subject = invocation.subject();
         return switch (arguments.getFirst().toLowerCase(java.util.Locale.ROOT)) {
@@ -218,11 +240,11 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> gui(PermissionSubject subject) {
-        self(subject);
-        var view = subject.has(PhaseSixPermissions.ADMIN_GUI) ? gui.openStaff(subject)
-                : gui.openPlayer(subject, self(subject));
-        return completed(CommandResponse.gui("gui.open", List.of(m("command.gui.opened", "id", view.sessionId(),
-                "count", view.actions().size())), view));
+        UUID playerId = self(subject);
+        CompletionStage<net.maddkraft.maddprestige.core.admin.ui.GuiSessionView> view = playerGui.isPresent()
+                ? playerGui.orElseThrow().open(subject, playerId)
+                : CompletableFuture.completedFuture(gui.openPlayer(subject, playerId));
+        return view.thenApply(opened -> CommandResponse.gui("gui.open", List.of(), opened));
     }
 
     private CompletionStage<CommandResponse> config(PermissionSubject subject, List<String> arguments) {

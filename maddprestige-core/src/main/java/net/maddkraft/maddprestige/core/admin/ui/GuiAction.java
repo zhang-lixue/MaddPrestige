@@ -15,6 +15,7 @@ public record GuiAction(
         boolean mutating,
         Optional<ConfigRevisionId> expectedConfigRevision,
         Optional<UUID> targetPlayer,
+        Optional<UUID> confirmationId,
         Optional<StageId> targetStage,
         Optional<StageId> replacementStage,
         Optional<GuiMutationContext> mutationContext) {
@@ -25,6 +26,7 @@ public record GuiAction(
         requiredPermission = Objects.requireNonNull(requiredPermission, "required permission");
         expectedConfigRevision = Objects.requireNonNull(expectedConfigRevision, "expected revision");
         targetPlayer = Objects.requireNonNull(targetPlayer, "target player");
+        confirmationId = Objects.requireNonNull(confirmationId, "confirmation ID");
         targetStage = Objects.requireNonNull(targetStage, "target stage");
         replacementStage = Objects.requireNonNull(replacementStage, "replacement stage");
         mutationContext = Objects.requireNonNull(mutationContext, "mutation context");
@@ -43,7 +45,22 @@ public record GuiAction(
             Optional<UUID> targetPlayer,
             Optional<StageId> targetStage,
             Optional<StageId> replacementStage) {
-        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer, targetStage,
-                replacementStage, Optional.empty());
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                Optional.empty(), targetStage, replacementStage, Optional.empty());
+    }
+
+    public GuiAction(
+            UUID actionId,
+            GuiActionKind kind,
+            MessageReference label,
+            String requiredPermission,
+            boolean mutating,
+            Optional<ConfigRevisionId> expectedConfigRevision,
+            Optional<UUID> targetPlayer,
+            Optional<StageId> targetStage,
+            Optional<StageId> replacementStage,
+            Optional<GuiMutationContext> mutationContext) {
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                Optional.empty(), targetStage, replacementStage, mutationContext);
     }
 }

@@ -93,6 +93,8 @@ class PhaseEightFReleasePackageIT {
             assertTrue(plugin.contains("version: '" + VERSION + "'"), plugin);
             assertTrue(plugin.contains(
                     "main: net.maddkraft.maddprestige.platform.paper.bootstrap.MaddPrestigeV2Plugin"));
+            assertTrue(plugin.contains("  prestige:"));
+            assertTrue(plugin.contains("usage: /prestige"));
             assertFalse(plugin.contains("SNAPSHOT"));
 
             for (String schema : List.of("defaults/progression.yml", "defaults/requirements.yml",

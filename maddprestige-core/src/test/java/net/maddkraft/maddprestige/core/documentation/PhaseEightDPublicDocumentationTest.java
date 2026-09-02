@@ -77,6 +77,8 @@ class PhaseEightDPublicDocumentationTest {
     void publicDocumentationReferencesRealSurfaces() throws IOException {
         Path root = repositoryRoot();
         String plugin = Files.readString(root.resolve("src/main/resources/plugin.yml"), StandardCharsets.UTF_8);
+        assertTrue(plugin.contains("  prestige:"));
+        assertTrue(plugin.contains("usage: /prestige"));
         Set<String> registeredPermissions = plugin.lines().map(String::strip)
                 .filter(line -> line.matches("maddprestige(?:\\.[a-z]+)+:"))
                 .map(line -> line.substring(0, line.length() - 1)).collect(java.util.stream.Collectors.toSet());
@@ -105,7 +107,7 @@ class PhaseEightDPublicDocumentationTest {
                     failures.add(document + " permission " + permissions.group(1));
                 }
             }
-            if (text.matches("(?s).*(?m)^\\s*/(?:rankup|prestige|season|maddhatter)\\b.*")) {
+            if (text.matches("(?s).*(?m)^\\s*/(?:rankup|season|maddhatter)\\b.*")) {
                 failures.add(document + " contains a stale V1 command");
             }
         }

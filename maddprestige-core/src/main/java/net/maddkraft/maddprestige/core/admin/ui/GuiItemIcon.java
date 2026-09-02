@@ -1,0 +1,19 @@
+package net.maddkraft.maddprestige.core.admin.ui;
+
+/** Platform-neutral item identity. Paper owns the final material mapping. */
+public enum GuiItemIcon {
+    PROGRESS,
+    PRESTIGE,
+    READY,
+    BLOCKED,
+    REQUIREMENTS,
+    BALANCE,
+    COST,
+    REWARD,
+    MILESTONE,
+    CONFIRM,
+    BACK,
+    CLOSE,
+    BORDER_PURPLE,
+    BORDER_AQUA
+}

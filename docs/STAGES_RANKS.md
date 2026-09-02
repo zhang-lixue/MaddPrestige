@@ -2,7 +2,8 @@
 
 Numeric Prestige has no intrinsic stage/rank ladder. It does not require a final group, project a reset group, acquire
 a stage-transition lease, or write stage history. Production stage catalog reads are empty and rank-up execution is
-blocked as compatibility-only; players advance through `/maddprestige prestige`.
+blocked as compatibility-only; players use `/prestige` for the Player GUI. The advanced
+`/maddprestige prestige` confirmation route remains available.
 
 Stable stage/rank API types, events, configuration parsing, and historical persistence remain so Phase 8 public
 contracts and recovery evidence are not broken. They are not current V2 Prestige authority. The historical

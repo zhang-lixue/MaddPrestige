@@ -3,12 +3,12 @@
 **Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7<br>
 **Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`<br>
 **Date:** 2026-08-22<br>
-**Scope:** all 77 codes with exactly one literal production `AdministrationException` construction site
+**Scope:** all 85 codes with exactly one literal production `AdministrationException` construction site
 
 ## Method and result
 
-The current production inventory contains 130 literal exception occurrences and 98 public administration codes. The
-21 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 77 remaining codes
+The current production inventory contains 141 literal exception occurrences and 107 public administration codes. The
+22 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 85 remaining codes
 are enumerated below. Each row was checked directly against the named production branch, not inferred from its code or
 developer exception text. The review compares the exact trigger, safety consequence, catalog-owned remediation and
 structured facts with the selected public semantic identity.
@@ -31,8 +31,12 @@ Phase 9C Owner Review Correction Pass 1 adds seven exact schema-confined structu
 add/edit/remove, map-key requirements, and list-index selection. Each failure occurs before draft replacement or active
 publication and carries the canonical collection path or rejected selector where applicable.
 
-Result: all 77 single-source codes have accurate catalog semantics. Together with the current 21-code multi-source
-register, all 98 known public administration failures have been checked against their production source condition.
+Phase 9F-A adds four exact Player GUI safety identities for consumed-action replay, missing canonical confirmation
+authority, self-only opening, and missing server-owned player targets. The multi-source
+`gui.action.player_invalid` identity remains separately reviewed by the compatibility registry.
+
+Result: all 85 single-source codes have accurate catalog semantics. Together with the current 22-code multi-source
+register, all 107 known public administration failures have been checked against their production source condition.
 
 Source locations are relative to
 `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/`.
@@ -84,11 +88,14 @@ Source locations are relative to
 | `confirmation.session_ended` | `admin/OperationConfirmationService.java:262` | `confirmation_session_ended` | A confirmation no longer belongs to the player's current login session. | Cross-session execution is rejected before mutation. | Request a fresh preview in the current login session. | — |
 | `confirmation.unknown` | `admin/OperationConfirmationService.java:57` | `confirmation_unknown` | Initial lookup finds no token because it is unknown, expired/pruned or already consumed. | No absent authority can execute. | Request a new server-issued operation preview. | — |
 | `gui.action.forged` | `admin/ui/GuiSessionService.java:258` | `gui_action_forged` | The clicked action ID is absent from the server-owned session map. | Player items cannot create authority. | Close and reopen the GUI. | — |
+| `gui.action.replayed` | `admin/ui/GuiSessionService.java:298` | `gui_action_replayed` | A concurrent or repeated click attempts to consume an already-consumed Player GUI session. | No action executes twice. | Reopen the GUI for a fresh single-use action. | — |
 | `gui.action.stale` | `admin/ui/GuiSessionService.java:264` | `gui_action_stale` | A mutating action's expected active revision differs from current active revision. | The stale GUI mutation is not executed. | Reopen the GUI and obtain a fresh preview/action. | — |
 | `gui.mutation.context_missing` | `admin/ui/CanonicalGuiMutationExecutor.java:133` | `gui_mutation_context_missing` | A server-owned mutation lacks a required draft, path, value, token or reason field. | No incomplete mutation executes. | Reopen the GUI to build a complete action from current state. | — |
 | `gui.mutation.kind_invalid` | `admin/ui/CanonicalGuiMutationExecutor.java:60` | `gui_mutation_kind_invalid` | The selected action kind is outside canonical configuration mutations. | No unrelated action is treated as a mutation. | Reopen the control panel and choose a current configuration action. | — |
 | `gui.session.actor_mismatch` | `admin/ui/GuiSessionService.java:253` | `gui_session_actor_mismatch` | The current actor differs from the session owner. | GUI authority is not transferable. | Open a separate GUI session. | — |
 | `gui.session.expired` | `admin/ui/GuiSessionService.java:249` | `gui_session_expired` | Session is absent or past its expiry instant. | The session is removed and no action runs. | Reopen the GUI for current server-owned controls. | — |
+| `gui.player.self_required` | `admin/ui/PlayerGuiService.java:271` | `gui_player_self_required` | A caller attempts to open the ordinary Player GUI for another player. | Staff-only cross-player controls are not exposed through the Player GUI. | Open the GUI in game for yourself or use explicit staff commands. | — |
+| `gui.player.target_missing` | `admin/ui/PlayerGuiService.java:259` | `gui_player_target_missing` | A server-owned Player GUI action lacks its player target. | No player identity is guessed and no operation executes. | Reopen the Player GUI for a complete action. | — |
 | `gui.target.missing` | `admin/ui/CanonicalGuiActionExecutor.java:71` | `gui_target_missing` | A canonical player operation action has no target UUID. | No player is guessed or mutated. | Reopen the intended player view. | — |
 | `operation.preview.blocked` | `admin/AdministrationException.java:60` | `operation_preview_blocked` | Canonical authorization returns one or more typed blockers. | No executable plan/confirmation is produced. | Resolve every typed blocker and preview again. | `operation`, typed blockers |
 | `permission.denied` | `admin/PermissionSubject.java:30` | `permission_denied` | The permission subject lacks the exact required node. | The protected action does not execute. | Grant only the documented node or use an authorized actor. | `permission` |
@@ -128,7 +135,7 @@ Source locations are relative to
 
 `PaperMessageServiceTest.administrationSingleSourceInventoryMatchesSemanticAudit` walks every production Java source,
 extracts literal constructor codes and derives the exact single-source set from occurrence counts. It parses the rows
-above and requires exact equality: 77 single-source rows, 21 multi-source codes, and a union equal to all 98 known
+above and requires exact equality: 85 single-source rows, 22 multi-source codes, and a union equal to all 107 known
 public codes. A new, removed, renamed or reclassified single-source code fails until this source-level audit is updated
 deliberately.
 

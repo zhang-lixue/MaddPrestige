@@ -1,12 +1,14 @@
 # V2 commands and permissions
 
-The registered command is `/maddprestige`; aliases are `/mprestige` and `/mp`. Arguments shown in angle brackets are
-required and square brackets are optional.
+The ordinary player command is `/prestige`, which silently opens the Player GUI and uses `maddprestige.use`.
+`/maddprestige` remains the advanced and administrative namespace; its compatibility aliases are `/mprestige` and
+`/mp`. Arguments shown in angle brackets are required and square brackets are optional.
 
 ## Player and observation commands
 
 | Command | Permission | Purpose |
 |---|---|---|
+| `/prestige` | `maddprestige.use` | Open the canonical Player GUI |
 | `/maddprestige help [topic]` | `maddprestige.use` as applicable | Schema/provider help |
 | `/maddprestige status` | `maddprestige.use` | Active revision status |
 | `/maddprestige player [player-uuid]` | self; `maddprestige.admin.players.view` for staff | Canonical progress preview |

@@ -50,6 +50,9 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
             case PREPARE_PRESTIGE -> confirmations.preparePrestige(subject, target(action))
                     .thenApply(value -> m("gui.result.prepare_prestige", "status", status(value.preview()),
                             "confirmation", value.confirmationId(), "expires", value.expiresAt()));
+            case CONFIRM_PRESTIGE, BACK_PLAYER, CLOSE_PLAYER -> throw new AdministrationException(
+                    "gui.action.player_invalid", "Player navigation must use the Player GUI flow.",
+                    "Reopen the Player GUI.");
             case VIEW_DOCTOR -> doctor.inspect(subject).thenApply(value -> m("gui.result.doctor",
                     "status", value.status(), "count", value.findings().size()));
             case VIEW_CONFIGURATION -> CompletableFuture.completedFuture(configuration.active(subject)

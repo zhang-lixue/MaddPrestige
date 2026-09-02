@@ -16,6 +16,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -159,6 +164,74 @@ class PaperMessageServiceTest {
                 net.maddkraft.maddprestige.platform.paper.admin.PaperGuiInventory.renderTitle(view, messages)));
         assertEquals("FAZA SIEDEM", plain(messages.render(
                 net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of("phase7.usage"))));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A correction] Player requirement count omits evaluation terminology")
+    void playerRequirementProgressArgumentsRender() {
+        var progress = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirements.progress.incomplete", "progress", 1, "total", 2);
+
+        assertEquals("1 / 2", plain(messages.render(progress)));
+        assertEquals("", plain(messages.render("gui.item.separator")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A correction] Preview balance accepts and renders the projected canonical value")
+    void previewBalanceProjectionArgumentsRender() {
+        var projection = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.balance.projected", "current", "$7", "projected", "$1");
+
+        assertEquals("$7 → $1", plain(messages.render(projection)));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A owner UX] Preview state actions are concise, bold, and semantically colored")
+    void eligiblePlayerGuiPresentationUsesGameplayHierarchy() {
+        Component ready = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirements.progress.complete", "progress", 2, "total", 2));
+        Component blocked = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirements.progress.incomplete", "progress", 1, "total", 2));
+        Component money = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirement.money.met", "label", "Money", "current", "$8", "target", "$5"));
+        Component skill = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirement.total_skill_level.met", "label", "Total Skill Level",
+                "current", 1, "target", 1));
+        Component confirmHeading = messages.render("gui.action.confirm");
+        Component blockedAction = messages.render("gui.item.blocked.title");
+
+        assertAllTextColor(ready, NamedTextColor.GREEN);
+        assertAllTextColor(blocked, NamedTextColor.RED);
+        assertEffectiveTextColor(money, "✓", NamedTextColor.GREEN);
+        assertEffectiveTextColor(money, "Money", NamedTextColor.GOLD);
+        assertNeutralTextColor(money, "$8");
+        assertNeutralTextColor(money, "$5");
+        assertEffectiveTextColor(skill, "✓", NamedTextColor.GREEN);
+        assertEffectiveTextColor(skill, "Total Skill Level", NamedTextColor.AQUA);
+        assertNeutralTextColor(skill, "1");
+        assertEquals("Confirm", plain(confirmHeading));
+        assertEffectiveTextColor(confirmHeading, "Confirm", NamedTextColor.GREEN);
+        assertEquals(TextDecoration.State.TRUE,
+                textNode(confirmHeading, "Confirm").decoration(TextDecoration.BOLD));
+        assertEquals("Not Ready", plain(blockedAction));
+        assertEffectiveTextColor(blockedAction, "Not Ready", NamedTextColor.RED);
+        assertEquals(TextDecoration.State.TRUE,
+                textNode(blockedAction, "Not Ready").decoration(TextDecoration.BOLD));
+        String playerFacing = (plain(confirmHeading) + " " + plain(blockedAction))
+                .toLowerCase(java.util.Locale.ROOT);
+        assertFalse(playerFacing.contains("session-bound"));
+        assertFalse(playerFacing.contains("player-bound"));
+        assertFalse(playerFacing.contains("single-use"));
+        assertFalse(playerFacing.contains("revalidat"));
+        assertFalse(playerFacing.contains("token"));
+        assertFalse(playerFacing.contains("operation"));
+        assertFalse(playerFacing.contains("backend"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A owner UX] Player GUI close control uses a concise label")
+    void playerGuiCloseLabelIsConcise() {
+        assertEquals("Close", plain(messages.render("gui.action.close")));
     }
 
     @Test
@@ -318,8 +391,10 @@ class PaperMessageServiceTest {
                 "config.validation.blocked", "config.value.not_allowed", "confirmation.actor_mismatch",
                 "confirmation.already_used", "confirmation.ambiguous", "confirmation.config_stale",
                 "confirmation.expired", "confirmation.none_pending", "confirmation.revalidation_failed",
-                "confirmation.session_ended", "confirmation.unknown", "gui.action.forged", "gui.action.stale",
-                "gui.mutation.context_missing", "gui.mutation.kind_invalid", "gui.session.actor_mismatch",
+                "confirmation.session_ended", "confirmation.unknown", "gui.action.forged",
+                "gui.action.player_invalid", "gui.action.replayed", "gui.action.stale",
+                "gui.mutation.context_missing", "gui.mutation.kind_invalid",
+                "gui.player.self_required", "gui.player.target_missing", "gui.session.actor_mismatch",
                 "gui.session.expired", "gui.target.missing", "operation.preview.blocked", "permission.denied",
                 "rankup.compatibility_only",
                 "setup.acknowledgement.unknown", "setup.already_active", "setup.baseline.unknown",
@@ -348,8 +423,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(102, identities.size());
-        assertEquals(102, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(106, identities.size());
+        assertEquals(106, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -419,6 +494,7 @@ class PaperMessageServiceTest {
                 Map.entry("config.preview.stale", 2),
                 Map.entry("config.revision.stale", 2),
                 Map.entry("config.validation.blocked", 2),
+                Map.entry("gui.action.player_invalid", 3),
                 Map.entry("rankup.compatibility_only", 4),
                 Map.entry("setup.preview.required", 2),
                 Map.entry("stage.change.remap_invalid", 2),
@@ -431,7 +507,8 @@ class PaperMessageServiceTest {
                 "config.document.missing", "config.draft.apply_in_progress", "config.draft.cancelled",
                 "config.draft.changed_during_apply", "config.draft.concurrent_edit", "config.path.not_listable",
                 "config.path.unknown", "config.preview.required", "config.preview.stale", "config.revision.stale",
-                "rankup.compatibility_only", "setup.preview.required", "stage.change.remap_invalid",
+                "gui.action.player_invalid", "rankup.compatibility_only", "setup.preview.required",
+                "stage.change.remap_invalid",
                 "stage.compatibility_only");
         Set<String> discriminated = Set.of("config.apply.failed", "config.validation.blocked");
         java.util.HashSet<String> reviewed = new java.util.HashSet<>(compatible);
@@ -483,8 +560,8 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(81, singleSource.size());
-        assertEquals(21, multiSource.size());
+        assertEquals(84, singleSource.size());
+        assertEquals(22, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
         java.util.HashSet<String> accounted = new java.util.HashSet<>(audited);
@@ -1219,5 +1296,69 @@ class PaperMessageServiceTest {
 
     private static String plain(net.kyori.adventure.text.Component component) {
         return PlainTextComponentSerializer.plainText().serialize(component);
+    }
+
+    private static void assertAllTextColor(Component component, NamedTextColor expected) {
+        assertAllTextColor(component, null, expected);
+    }
+
+    private static void assertAllTextColor(Component component, TextColor inherited, NamedTextColor expected) {
+        TextColor effective = component.color() == null ? inherited : component.color();
+        if (component instanceof TextComponent text && !text.content().isBlank()) {
+            assertEquals(expected, effective, text.content());
+        }
+        component.children().forEach(child -> assertAllTextColor(child, effective, expected));
+    }
+
+    private static void assertEffectiveTextColor(
+            Component component,
+            String text,
+            NamedTextColor expected) {
+        assertEquals(expected, effectiveTextColor(component, text, null));
+    }
+
+    private static void assertNeutralTextColor(Component component, String text) {
+        TextColor color = effectiveTextColor(component, text, null);
+        assertTrue(color == null || color.equals(NamedTextColor.WHITE) || color.equals(NamedTextColor.GRAY),
+                () -> text + " uses non-neutral color " + color);
+    }
+
+    private static TextColor effectiveTextColor(Component component, String text, TextColor inherited) {
+        TextColor effective = component.color() == null ? inherited : component.color();
+        if (component instanceof TextComponent textComponent && textComponent.content().equals(text)) {
+            return effective;
+        }
+        return component.children().stream()
+                .map(child -> effectiveTextColor(child, text, effective))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static Component textNode(Component component, String text) {
+        if (component instanceof TextComponent textComponent && textComponent.content().equals(text)) {
+            return component;
+        }
+        return component.children().stream()
+                .map(child -> textNodeOrNull(child, text))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static Component textNodeOrNull(Component component, String text) {
+        if (component instanceof TextComponent textComponent && textComponent.content().equals(text)) {
+            return component;
+        }
+        return component.children().stream()
+                .map(child -> textNodeOrNull(child, text))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static boolean containsDecoration(Component component, TextDecoration decoration) {
+        return component.decoration(decoration) == TextDecoration.State.TRUE
+                || component.children().stream().anyMatch(child -> containsDecoration(child, decoration));
     }
 }
