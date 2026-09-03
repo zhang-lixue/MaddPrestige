@@ -3,6 +3,10 @@ package net.maddkraft.maddprestige.core.admin;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import net.maddkraft.maddprestige.api.explanation.ExplanationNode;
+import net.maddkraft.maddprestige.api.explanation.ExplanationStatus;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +31,42 @@ class PrestigeBalanceProjectionTest {
 
         assertEquals("0", projection.current().canonical());
         assertEquals("0", projection.projected().canonical());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B] Canonical blocked balance uses the greater truthful requirement or cost shortfall")
+    void derivesCanonicalBlockedBalanceShortfall() {
+        ExplanationNode requirement = balanceRequirement("1", "8", "GREATER_OR_EQUAL",
+                ExplanationStatus.UNSATISFIED);
+        ExplanationNode root = new ExplanationNode("requirement.group", ExplanationStatus.UNSATISFIED,
+                "Not Ready", Map.of("mode", "ALL"), List.of(requirement));
+
+        Optional<MetricValue> missing = PrestigeBalanceProjection.requiredAdditionalBalance(
+                root, List.of(money("5")), true);
+
+        assertEquals(Optional.of("7"), missing.map(MetricValue::canonical));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B] Canonical blocked balance declines to invent unsupported requirement shortfalls")
+    void rejectsUnsupportedRequirementShortfall() {
+        ExplanationNode requirement = balanceRequirement("1", "8", "LESS_OR_EQUAL",
+                ExplanationStatus.UNSATISFIED);
+        ExplanationNode root = new ExplanationNode("requirement.group", ExplanationStatus.UNSATISFIED,
+                "Not Ready", Map.of("mode", "ALL"), List.of(requirement));
+
+        assertEquals(Optional.empty(), PrestigeBalanceProjection.requiredAdditionalBalance(
+                root, List.of(), false));
+    }
+
+    private static ExplanationNode balanceRequirement(
+            String current,
+            String target,
+            String operator,
+            ExplanationStatus status) {
+        return new ExplanationNode("requirement.leaf", status, status.name(),
+                Map.of("provider", "vault_balance", "metric", "balance", "operator", operator,
+                        "current", current, "target", target), List.of());
     }
 
     private static MetricValue money(String amount) {

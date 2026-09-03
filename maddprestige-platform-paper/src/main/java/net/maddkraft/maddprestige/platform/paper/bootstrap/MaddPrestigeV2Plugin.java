@@ -269,6 +269,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
         PluginCommand command = java.util.Objects.requireNonNull(getCommand("maddprestige"),
                 "maddprestige command is absent from plugin.yml");
         PaperPhaseSixGuiController guiController = new PaperPhaseSixGuiController(runtime.playerGui(),
+                runtime.staffGui(),
                 new PaperGuiInventoryGuard(), scheduler, messages);
         getServer().getPluginManager().registerEvents(guiController, this);
         PaperPhaseSixCommandAdapter adapter = new PaperPhaseSixCommandAdapter(runtime.commands(),

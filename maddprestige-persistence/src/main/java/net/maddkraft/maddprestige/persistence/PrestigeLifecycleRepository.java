@@ -28,6 +28,10 @@ public interface PrestigeLifecycleRepository extends MilestoneStateReader {
 
     List<PrestigeHistoryRecord> history(UUID playerId, int limit);
 
+    PrestigeHistoryPage history(UUID playerId, int offset, int limit);
+
+    Optional<PrestigeHistoryRecord> historyEntry(UUID playerId, OperationId operationId);
+
     @Override
     boolean awarded(UUID playerId, MilestoneId milestoneId, String repeatabilityKey);
 }

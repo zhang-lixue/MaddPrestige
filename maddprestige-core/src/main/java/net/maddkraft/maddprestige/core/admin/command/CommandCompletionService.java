@@ -31,25 +31,45 @@ public final class CommandCompletionService {
     private final AtomicReference<CompletionCatalog> catalog = new AtomicReference<>(CompletionCatalog.empty());
     private final SetupWizardService setup;
     private final OperationConfirmationService confirmations;
+    private final StaffHistoryCommandService staffHistory;
 
     public CommandCompletionService() {
         this.setup = null;
         this.confirmations = null;
+        this.staffHistory = null;
     }
 
     public CommandCompletionService(SetupWizardService setup) {
         this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = null;
+        this.staffHistory = null;
     }
 
     public CommandCompletionService(SetupWizardService setup, OperationConfirmationService confirmations) {
         this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
+        this.staffHistory = null;
+    }
+
+    public CommandCompletionService(
+            SetupWizardService setup,
+            OperationConfirmationService confirmations,
+            StaffHistoryCommandService staffHistory) {
+        this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
+        this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
+        this.staffHistory = Objects.requireNonNull(staffHistory, "staff history");
     }
 
     public CommandCompletionService(OperationConfirmationService confirmations) {
         this.setup = null;
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
+        this.staffHistory = null;
+    }
+
+    public CommandCompletionService(StaffHistoryCommandService staffHistory) {
+        this.setup = null;
+        this.confirmations = null;
+        this.staffHistory = Objects.requireNonNull(staffHistory, "staff history");
     }
 
     public void refresh(ProviderRegistry providers, SchemaRegistry schema, StageConfiguration stages) {
@@ -115,6 +135,32 @@ public final class CommandCompletionService {
         if (root.equals(CONFIRM) && tokens.size() == 2 && confirmations != null
                 && subject.has(PhaseSixPermissions.PRESTIGE)) {
             return confirmations.validConfirmationIds(subject).stream().map(UUID::toString).toList();
+        }
+        if (root.equals("history") && staffHistory != null
+                && subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
+            if (tokens.size() == 2) {
+                ArrayList<String> suggestions = new ArrayList<>();
+                suggestions.add(DETAILS);
+                suggestions.addAll(staffHistory.playerSuggestions());
+                return suggestions;
+            }
+            if (tokens.size() == 3) {
+                return tokens.get(1).equalsIgnoreCase(DETAILS)
+                        ? staffHistory.playerSuggestions() : List.of("1");
+            }
+            if (tokens.size() == 4 && tokens.get(1).equalsIgnoreCase(DETAILS)) {
+                return staffHistory.entrySuggestions(tokens.get(2));
+            }
+        }
+        if (root.equals("admin") && staffHistory != null
+                && subject.has(PhaseSixPermissions.ADMIN_GUI)) {
+            if (tokens.size() == 2) {
+                return subject.has(PhaseSixPermissions.PLAYER_VIEW) ? List.of("find") : List.of();
+            }
+            if (tokens.size() == 3 && tokens.get(1).equalsIgnoreCase("find")
+                    && subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
+                return staffHistory.playerSuggestions();
+            }
         }
         if (root.equals("help")) {
             return List.of("overview", SETUP_COMMAND, "measurement", "requirements", "scaling", "providers");
@@ -288,7 +334,7 @@ public final class CommandCompletionService {
         return current.valuesByPath().getOrDefault(path, List.of());
     }
 
-    private static List<String> rootCommands(PermissionSubject subject) {
+    private List<String> rootCommands(PermissionSubject subject) {
         ArrayList<String> commands = new ArrayList<>();
         boolean player = subject.actor().uuid().isPresent();
         if (subject.has(PhaseSixPermissions.USE)) {
@@ -314,8 +360,14 @@ public final class CommandCompletionService {
         if (player && (subject.has(PhaseSixPermissions.ADMIN_GUI) || subject.has(PhaseSixPermissions.USE))) {
             commands.add("gui");
         }
+        if (player && subject.has(PhaseSixPermissions.ADMIN_GUI)) {
+            commands.add("admin");
+        }
         if (subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
             commands.add("player");
+            if (staffHistory != null) {
+                commands.add("history");
+            }
         }
         if (subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT)) {
             commands.add("staff");

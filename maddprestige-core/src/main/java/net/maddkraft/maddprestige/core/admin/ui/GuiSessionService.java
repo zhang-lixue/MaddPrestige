@@ -224,7 +224,15 @@ public final class GuiSessionService implements AutoCloseable {
             PermissionSubject subject,
             UUID sessionId,
             UUID actionId) {
-        return authorize(subject, sessionId, actionId, true);
+        return authorize(subject, sessionId, actionId, true, GuiAudience.PLAYER);
+    }
+
+    /** Validates and consumes one actor-bound staff navigation action. */
+    GuiAction authorizeStaffClick(
+            PermissionSubject subject,
+            UUID sessionId,
+            UUID actionId) {
+        return authorize(subject, sessionId, actionId, true, GuiAudience.STAFF);
     }
 
     GuiSessionView storePlayerScreen(
@@ -239,6 +247,17 @@ public final class GuiSessionService implements AutoCloseable {
         return store(subject, GuiAudience.PLAYER, title, actions, screen, inventorySize, items);
     }
 
+    GuiSessionView storeStaffScreen(
+            PermissionSubject subject,
+            MessageReference title,
+            List<GuiAction> actions,
+            GuiScreenKind screen,
+            int inventorySize,
+            List<GuiDisplayItem> items) {
+        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        return store(subject, GuiAudience.STAFF, title, actions, screen, inventorySize, items);
+    }
+
     public void invalidate(UUID sessionId) {
         sessions.remove(Objects.requireNonNull(sessionId, "session ID"));
     }
@@ -247,6 +266,12 @@ public final class GuiSessionService implements AutoCloseable {
         UUID player = Objects.requireNonNull(playerId, "player ID");
         sessions.entrySet().removeIf(entry -> entry.getValue().audience() == GuiAudience.PLAYER
                 && entry.getValue().actor().uuid().filter(player::equals).isPresent());
+    }
+
+    public void invalidateStaff(UUID actorId) {
+        UUID actor = Objects.requireNonNull(actorId, "actor ID");
+        sessions.entrySet().removeIf(entry -> entry.getValue().audience() == GuiAudience.STAFF
+                && entry.getValue().actor().uuid().filter(actor::equals).isPresent());
     }
 
     @Override
@@ -259,6 +284,15 @@ public final class GuiSessionService implements AutoCloseable {
             UUID sessionId,
             UUID actionId,
             boolean consume) {
+        return authorize(subject, sessionId, actionId, consume, null);
+    }
+
+    private GuiAction authorize(
+            PermissionSubject subject,
+            UUID sessionId,
+            UUID actionId,
+            boolean consume,
+            GuiAudience expectedAudience) {
         pruneExpired();
         UUID id = Objects.requireNonNull(sessionId, "session ID");
         Session session = sessions.get(id);
@@ -271,9 +305,9 @@ public final class GuiSessionService implements AutoCloseable {
             throw new AdministrationException("gui.session.actor_mismatch",
                     "A GUI session cannot be used by another actor.", "Open a separate GUI session.");
         }
-        if (consume && session.audience() != GuiAudience.PLAYER) {
+        if (expectedAudience != null && session.audience() != expectedAudience) {
             throw new AdministrationException("gui.action.player_invalid",
-                    "A staff GUI session cannot be routed through the Player GUI.",
+                    "A GUI session cannot be routed through a different audience flow.",
                     "Reopen the intended GUI surface.");
         }
         GuiAction action = session.actions().get(actionId);
@@ -337,9 +371,13 @@ public final class GuiSessionService implements AutoCloseable {
             int inventorySize,
             List<GuiDisplayItem> items) {
         pruneExpired();
-        if (audience == GuiAudience.PLAYER) {
-            subject.actor().uuid().ifPresent(this::invalidatePlayer);
-        }
+        subject.actor().uuid().ifPresent(actor -> {
+            if (audience == GuiAudience.PLAYER) {
+                invalidatePlayer(actor);
+            } else {
+                invalidateStaff(actor);
+            }
+        });
         UUID id = UUID.randomUUID();
         Instant expiresAt = Instant.now(clock).plus(lifetime);
         LinkedHashMap<UUID, GuiAction> byId = new LinkedHashMap<>();

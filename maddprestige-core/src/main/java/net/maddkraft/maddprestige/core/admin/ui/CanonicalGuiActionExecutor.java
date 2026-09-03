@@ -50,9 +50,23 @@ public final class CanonicalGuiActionExecutor implements GuiActionExecutor {
             case PREPARE_PRESTIGE -> confirmations.preparePrestige(subject, target(action))
                     .thenApply(value -> m("gui.result.prepare_prestige", "status", status(value.preview()),
                             "confirmation", value.confirmationId(), "expires", value.expiresAt()));
-            case CONFIRM_PRESTIGE, BACK_PLAYER, CLOSE_PLAYER -> throw new AdministrationException(
+            case CONFIRM_PRESTIGE, BACK_PLAYER, CLOSE_PLAYER,
+                    STAFF_OPEN_PLAYERS, STAFF_OPEN_ONLINE_PLAYERS, STAFF_FIND_PLAYER,
+                    STAFF_VIEW_CONFIGURATION, STAFF_SELECT_PLAYER, STAFF_SELECT_SEARCH_RESULT,
+                    STAFF_REFRESH_PLAYER_OVERVIEW, STAFF_REFRESH_SEARCH_PLAYER_OVERVIEW,
+                    STAFF_COPY_PLAYER_UUID, STAFF_COPY_SEARCH_PLAYER_UUID,
+                    STAFF_VIEW_REQUIREMENTS,
+                    STAFF_VIEW_PRESTIGE_PREVIEW, STAFF_REFRESH_PRESTIGE_PREVIEW,
+                    STAFF_VIEW_HISTORY, STAFF_HISTORY_PREVIOUS, STAFF_HISTORY_NEXT,
+                    STAFF_VIEW_SYSTEM_STATUS, STAFF_REFRESH_SYSTEM_STATUS,
+                    STAFF_SYSTEM_STATUS_PREVIOUS, STAFF_SYSTEM_STATUS_NEXT,
+                    STAFF_REQUIREMENTS_PREVIOUS, STAFF_REQUIREMENTS_NEXT,
+                    STAFF_VIEW_PLAYER_HISTORY, STAFF_PLAYER_HISTORY_PREVIOUS, STAFF_PLAYER_HISTORY_NEXT,
+                    STAFF_BACK_DASHBOARD, STAFF_BACK_PLAYER_MANAGEMENT, STAFF_BACK_PLAYER_LIST,
+                    STAFF_BACK_PLAYER_SEARCH_RESULTS, STAFF_BACK_PLAYER_OVERVIEW,
+                    STAFF_CLOSE -> throw new AdministrationException(
                     "gui.action.player_invalid", "Player navigation must use the Player GUI flow.",
-                    "Reopen the Player GUI.");
+                    "Reopen the intended GUI flow.");
             case VIEW_DOCTOR -> doctor.inspect(subject).thenApply(value -> m("gui.result.doctor",
                     "status", value.status(), "count", value.findings().size()));
             case VIEW_CONFIGURATION -> CompletableFuture.completedFuture(configuration.active(subject)

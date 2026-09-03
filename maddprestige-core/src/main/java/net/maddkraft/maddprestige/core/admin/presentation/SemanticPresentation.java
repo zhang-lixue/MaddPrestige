@@ -150,6 +150,14 @@ public final class SemanticPresentation {
                 message(preview.executable() ? "command.player.concise.ready" : "command.player.concise.not_ready"));
     }
 
+    /** All canonical requirement leaves for structured staff inspection. */
+    public static List<MessageReference> requirementLeaves(ExplanationNode root) {
+        Objects.requireNonNull(root, "requirement root");
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        appendConciseRequirementLeaves(root, lines, Integer.MAX_VALUE);
+        return List.copyOf(lines);
+    }
+
     public static List<MessageReference> administration(AdministrationException exception) {
         Objects.requireNonNull(exception, "administration exception");
         Keys keys = exception.semanticVariant().map(variant -> Objects.requireNonNull(
@@ -590,12 +598,17 @@ public final class SemanticPresentation {
         register(result, "confirmation_unknown", "confirmation.unknown");
         register(result, "gui_action_forged", "gui.action.forged");
         register(result, "gui_action_player_invalid", "gui.action.player_invalid");
+        register(result, "gui_action_staff_invalid", "gui.action.staff_invalid");
         register(result, "gui_action_replayed", "gui.action.replayed");
         register(result, "gui_action_stale", "gui.action.stale");
         register(result, "gui_mutation_context_missing", "gui.mutation.context_missing");
         register(result, "gui_mutation_kind_invalid", "gui.mutation.kind_invalid");
         register(result, "gui_session_actor_mismatch", "gui.session.actor_mismatch");
         register(result, "gui_session_expired", "gui.session.expired");
+        register(result, "gui_staff_player_unknown", "gui.staff.player_unknown");
+        register(result, "gui_staff_player_required", "gui.staff.player_required");
+        register(result, "gui_staff_target_missing", "gui.staff.target_missing");
+        register(result, "gui_staff_unavailable", "gui.staff.unavailable");
         register(result, "gui_player_self_required", "gui.player.self_required");
         register(result, "gui_player_target_missing", "gui.player.target_missing");
         register(result, "gui_target_missing", "gui.target.missing");

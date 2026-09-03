@@ -13,7 +13,8 @@ public record GuiDisplayItem(
         MessageReference title,
         List<MessageReference> lore,
         Optional<UUID> actionId,
-        boolean highlighted) {
+        boolean highlighted,
+        Optional<UUID> profilePlayerId) {
     public GuiDisplayItem {
         if (slot < 0 || slot >= 54) {
             throw new IllegalArgumentException("GUI item slot must be between zero and fifty-three");
@@ -22,6 +23,17 @@ public record GuiDisplayItem(
         title = Objects.requireNonNull(title, "title");
         lore = List.copyOf(Objects.requireNonNull(lore, "lore"));
         actionId = Objects.requireNonNull(actionId, "action ID");
+        profilePlayerId = Objects.requireNonNull(profilePlayerId, "profile player ID");
+    }
+
+    public GuiDisplayItem(
+            int slot,
+            GuiItemIcon icon,
+            MessageReference title,
+            List<MessageReference> lore,
+            Optional<UUID> actionId,
+            boolean highlighted) {
+        this(slot, icon, title, lore, actionId, highlighted, Optional.empty());
     }
 
     public static GuiDisplayItem display(
@@ -40,5 +52,27 @@ public record GuiDisplayItem(
             UUID actionId,
             boolean highlighted) {
         return new GuiDisplayItem(slot, icon, title, lore, Optional.of(actionId), highlighted);
+    }
+
+    public static GuiDisplayItem profiledDisplay(
+            int slot,
+            GuiItemIcon icon,
+            MessageReference title,
+            List<MessageReference> lore,
+            UUID profilePlayerId) {
+        return new GuiDisplayItem(slot, icon, title, lore, Optional.empty(), false,
+                Optional.of(profilePlayerId));
+    }
+
+    public static GuiDisplayItem profiledAction(
+            int slot,
+            GuiItemIcon icon,
+            MessageReference title,
+            List<MessageReference> lore,
+            UUID actionId,
+            boolean highlighted,
+            UUID profilePlayerId) {
+        return new GuiDisplayItem(slot, icon, title, lore, Optional.of(actionId), highlighted,
+                Optional.of(profilePlayerId));
     }
 }

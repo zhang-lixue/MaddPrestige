@@ -3,7 +3,7 @@
 **Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7<br>
 **Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`<br>
 **Date:** 2026-08-22<br>
-**Scope:** all 85 codes with exactly one literal production `AdministrationException` construction site
+**Current scope:** all 89 codes with exactly one literal production `AdministrationException` construction site
 
 ## Method and result
 
@@ -35,8 +35,12 @@ Phase 9F-A adds four exact Player GUI safety identities for consumed-action repl
 authority, self-only opening, and missing server-owned player targets. The multi-source
 `gui.action.player_invalid` identity remains separately reviewed by the compatibility registry.
 
-Result: all 85 single-source codes have accurate catalog semantics. Together with the current 22-code multi-source
-register, all 107 known public administration failures have been checked against their production source condition.
+Phase 9F-B adds five precise, single-source Staff GUI failures: invalid staff-flow action, offline selected player,
+non-player staff actor, missing server-owned staff target, and unavailable Staff GUI runtime. They remain distinct from
+the accepted Player GUI and generic target contracts so their public summaries and recovery guidance stay exact.
+
+Result: all 89 single-source codes have accurate catalog semantics. Together with the current 22-code multi-source
+register, all 111 known public administration failures have been checked against their production source condition.
 
 Source locations are relative to
 `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/`.
@@ -88,12 +92,17 @@ Source locations are relative to
 | `confirmation.session_ended` | `admin/OperationConfirmationService.java:262` | `confirmation_session_ended` | A confirmation no longer belongs to the player's current login session. | Cross-session execution is rejected before mutation. | Request a fresh preview in the current login session. | — |
 | `confirmation.unknown` | `admin/OperationConfirmationService.java:57` | `confirmation_unknown` | Initial lookup finds no token because it is unknown, expired/pruned or already consumed. | No absent authority can execute. | Request a new server-issued operation preview. | — |
 | `gui.action.forged` | `admin/ui/GuiSessionService.java:258` | `gui_action_forged` | The clicked action ID is absent from the server-owned session map. | Player items cannot create authority. | Close and reopen the GUI. | — |
+| `gui.action.staff_invalid` | `admin/ui/StaffGuiService.java:83` | `gui_action_staff_invalid` | A server-owned session action is routed to the Staff GUI but its kind is outside the read-only Staff flow. | No unrelated or mutation action executes through Staff navigation. | Reopen the Staff GUI for current read-only controls. | — |
 | `gui.action.replayed` | `admin/ui/GuiSessionService.java:298` | `gui_action_replayed` | A concurrent or repeated click attempts to consume an already-consumed Player GUI session. | No action executes twice. | Reopen the GUI for a fresh single-use action. | — |
 | `gui.action.stale` | `admin/ui/GuiSessionService.java:264` | `gui_action_stale` | A mutating action's expected active revision differs from current active revision. | The stale GUI mutation is not executed. | Reopen the GUI and obtain a fresh preview/action. | — |
 | `gui.mutation.context_missing` | `admin/ui/CanonicalGuiMutationExecutor.java:133` | `gui_mutation_context_missing` | A server-owned mutation lacks a required draft, path, value, token or reason field. | No incomplete mutation executes. | Reopen the GUI to build a complete action from current state. | — |
 | `gui.mutation.kind_invalid` | `admin/ui/CanonicalGuiMutationExecutor.java:60` | `gui_mutation_kind_invalid` | The selected action kind is outside canonical configuration mutations. | No unrelated action is treated as a mutation. | Reopen the control panel and choose a current configuration action. | — |
 | `gui.session.actor_mismatch` | `admin/ui/GuiSessionService.java:253` | `gui_session_actor_mismatch` | The current actor differs from the session owner. | GUI authority is not transferable. | Open a separate GUI session. | — |
 | `gui.session.expired` | `admin/ui/GuiSessionService.java:249` | `gui_session_expired` | Session is absent or past its expiry instant. | The session is removed and no action runs. | Reopen the GUI for current server-owned controls. | — |
+| `gui.staff.player_unknown` | `admin/ui/StaffGuiService.java:688` | `gui_staff_player_unknown` | The selected server-known identity is no longer present when its canonical view is requested. | No missing or guessed identity is inspected. | Find the player again using a current server-known name or UUID. | — |
+| `gui.staff.player_required` | `admin/ui/StaffGuiService.java:255` | `gui_staff_player_required` | Staff GUI opening has an authorized actor without an in-game player UUID. | No inventory session is issued to a console or non-player actor. | Run the admin GUI command from an authorized player. | — |
+| `gui.staff.target_missing` | `admin/ui/StaffGuiService.java:206` | `gui_staff_target_missing` | A Staff player-navigation action lacks its server-owned target UUID. | No player identity is inferred and no read occurs. | Return to player selection and choose a player again. | — |
+| `gui.staff.unavailable` | `admin/command/PhaseSixCommandService.java:279` | `gui_staff_unavailable` | The admin GUI route is invoked in a runtime composition without the Staff GUI service. | No partial or legacy control panel is opened. | Use a read-only command or try again after restart. | — |
 | `gui.player.self_required` | `admin/ui/PlayerGuiService.java:271` | `gui_player_self_required` | A caller attempts to open the ordinary Player GUI for another player. | Staff-only cross-player controls are not exposed through the Player GUI. | Open the GUI in game for yourself or use explicit staff commands. | — |
 | `gui.player.target_missing` | `admin/ui/PlayerGuiService.java:259` | `gui_player_target_missing` | A server-owned Player GUI action lacks its player target. | No player identity is guessed and no operation executes. | Reopen the Player GUI for a complete action. | — |
 | `gui.target.missing` | `admin/ui/CanonicalGuiActionExecutor.java:71` | `gui_target_missing` | A canonical player operation action has no target UUID. | No player is guessed or mutated. | Reopen the intended player view. | — |
@@ -135,7 +144,7 @@ Source locations are relative to
 
 `PaperMessageServiceTest.administrationSingleSourceInventoryMatchesSemanticAudit` walks every production Java source,
 extracts literal constructor codes and derives the exact single-source set from occurrence counts. It parses the rows
-above and requires exact equality: 85 single-source rows, 22 multi-source codes, and a union equal to all 107 known
+above and requires exact equality: 89 single-source rows, 22 multi-source codes, and a union equal to all 111 known
 public codes. A new, removed, renamed or reclassified single-source code fails until this source-level audit is updated
 deliberately.
 

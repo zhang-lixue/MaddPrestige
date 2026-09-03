@@ -6,6 +6,7 @@ import java.util.UUID;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionView;
+import net.maddkraft.maddprestige.core.admin.ui.GuiAudience;
 import net.maddkraft.maddprestige.platform.paper.PaperThreadGuard;
 import net.maddkraft.maddprestige.platform.paper.i18n.PaperMessageService;
 import org.bukkit.Bukkit;
@@ -13,11 +14,14 @@ import org.bukkit.Material;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 import org.jetbrains.annotations.NotNull;
 
 /** Server-owned slot/action map. Item names and metadata never carry authority. */
 public final class PaperGuiInventory implements InventoryHolder {
     private final UUID sessionId;
+    private final GuiAudience audience;
     private final Map<Integer, UUID> actionIds;
     private final Inventory inventory;
 
@@ -25,6 +29,7 @@ public final class PaperGuiInventory implements InventoryHolder {
         PaperThreadGuard.requireServerThread("Create Phase 6 GUI");
         java.util.Objects.requireNonNull(messages, "messages");
         sessionId = view.sessionId();
+        audience = view.audience();
         int size = view.inventorySize();
         inventory = Bukkit.createInventory(this, size, renderTitle(view, messages));
         LinkedHashMap<Integer, UUID> slots = new LinkedHashMap<>();
@@ -34,6 +39,7 @@ public final class PaperGuiInventory implements InventoryHolder {
             for (var display : view.items()) {
                 ItemStack item = new ItemStack(material(display.icon()));
                 item.editMeta(meta -> {
+                    applyPlayerProfile(meta, display.profilePlayerId());
                     meta.displayName(nonItalic(messages.render(display.title())));
                     if (!display.lore().isEmpty()) {
                         meta.lore(display.lore().stream().map(messages::render)
@@ -48,6 +54,20 @@ public final class PaperGuiInventory implements InventoryHolder {
             }
         }
         actionIds = Map.copyOf(slots);
+    }
+
+    private static void applyPlayerProfile(ItemMeta meta, java.util.Optional<UUID> playerId) {
+        if (!(meta instanceof SkullMeta skull) || playerId.isEmpty()) {
+            return;
+        }
+        try {
+            var player = Bukkit.getPlayer(playerId.orElseThrow());
+            if (player != null && player.isOnline()) {
+                skull.setPlayerProfile(player.getPlayerProfile());
+            }
+        } catch (IllegalArgumentException | UnsupportedOperationException ignored) {
+            // A normal player head remains usable when a platform cannot resolve the live profile.
+        }
     }
 
     private void renderLegacy(
@@ -67,6 +87,7 @@ public final class PaperGuiInventory implements InventoryHolder {
     static Material material(net.maddkraft.maddprestige.core.admin.ui.GuiItemIcon icon) {
         return switch (icon) {
             case PROGRESS -> Material.CLOCK;
+            case REFRESH -> Material.COMPASS;
             case PRESTIGE -> Material.NETHER_STAR;
             case READY -> Material.LIME_DYE;
             case BLOCKED -> Material.RED_CONCRETE;
@@ -76,6 +97,12 @@ public final class PaperGuiInventory implements InventoryHolder {
             case REWARD -> Material.CHEST;
             case MILESTONE -> Material.BEACON;
             case CONFIRM -> Material.LIME_CONCRETE;
+            case STAFF -> Material.COMPASS;
+            case PLAYERS -> Material.PLAYER_HEAD;
+            case PLAYER_INFORMATION -> Material.NAME_TAG;
+            case CONFIGURATION -> Material.KNOWLEDGE_BOOK;
+            case HISTORY -> Material.BOOK;
+            case SYSTEM_STATUS -> Material.COMPARATOR;
             case BACK -> Material.ARROW;
             case CLOSE -> Material.BARRIER;
             case BORDER_PURPLE -> Material.PURPLE_STAINED_GLASS_PANE;
@@ -89,6 +116,10 @@ public final class PaperGuiInventory implements InventoryHolder {
 
     public UUID sessionId() {
         return sessionId;
+    }
+
+    public GuiAudience audience() {
+        return audience;
     }
 
     public static net.kyori.adventure.text.Component renderTitle(

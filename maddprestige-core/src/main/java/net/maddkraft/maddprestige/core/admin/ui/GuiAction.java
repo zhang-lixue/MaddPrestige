@@ -18,7 +18,8 @@ public record GuiAction(
         Optional<UUID> confirmationId,
         Optional<StageId> targetStage,
         Optional<StageId> replacementStage,
-        Optional<GuiMutationContext> mutationContext) {
+        Optional<GuiMutationContext> mutationContext,
+        Optional<Integer> page) {
     public GuiAction {
         actionId = Objects.requireNonNull(actionId, "action ID");
         kind = Objects.requireNonNull(kind, "kind");
@@ -30,9 +31,29 @@ public record GuiAction(
         targetStage = Objects.requireNonNull(targetStage, "target stage");
         replacementStage = Objects.requireNonNull(replacementStage, "replacement stage");
         mutationContext = Objects.requireNonNull(mutationContext, "mutation context");
+        page = Objects.requireNonNull(page, "page");
         if (mutating && expectedConfigRevision.isEmpty()) {
             throw new IllegalArgumentException("Mutating GUI action requires an expected configuration revision");
         }
+        if (page.filter(value -> value < 0).isPresent()) {
+            throw new IllegalArgumentException("GUI action page cannot be negative");
+        }
+    }
+
+    public GuiAction(
+            UUID actionId,
+            GuiActionKind kind,
+            MessageReference label,
+            String requiredPermission,
+            boolean mutating,
+            Optional<ConfigRevisionId> expectedConfigRevision,
+            Optional<UUID> targetPlayer,
+            Optional<UUID> confirmationId,
+            Optional<StageId> targetStage,
+            Optional<StageId> replacementStage,
+            Optional<GuiMutationContext> mutationContext) {
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                confirmationId, targetStage, replacementStage, mutationContext, Optional.empty());
     }
 
     public GuiAction(
@@ -46,7 +67,7 @@ public record GuiAction(
             Optional<StageId> targetStage,
             Optional<StageId> replacementStage) {
         this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
-                Optional.empty(), targetStage, replacementStage, Optional.empty());
+                Optional.empty(), targetStage, replacementStage, Optional.empty(), Optional.empty());
     }
 
     public GuiAction(
@@ -61,6 +82,6 @@ public record GuiAction(
             Optional<StageId> replacementStage,
             Optional<GuiMutationContext> mutationContext) {
         this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
-                Optional.empty(), targetStage, replacementStage, mutationContext);
+                Optional.empty(), targetStage, replacementStage, mutationContext, Optional.empty());
     }
 }

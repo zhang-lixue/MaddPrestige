@@ -41,16 +41,17 @@ public final class PaperMessageService {
             "current_prestige", "current_stage", "delta", "detail", "disposition", "document", "draft", "expires",
             "eligible_at", "errors", "findings", "formula", "group", "hash", "healthy", "id", "intended_target",
             "kind",
-            "indicator", "label", "lifetime",
-            "locale", "metric", "metrics", "mode",
+            "indicator", "label", "lifetime", "missing",
+            "locale", "metric", "metrics", "mode", "next",
             "operation", "operator", "path", "permission", "player", "prestige_status", "progress", "projected",
             "provider",
             "purpose", "rank",
             "rankup_status",
-            "prestige_maximum", "reason", "remediation", "repeatability", "requirement", "revision", "rewards", "risk",
+            "prestige_maximum", "previous", "reason", "remediation", "repeatability", "requirement", "revision",
+            "rewards", "risk",
             "scaling", "scope", "stage",
             "source", "status", "target", "threshold", "total",
-            "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "value", "variant",
+            "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "uuid", "value", "variant",
             "version");
     private static final TagResolver VALIDATION_ARGUMENTS = TagResolver.resolver(TEMPLATE_ARGUMENTS.stream()
             .map(name -> Placeholder.unparsed(name, "value"))

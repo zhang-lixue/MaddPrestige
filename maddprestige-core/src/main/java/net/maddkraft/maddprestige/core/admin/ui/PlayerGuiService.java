@@ -186,7 +186,7 @@ public final class PlayerGuiService {
                 GuiScreenKind.PRESTIGE_PREVIEW, SIZE, items);
     }
 
-    private static ArrayList<GuiDisplayItem> commonItems(
+    static ArrayList<GuiDisplayItem> commonItems(
             OperationPreview preview,
             boolean projectedBalance) {
         ArrayList<GuiDisplayItem> items = new ArrayList<>();
@@ -203,14 +203,39 @@ public final class PlayerGuiService {
         return items;
     }
 
+    static ArrayList<GuiDisplayItem> staffPreviewItems(OperationPreview preview) {
+        ArrayList<GuiDisplayItem> items = commonItems(preview, true);
+        if (preview.executable()) {
+            return items;
+        }
+        items.removeIf(item -> item.icon() == GuiItemIcon.BALANCE);
+        addBlockedStaffBalance(items, preview, 10);
+        return items;
+    }
+
+    private static void addBlockedStaffBalance(
+            List<GuiDisplayItem> items,
+            OperationPreview preview,
+            int slot) {
+        Optional<MessageReference> snapshot = balanceSnapshot(preview);
+        ArrayList<MessageReference> lore = new ArrayList<>();
+        lore.add(m("gui.item.balance.current", "current", snapshot
+                .flatMap(reference -> reference.argument("current"))
+                .map(PlayerGuiService::money).orElse("Unavailable")));
+        snapshot.flatMap(reference -> reference.argument("missing"))
+                .map(PlayerGuiService::money)
+                .map(missing -> m("gui.item.balance.missing", "missing", missing))
+                .ifPresent(lore::add);
+        items.add(GuiDisplayItem.display(slot, GuiItemIcon.BALANCE,
+                m("gui.item.balance.title"), lore));
+    }
+
     private static void addBalance(
             List<GuiDisplayItem> items,
             OperationPreview preview,
             int slot,
             boolean projected) {
-        Optional<MessageReference> snapshot = preview.semanticDetails().stream()
-                .filter(reference -> reference.key().equals("command.preview.balance_projection"))
-                .findFirst();
+        Optional<MessageReference> snapshot = balanceSnapshot(preview);
         MessageReference value = snapshot.map(reference -> projected
                 ? m("gui.item.balance.projected",
                         "current", money(reference.argument("current").orElse("Unavailable")),
@@ -220,6 +245,12 @@ public final class PlayerGuiService {
                 .orElseGet(() -> m("gui.item.balance.current", "current", "Unavailable"));
         items.add(GuiDisplayItem.display(slot, GuiItemIcon.BALANCE,
                 m("gui.item.balance.title"), List.of(value)));
+    }
+
+    private static Optional<MessageReference> balanceSnapshot(OperationPreview preview) {
+        return preview.semanticDetails().stream()
+                .filter(reference -> reference.key().equals("command.preview.balance_projection"))
+                .findFirst();
     }
 
     private static void addRewards(
@@ -306,7 +337,7 @@ public final class PlayerGuiService {
                 m(preview.executable() ? "gui.item.progress.ready" : "gui.item.progress.not_ready"));
     }
 
-    private static MessageReference requirementLine(MessageReference reference) {
+    static MessageReference requirementLine(MessageReference reference) {
         String canonicalLabel = reference.argument("label").orElse("Progress");
         String current = gameplayRequirementValue(canonicalLabel,
                 reference.argument("current").orElse("Unavailable"));

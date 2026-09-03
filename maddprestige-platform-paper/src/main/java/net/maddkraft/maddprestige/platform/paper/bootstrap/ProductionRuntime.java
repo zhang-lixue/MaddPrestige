@@ -3,6 +3,7 @@ package net.maddkraft.maddprestige.platform.paper.bootstrap;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
@@ -19,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.stream.Collectors;
 import net.maddkraft.maddprestige.api.event.ConfigAppliedSnapshot;
@@ -35,6 +37,7 @@ import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.operation.OperationState;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
+import net.maddkraft.maddprestige.api.provider.ProviderSnapshot;
 import net.maddkraft.maddprestige.api.service.CurrencyBalanceView;
 import net.maddkraft.maddprestige.api.service.OperationEvaluation;
 import net.maddkraft.maddprestige.api.service.OperationEvaluationStatus;
@@ -56,6 +59,7 @@ import net.maddkraft.maddprestige.core.admin.OperationPreviewService;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.ContextualHelpService;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.command.StaffHistoryCommandService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
 import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationCandidate;
@@ -76,6 +80,17 @@ import net.maddkraft.maddprestige.core.admin.ui.CanonicalGuiActionExecutor;
 import net.maddkraft.maddprestige.core.admin.ui.CanonicalGuiMutationExecutor;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
 import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiService;
+import net.maddkraft.maddprestige.core.admin.ui.StaffGuiService;
+import net.maddkraft.maddprestige.core.admin.ui.StaffHistoryPresentation;
+import net.maddkraft.maddprestige.core.admin.ui.StaffHistorySource;
+import net.maddkraft.maddprestige.core.admin.ui.StaffPlayerDirectory;
+import net.maddkraft.maddprestige.core.admin.ui.StaffPlayerIdentity;
+import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource;
+import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource.Component;
+import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource.ConfigurationSummary;
+import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource.Health;
+import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource.Snapshot;
+import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource.Summary;
 import net.maddkraft.maddprestige.core.config.BackupMetadata;
 import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.ConfigurationService;
@@ -92,12 +107,17 @@ import net.maddkraft.maddprestige.core.requirement.BaselineInitializationService
 import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
 import net.maddkraft.maddprestige.core.requirement.RequirementDefinition;
 import net.maddkraft.maddprestige.core.requirement.RequirementEvaluationResult;
+import net.maddkraft.maddprestige.core.requirement.RequirementGroup;
+import net.maddkraft.maddprestige.core.requirement.RequirementLeaf;
+import net.maddkraft.maddprestige.core.requirement.RequirementNode;
+import net.maddkraft.maddprestige.core.requirement.ScalingStrategy;
 import net.maddkraft.maddprestige.core.schema.PhaseSixSchema;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompilation;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompiler;
 import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationSchema;
 import net.maddkraft.maddprestige.persistence.admin.AtomicConfigurationFileStore;
+import net.maddkraft.maddprestige.persistence.PrestigeHistoryRecord;
 import net.maddkraft.maddprestige.persistence.admin.SqliteConfigurationHistoryStore;
 import net.maddkraft.maddprestige.persistence.admin.SqlitePrestigeAdministrationStore;
 import net.maddkraft.maddprestige.persistence.admin.SqliteStageReferenceMigrationStore;
@@ -110,6 +130,7 @@ import net.maddkraft.maddprestige.persistence.sqlite.SqliteOperationRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerInitializationStore;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePlayerPrestigeRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqlitePrestigeLifecycleRepository;
+import net.maddkraft.maddprestige.persistence.sqlite.SqliteRecoveryEventRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteRequirementStateRepository;
 import net.maddkraft.maddprestige.persistence.sqlite.SqliteSeasonStore;
 import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
@@ -150,6 +171,9 @@ public final class ProductionRuntime implements AutoCloseable {
     private final OperationConfirmationService confirmations;
     private final GuiSessionService gui;
     private final PlayerGuiService playerGui;
+    private final StaffGuiService staffGui;
+    private final AtomicReference<List<StaffPlayerIdentity>> knownStaffPlayers =
+            new AtomicReference<>(List.of());
     private final AtomicReference<ConfigRevisionId> publishedRevision = new AtomicReference<>();
     private final AtomicReference<StoredConfigurationRevision> authoritativeRevision = new AtomicReference<>();
     private final AtomicBoolean providerRecompositionQueued = new AtomicBoolean();
@@ -222,12 +246,13 @@ public final class ProductionRuntime implements AutoCloseable {
                 this::activeRevision, () -> configuration.active()
                         .map(active -> active.phaseFour().configuration().prestige().confirmationMaximumLifetime())
                         .orElse(OperationConfirmationService.DEFAULT_MAXIMUM_LIFETIME), clock);
-        var databaseProbe = new DatabaseDiagnosticProbe(() -> CompletableFuture.supplyAsync(() -> {
+        Supplier<CompletionStage<DatabaseHealth>> databaseHealth = () -> CompletableFuture.supplyAsync(() -> {
             var validation = SqliteDatabaseValidator.validate(
                     foundation.databaseFile(), SqliteMigrations.phaseNineB());
             return new DatabaseHealth(true, validation.schemaVersion() == 12, "SQLite",
                     "validated schema " + validation.schemaVersion());
-        }, worker));
+        }, worker);
+        var databaseProbe = new DatabaseDiagnosticProbe(databaseHealth);
         var operationalProbe = new PhaseSixOperationalDiagnosticProbe(providers,
                 () -> CompletableFuture.supplyAsync(this::operationalDiagnosticSnapshot, worker));
         var historyProbe = new ConfigurationHistoryDiagnosticProbe(history, worker);
@@ -246,11 +271,69 @@ public final class ProductionRuntime implements AutoCloseable {
                 doctor, administration, mutations);
         gui = new GuiSessionService(this::activeRevision, guiActions, mutations, Duration.ofMinutes(5), clock);
         playerGui = new PlayerGuiService(gui, playerViews, previews, confirmations);
+        refreshKnownStaffPlayers();
+        StaffPlayerDirectory staffPlayers = new StaffPlayerDirectory() {
+            @Override
+            public List<StaffPlayerIdentity> onlinePlayers() {
+                return knownStaffPlayers.get().stream().filter(StaffPlayerIdentity::online).toList();
+            }
+
+            @Override
+            public List<StaffPlayerIdentity> knownPlayers() {
+                return knownStaffPlayers.get();
+            }
+        };
+        var recoveryEvents = new SqliteRecoveryEventRepository(foundation);
+        StaffHistorySource staffHistory = new StaffHistorySource() {
+            @Override
+            public CompletionStage<Page> recent(int offset, int limit) {
+                Map<UUID, String> visibleNames = visiblePlayerNames();
+                return CompletableFuture.supplyAsync(() -> historyPage(
+                        prestigeLifecycle.recentHistory(offset, limit), offset, visibleNames, recoveryEvents), worker);
+            }
+
+            @Override
+            public CompletionStage<Page> forPlayer(UUID playerId, int offset, int limit) {
+                Map<UUID, String> visibleNames = visiblePlayerNames();
+                return CompletableFuture.supplyAsync(() -> historyPage(
+                        prestigeLifecycle.history(playerId, offset, limit), offset, visibleNames, recoveryEvents), worker);
+            }
+
+            @Override
+            public CompletionStage<Optional<Entry>> entry(UUID playerId, UUID entryId) {
+                Map<UUID, String> visibleNames = visiblePlayerNames();
+                OperationId operationId = new OperationId(entryId);
+                return CompletableFuture.supplyAsync(() -> prestigeLifecycle.historyEntry(playerId, operationId)
+                        .map(value -> staffHistoryEntry(value, visibleNames,
+                                !recoveryEvents.find(value.operationId(), 1).isEmpty())), worker);
+            }
+        };
+        StaffSystemStatusSource staffStatus = new StaffSystemStatusSource() {
+            @Override
+            public Summary summary() {
+                return staffSystemSummary();
+            }
+
+            @Override
+            public CompletionStage<Snapshot> inspect() {
+                Summary summary = summary();
+                return databaseHealth.get().handle((database, failure) ->
+                        staffSystemSnapshot(summary, database, failure));
+            }
+
+            @Override
+            public ConfigurationSummary configuration() {
+                return staffConfigurationSummary();
+            }
+        };
+        staffGui = new StaffGuiService(gui, playerViews, staffPlayers,
+                this::activeRevision, staffHistory, staffStatus);
+        StaffHistoryCommandService historyCommands = new StaffHistoryCommandService(staffHistory, staffPlayers);
         SetupWizardService setupWizard = new SetupWizardService(administration, providers);
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
                 doctor, why, previews, confirmations, playerViews, setupWizard,
-                manualPrestige, gui, playerGui, this::activeRevision, worker);
-        completion = new CommandCompletionService(setupWizard, confirmations);
+                manualPrestige, gui, playerGui, staffGui, historyCommands, this::activeRevision, worker);
+        completion = new CommandCompletionService(setupWizard, confirmations, historyCommands);
 
         providerLifecycle = providers.addLifecycleListener(ignored -> recomposeForProviderLifecycle());
         startup.ifPresent(this::publishStartup);
@@ -298,14 +381,319 @@ public final class ProductionRuntime implements AutoCloseable {
         return playerGui;
     }
 
+    public StaffGuiService staffGui() {
+        return staffGui;
+    }
+
     public void beginPlayerConfirmationSession(UUID playerId) {
+        registerOnlineStaffPlayer(playerId);
         confirmations.beginPlayerSession(playerId);
         playerGui.invalidatePlayer(playerId);
+        staffGui.invalidateStaff(playerId);
     }
 
     public void endPlayerConfirmationSession(UUID playerId) {
+        knownStaffPlayers.updateAndGet(players -> players.stream()
+                .map(player -> player.playerId().equals(playerId)
+                        ? new StaffPlayerIdentity(player.playerId(), player.name(), false)
+                        : player)
+                .toList());
         confirmations.endPlayerSession(playerId);
         playerGui.invalidatePlayer(playerId);
+        staffGui.invalidateStaff(playerId);
+    }
+
+    private Map<UUID, String> visiblePlayerNames() {
+        return knownStaffPlayers.get().stream().collect(Collectors.toMap(
+                StaffPlayerIdentity::playerId, StaffPlayerIdentity::name));
+    }
+
+    private void refreshKnownStaffPlayers() {
+        java.util.LinkedHashMap<UUID, StaffPlayerIdentity> known = new java.util.LinkedHashMap<>();
+        org.bukkit.OfflinePlayer[] offlinePlayers = plugin.getServer().getOfflinePlayers();
+        if (offlinePlayers != null) {
+            for (org.bukkit.OfflinePlayer player : offlinePlayers) {
+                if (player != null && player.getName() != null && !player.getName().isBlank()) {
+                    known.put(player.getUniqueId(), new StaffPlayerIdentity(
+                            player.getUniqueId(), player.getName(), player.isOnline()));
+                }
+            }
+        }
+        for (UUID playerId : prestiges.knownPlayerIds()) {
+            if (known.containsKey(playerId)) {
+                continue;
+            }
+            org.bukkit.OfflinePlayer player = plugin.getServer().getOfflinePlayer(playerId);
+            String name = player == null || player.getName() == null || player.getName().isBlank()
+                    ? playerId.toString() : player.getName();
+            known.put(playerId, new StaffPlayerIdentity(playerId, name,
+                    player != null && player.isOnline()));
+        }
+        java.util.Collection<? extends org.bukkit.entity.Player> online = plugin.getServer().getOnlinePlayers();
+        if (online != null) {
+            online.forEach(player -> known.put(player.getUniqueId(),
+                    new StaffPlayerIdentity(player.getUniqueId(), player.getName(), true)));
+        }
+        knownStaffPlayers.set(List.copyOf(known.values()));
+    }
+
+    private void registerOnlineStaffPlayer(UUID playerId) {
+        org.bukkit.entity.Player player = plugin.getServer().getPlayer(playerId);
+        if (player == null) {
+            return;
+        }
+        StaffPlayerIdentity identity = new StaffPlayerIdentity(playerId, player.getName(), true);
+        knownStaffPlayers.updateAndGet(players -> {
+            ArrayList<StaffPlayerIdentity> updated = new ArrayList<>(players.stream()
+                    .filter(existing -> !existing.playerId().equals(playerId)).toList());
+            updated.add(identity);
+            return List.copyOf(updated);
+        });
+    }
+
+    private StaffHistorySource.Page historyPage(
+            net.maddkraft.maddprestige.persistence.PrestigeHistoryPage page,
+            int offset,
+            Map<UUID, String> visibleNames,
+            SqliteRecoveryEventRepository recoveryEvents) {
+        List<StaffHistorySource.Entry> entries = page.entries().stream()
+                .map(entry -> staffHistoryEntry(entry, visibleNames,
+                        !recoveryEvents.find(entry.operationId(), 1).isEmpty()))
+                .toList();
+        return new StaffHistorySource.Page(entries, offset > 0,
+                (long) offset + entries.size() < page.totalEntries(), page.totalEntries());
+    }
+
+    private StaffHistorySource.Entry staffHistoryEntry(
+            PrestigeHistoryRecord entry,
+            Map<UUID, String> visibleNames,
+            boolean recovered) {
+        boolean costRecorded = recordedSnapshot(entry.costsSnapshot());
+        boolean rewardRecorded = recordedSnapshot(entry.rewardsSnapshot());
+        return new StaffHistorySource.Entry(entry.operationId().value(),
+                visibleNames.getOrDefault(entry.playerId(), entry.playerId().toString()),
+                entry.currentBefore(), entry.currentAfter(), historyOutcome(entry.result(), recovered),
+                costRecorded, rewardRecorded, Optional.empty(), Optional.empty(),
+                StaffHistoryPresentation.snapshotAmount(entry.costsSnapshot()),
+                StaffHistoryPresentation.snapshotAmount(entry.rewardsSnapshot()),
+                entry.occurredAt());
+    }
+
+    private static StaffHistorySource.Outcome historyOutcome(String result, boolean recovered) {
+        String normalized = result.toUpperCase(Locale.ROOT);
+        if (normalized.equals("COMPLETED") || normalized.endsWith("_COMPLETED")) {
+            if (recovered) {
+                return StaffHistorySource.Outcome.RECOVERED;
+            }
+            return StaffHistorySource.Outcome.COMPLETED;
+        }
+        if (normalized.contains("REJECT") || normalized.contains("CANCEL")) {
+            return StaffHistorySource.Outcome.REJECTED;
+        }
+        if (normalized.contains("FAIL") || normalized.contains("ROLLBACK")) {
+            return StaffHistorySource.Outcome.FAILED;
+        }
+        if (normalized.contains("COMMITTED") || normalized.contains("RECONCIL")
+                || normalized.contains("ATTENTION")) {
+            return StaffHistorySource.Outcome.ATTENTION;
+        }
+        return StaffHistorySource.Outcome.IN_PROGRESS;
+    }
+
+    private static boolean recordedSnapshot(String snapshot) {
+        String value = snapshot.trim();
+        return !value.isEmpty() && !value.equals("[]") && !value.equals("{}");
+    }
+
+    private Summary staffSystemSummary() {
+        List<ProviderSnapshot> active = activeProviderSnapshots();
+        int available = (int) active.stream()
+                .filter(snapshot -> providerHealth(snapshot.health().state()) == Health.HEALTHY)
+                .count();
+        Health health = activeRevision().isEmpty() ? Health.BLOCKED : Health.HEALTHY;
+        for (ProviderSnapshot snapshot : active) {
+            health = worst(health, providerHealth(snapshot.health().state()));
+        }
+        return new Summary(health, activeRevision().isPresent(), available, active.size());
+    }
+
+    private ConfigurationSummary staffConfigurationSummary() {
+        Optional<ActivePhaseFourConfiguration> active = configuration.active();
+        if (active.isEmpty()) {
+            return ConfigurationSummary.inactive();
+        }
+        ActivePhaseFourConfiguration current = active.orElseThrow();
+        var phaseThree = current.priorPhases().phaseThree().configuration();
+        var phaseFour = current.phaseFour().configuration();
+        var prestige = phaseFour.prestige();
+        List<RequirementDefinition> requirements = activeRequirements(phaseThree.trees(),
+                prestige.requirementTreeId());
+        java.util.LinkedHashSet<String> providerNames = new java.util.LinkedHashSet<>();
+        requirements.stream().map(RequirementDefinition::providerId).map(ProductionRuntime::providerLabel)
+                .sorted().forEach(providerNames::add);
+        prestige.costIds().stream().map(phaseThree.costs()::get).filter(Objects::nonNull)
+                .map(value -> providerLabel(value.providerId())).sorted().forEach(providerNames::add);
+        prestige.rewardIds().stream().map(phaseThree.rewards()::get).filter(Objects::nonNull)
+                .map(value -> providerLabel(value.providerId())).sorted().forEach(providerNames::add);
+        long requirementScaling = requirements.stream().filter(ProductionRuntime::scaled).count();
+        long costScaling = prestige.costIds().stream().filter(phaseFour.valueScaling().costs()::containsKey).count();
+        long rewardScaling = prestige.rewardIds().stream()
+                .filter(phaseFour.valueScaling().rewards()::containsKey).count();
+        int scalingProfiles = Math.toIntExact(requirementScaling + costScaling + rewardScaling);
+        String range = prestige.enabled()
+                ? prestige.limit().maximum().isPresent()
+                        ? "P1 – P" + prestige.limit().maximum().getAsLong()
+                        : "P1+"
+                : "Disabled";
+        boolean published = activeRevision().isPresent();
+        boolean usable = operational() && prestige.enabled() && !latestValidation.get().hasErrors();
+        return new ConfigurationSummary(published, usable, range, requirements.size(),
+                prestige.costIds().size(), prestige.rewardIds().size(), scalingProfiles,
+                List.copyOf(providerNames));
+    }
+
+    private static List<RequirementDefinition> activeRequirements(
+            Map<net.maddkraft.maddprestige.api.id.RequirementId, RequirementNode> trees,
+            Optional<net.maddkraft.maddprestige.api.id.RequirementId> rootId) {
+        java.util.LinkedHashMap<net.maddkraft.maddprestige.api.id.RequirementId, RequirementDefinition> result =
+                new java.util.LinkedHashMap<>();
+        rootId.map(trees::get).ifPresent(root -> collectRequirements(root, result));
+        return List.copyOf(result.values());
+    }
+
+    private static void collectRequirements(
+            RequirementNode node,
+            Map<net.maddkraft.maddprestige.api.id.RequirementId, RequirementDefinition> destination) {
+        if (node instanceof RequirementLeaf leaf) {
+            destination.putIfAbsent(leaf.id(), leaf.definition());
+        } else if (node instanceof RequirementGroup group) {
+            group.children().forEach(child -> collectRequirements(child.node(), destination));
+        }
+    }
+
+    private static boolean scaled(RequirementDefinition requirement) {
+        return requirement.scaling().strategy() != ScalingStrategy.NONE
+                || !requirement.scaling().segments().isEmpty();
+    }
+
+    private Snapshot staffSystemSnapshot(
+            Summary summary,
+            DatabaseHealth database,
+            Throwable failure) {
+        ArrayList<Component> components = new ArrayList<>();
+        Optional<ConfigRevisionId> revision = activeRevision();
+        components.add(new Component("Configuration",
+                revision.isPresent() ? Health.HEALTHY : Health.BLOCKED,
+                revision.isPresent() ? "Active" : "Inactive",
+                revision.map(value -> "Active revision " + value.value())
+                        .orElse("No active configuration")));
+
+        LinkedHashMap<String, ProviderHealthState> providerGroups = new LinkedHashMap<>();
+        activeProviderSnapshots().stream()
+                .sorted(java.util.Comparator.comparing(snapshot -> providerLabel(snapshot.descriptor().id())))
+                .forEach(snapshot -> providerGroups.merge(providerLabel(snapshot.descriptor().id()),
+                        snapshot.health().state(), ProductionRuntime::worseProviderState));
+        if (providerGroups.isEmpty()) {
+            components.add(new Component("Integrations", Health.HEALTHY,
+                    "Not configured", "No configured integrations"));
+        } else {
+            providerGroups.forEach((name, state) -> components.add(new Component(name,
+                    providerHealth(state), providerStatus(state), "")));
+        }
+
+        Health persistenceHealth;
+        String persistenceDetail;
+        if (failure != null || database == null || !database.reachable()) {
+            persistenceHealth = Health.BLOCKED;
+            persistenceDetail = "Persistence validation unavailable";
+        } else if (!database.migrationsCurrent()) {
+            persistenceHealth = Health.WARNING;
+            persistenceDetail = database.backend() + " schema requires attention";
+        } else {
+            persistenceHealth = Health.HEALTHY;
+            persistenceDetail = database.backend() + " schema is current";
+        }
+        components.add(new Component("Persistence", persistenceHealth,
+                switch (persistenceHealth) {
+                    case HEALTHY -> "Available";
+                    case WARNING -> "Attention";
+                    case BLOCKED -> "Unavailable";
+                }, persistenceDetail));
+        Summary detailed = new Summary(worst(summary.health(), persistenceHealth),
+                summary.configurationActive(), summary.availableProviders(), summary.totalProviders());
+        return new Snapshot(detailed, components);
+    }
+
+    private List<ProviderSnapshot> activeProviderSnapshots() {
+        return providers.snapshots().stream()
+                .filter(snapshot -> snapshot.activation() == ActivationState.ACTIVE)
+                .toList();
+    }
+
+    private static Health providerHealth(ProviderHealthState state) {
+        return switch (state) {
+            case AVAILABLE, ACTIVE -> Health.HEALTHY;
+            case INACTIVE, DEGRADED -> Health.WARNING;
+            case NOT_INSTALLED, UNSUPPORTED, UNAVAILABLE, UNHEALTHY -> Health.BLOCKED;
+        };
+    }
+
+    private static ProviderHealthState worseProviderState(
+            ProviderHealthState left,
+            ProviderHealthState right) {
+        Health worst = worst(providerHealth(left), providerHealth(right));
+        return providerHealth(left) == worst ? left : right;
+    }
+
+    private static String providerStatus(ProviderHealthState state) {
+        return switch (state) {
+            case AVAILABLE, ACTIVE -> "Available";
+            case INACTIVE -> "Inactive";
+            case DEGRADED -> "Degraded";
+            case UNSUPPORTED -> "Unsupported";
+            case NOT_INSTALLED -> "Not installed";
+            case UNAVAILABLE -> "Unavailable";
+            case UNHEALTHY -> "Unhealthy";
+        };
+    }
+
+    private static Health worst(Health left, Health right) {
+        if (left == Health.BLOCKED || right == Health.BLOCKED) {
+            return Health.BLOCKED;
+        }
+        if (left == Health.WARNING || right == Health.WARNING) {
+            return Health.WARNING;
+        }
+        return Health.HEALTHY;
+    }
+
+    private static String providerLabel(ProviderId providerId) {
+        String id = providerId.value();
+        if (id.startsWith("vault_")) {
+            return "Vault";
+        }
+        if (id.equals("mcmmo")) {
+            return "mcMMO";
+        }
+        if (id.equals("luckperms")) {
+            return "LuckPerms";
+        }
+        if (id.contains("internal")) {
+            return "Internal Currency";
+        }
+        if (id.equals("placeholder_input")) {
+            return "PlaceholderAPI";
+        }
+        if (id.equals("paper_statistics")) {
+            return "Minecraft Statistics";
+        }
+        if (id.equals("paper_world_context")) {
+            return "World Context";
+        }
+        return java.util.Arrays.stream(id.split("[_:.\\-]+"))
+                .filter(part -> !part.isBlank())
+                .map(part -> Character.toUpperCase(part.charAt(0)) + part.substring(1))
+                .collect(Collectors.joining(" "));
     }
 
     private PhaseSixOperationalSnapshot operationalDiagnosticSnapshot() {

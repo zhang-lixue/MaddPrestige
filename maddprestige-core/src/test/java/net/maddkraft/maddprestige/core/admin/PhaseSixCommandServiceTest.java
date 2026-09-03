@@ -29,6 +29,7 @@ import net.maddkraft.maddprestige.api.validation.ValidationReport;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
 import net.maddkraft.maddprestige.core.admin.command.ContextualHelpService;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.command.StaffHistoryCommandService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationApplicationStatus;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationHistoryStore;
@@ -45,6 +46,8 @@ import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
 import net.maddkraft.maddprestige.core.admin.ui.CanonicalGuiMutationExecutor;
+import net.maddkraft.maddprestige.core.admin.ui.StaffHistorySource;
+import net.maddkraft.maddprestige.core.admin.ui.StaffPlayerIdentity;
 import net.maddkraft.maddprestige.core.config.BackupMetadata;
 import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.CompiledConfiguration;
@@ -64,6 +67,21 @@ import org.junit.jupiter.api.Test;
 
 class PhaseSixCommandServiceTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-16T12:00:00Z"), ZoneOffset.UTC);
+
+    @Test
+    @DisplayName("[Phase 9F-B] Production command dispatcher exposes canonical player history")
+    void dispatchesPlayerHistoryCommand() {
+        Fixture fixture = new Fixture();
+
+        var response = fixture.commands.execute(new CommandInvocation(
+                subject(PhaseSixPermissions.PLAYER_VIEW), List.of("history", "tmydwc")))
+                .toCompletableFuture().join();
+
+        assertTrue(response.successful());
+        assertEquals("history.empty", response.code());
+        assertEquals(List.of("command.history.header", "command.history.empty"),
+                response.messages().stream().map(MessageReference::key).toList());
+    }
 
     @Test
     @DisplayName("[OR8D-02] Manual Prestige mutation establishes lifecycle before its audited CAS")
@@ -875,9 +893,27 @@ class PhaseSixCommandServiceTest {
             CanonicalGuiMutationExecutor guiMutations = new CanonicalGuiMutationExecutor(configuration);
             gui = new GuiSessionService(() -> activeRevision(this), guiMutations::execute, guiMutations,
                     Duration.ofMinutes(1), CLOCK);
+            UUID historyPlayer = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+            StaffHistorySource historySource = new StaffHistorySource() {
+                @Override
+                public java.util.concurrent.CompletionStage<Page> recent(int offset, int limit) {
+                    return CompletableFuture.completedFuture(new Page(List.of(), false, false, 0));
+                }
+
+                @Override
+                public java.util.concurrent.CompletionStage<Page> forPlayer(
+                        UUID playerId,
+                        int offset,
+                        int limit) {
+                    return CompletableFuture.completedFuture(new Page(List.of(), false, false, 0));
+                }
+            };
+            StaffHistoryCommandService historyCommands = new StaffHistoryCommandService(historySource,
+                    () -> List.of(new StaffPlayerIdentity(historyPlayer, "tmydwc")));
             commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, configuration,
                     doctor, why, preview, confirmation, new PlayerProgressViewService(preview),
-                    new SetupWizardService(configuration, providers), manual, gui, () -> activeRevision(this), Runnable::run);
+                    new SetupWizardService(configuration, providers), manual, gui, null, null,
+                    historyCommands, () -> activeRevision(this), Runnable::run);
         }
 
         private ConfigurationService activeConfiguration() {

@@ -1,10 +1,15 @@
 package net.maddkraft.maddprestige.platform.paper.admin;
 
 import java.util.Objects;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.event.ClickEvent;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
+import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionView;
 import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiService;
+import net.maddkraft.maddprestige.core.admin.ui.GuiAudience;
+import net.maddkraft.maddprestige.core.admin.ui.StaffGuiService;
 import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
 import net.maddkraft.maddprestige.platform.paper.PaperTaskScheduler;
 import net.maddkraft.maddprestige.platform.paper.PaperThreadGuard;
@@ -19,6 +24,7 @@ import org.bukkit.event.inventory.InventoryDragEvent;
 /** Paper rendering/event boundary for server-owned Phase 6 GUI sessions. */
 public final class PaperPhaseSixGuiController implements Listener {
     private final PlayerGuiService playerGui;
+    private final StaffGuiService staffGui;
     private final PaperGuiInventoryGuard guard;
     private final PaperTaskScheduler scheduler;
     private final PaperMessageService messages;
@@ -28,7 +34,17 @@ public final class PaperPhaseSixGuiController implements Listener {
             PaperGuiInventoryGuard guard,
             PaperTaskScheduler scheduler,
             PaperMessageService messages) {
+        this(playerGui, null, guard, scheduler, messages);
+    }
+
+    public PaperPhaseSixGuiController(
+            PlayerGuiService playerGui,
+            StaffGuiService staffGui,
+            PaperGuiInventoryGuard guard,
+            PaperTaskScheduler scheduler,
+            PaperMessageService messages) {
         this.playerGui = Objects.requireNonNull(playerGui, "player GUI");
+        this.staffGui = staffGui;
         this.guard = Objects.requireNonNull(guard, "guard");
         this.scheduler = Objects.requireNonNull(scheduler, "scheduler");
         this.messages = Objects.requireNonNull(messages, "messages");
@@ -39,7 +55,7 @@ public final class PaperPhaseSixGuiController implements Listener {
         try {
             player.openInventory(new PaperGuiInventory(view, messages).getInventory());
         } catch (RuntimeException failure) {
-            playerGui.closeView(view.sessionId());
+            closeView(view.audience(), view.sessionId());
             throw failure;
         }
     }
@@ -70,17 +86,39 @@ public final class PaperPhaseSixGuiController implements Listener {
     @EventHandler(ignoreCancelled = false)
     public void onClose(InventoryCloseEvent event) {
         if (event.getInventory().getHolder() instanceof PaperGuiInventory holder) {
-            playerGui.closeView(holder.sessionId());
+            closeView(holder.audience(), holder.sessionId());
         }
     }
 
     private void dispatch(Player player, PaperGuiInventory holder, java.util.UUID actionId) {
         try {
-            playerGui.click(PaperPermissionSubjects.from(player), holder.sessionId(), actionId)
+            interaction(player, holder, actionId)
                     .whenComplete((result, failure) -> deferDelivery(player, result, failure));
         } catch (AdministrationException exception) {
             SemanticPresentation.administration(exception).stream().map(messages::render)
                     .forEach(player::sendMessage);
+        }
+    }
+
+    private java.util.concurrent.CompletionStage<
+            net.maddkraft.maddprestige.core.admin.ui.PlayerGuiInteractionResult> interaction(
+            Player player,
+            PaperGuiInventory holder,
+            java.util.UUID actionId) {
+        if (GuiAudience.STAFF.equals(holder.audience())) {
+            if (staffGui == null) {
+                throw new IllegalStateException("Staff GUI is unavailable");
+            }
+            return staffGui.click(PaperPermissionSubjects.from(player), holder.sessionId(), actionId);
+        }
+        return playerGui.click(PaperPermissionSubjects.from(player), holder.sessionId(), actionId);
+    }
+
+    private void closeView(GuiAudience audience, java.util.UUID sessionId) {
+        if (GuiAudience.STAFF.equals(audience) && staffGui != null) {
+            staffGui.closeView(sessionId);
+        } else {
+            playerGui.closeView(sessionId);
         }
     }
 
@@ -105,12 +143,23 @@ public final class PaperPhaseSixGuiController implements Listener {
         if (failure != null) {
             reportFailure(player, failure);
         } else if (player.isOnline()) {
-            result.messages().stream().map(messages::render).forEach(player::sendMessage);
+            result.messages().stream().map(this::renderResultMessage).forEach(player::sendMessage);
             result.nextView().ifPresent(view -> open(player, view));
             if (result.close()) {
                 player.closeInventory();
             }
         }
+    }
+
+    private Component renderResultMessage(MessageReference reference) {
+        Component rendered = messages.render(reference);
+        if (!reference.key().equals("gui.staff.player.uuid.copy")) {
+            return rendered;
+        }
+        String value = reference.argument("uuid").orElseThrow(() ->
+                new IllegalArgumentException("Copy UUID message requires a server-owned UUID"));
+        java.util.UUID.fromString(value);
+        return rendered.clickEvent(ClickEvent.copyToClipboard(value));
     }
 
     private void reportFailure(Player player, Throwable failure) {

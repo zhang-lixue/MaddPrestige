@@ -167,6 +167,75 @@ class PaperMessageServiceTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-B] Canonical history Details action uses an exact injection-safe command target")
+    void historyEntryRendersClickableStableDetailTarget() {
+        String entry = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        var reference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.entry.recovered",
+                "before", 2, "after", 3, "status", "Recovered",
+                "value", "Sep 2, 2026 • 1:24 PM", "player", "tmydwc", "id", entry);
+        var response = net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                "history.summary", List.of(reference));
+
+        Component rendered = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(response, messages).getFirst();
+
+        assertTrue(plain(rendered).contains("2 → 3  Recovered"));
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND,
+                rendered.clickEvent().action());
+        assertEquals("/maddprestige history details tmydwc " + entry,
+                rendered.clickEvent().value());
+
+        var unsafe = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.entry.completed", "before", 1, "after", 2,
+                "status", "Completed", "value", "now", "player", "bad player", "id", entry);
+        Component safelyUnlinked = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(unsafe)), messages).getFirst();
+        assertEquals(null, safelyUnlinked.clickEvent());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B UX] History pages expose only safe available Previous and Next actions")
+    void historyPaginationRendersSafeDirectionalActions() {
+        var firstReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.page", "current", 1, "total", 2, "player", "tmydwc",
+                "previous", "", "next", 2);
+        Component first = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(firstReference)), messages).getFirst();
+
+        assertEquals("Page 1 / 2   [Next →]", plain(first));
+        assertEquals(null, textNodeOrNull(first, "[← Previous]"));
+        Component next = textNode(first, "[Next →]");
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND,
+                next.clickEvent().action());
+        assertEquals("/maddprestige history tmydwc 2", next.clickEvent().value());
+
+        var lastReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.page", "current", 2, "total", 2, "player", "tmydwc",
+                "previous", 1, "next", "");
+        Component last = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(lastReference)), messages).getFirst();
+
+        assertEquals("[← Previous]   Page 2 / 2", plain(last));
+        assertEquals(null, textNodeOrNull(last, "[Next →]"));
+        Component previous = textNode(last, "[← Previous]");
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND,
+                previous.clickEvent().action());
+        assertEquals("/maddprestige history tmydwc 1", previous.clickEvent().value());
+
+        var unsafeReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.page", "current", 1, "total", 2, "player", "bad player",
+                "previous", "", "next", 2);
+        Component unsafe = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(unsafeReference)), messages).getFirst();
+        assertEquals("Page 1 / 2", plain(unsafe));
+    }
+
+    @Test
     @DisplayName("[Phase 9F-A correction] Player requirement count omits evaluation terminology")
     void playerRequirementProgressArgumentsRender() {
         var progress = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
@@ -183,6 +252,20 @@ class PaperMessageServiceTest {
                 "gui.item.balance.projected", "current", "$7", "projected", "$1");
 
         assertEquals("$7 → $1", plain(messages.render(projection)));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B] Blocked balance shortfall is concise and warning-colored")
+    void blockedBalanceShortfallRenders() {
+        var shortfall = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.balance.missing", "missing", "$7");
+
+        Component rendered = messages.render(shortfall);
+
+        assertEquals("Needs $7 more", plain(rendered));
+        assertAllTextColor(rendered, NamedTextColor.RED);
+        assertFalse(rendered.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE);
+        assertFalse(rendered.decoration(TextDecoration.ITALIC) == TextDecoration.State.TRUE);
     }
 
     @Test
@@ -392,10 +475,13 @@ class PaperMessageServiceTest {
                 "confirmation.already_used", "confirmation.ambiguous", "confirmation.config_stale",
                 "confirmation.expired", "confirmation.none_pending", "confirmation.revalidation_failed",
                 "confirmation.session_ended", "confirmation.unknown", "gui.action.forged",
-                "gui.action.player_invalid", "gui.action.replayed", "gui.action.stale",
+                "gui.action.player_invalid", "gui.action.replayed", "gui.action.staff_invalid",
+                "gui.action.stale",
                 "gui.mutation.context_missing", "gui.mutation.kind_invalid",
                 "gui.player.self_required", "gui.player.target_missing", "gui.session.actor_mismatch",
-                "gui.session.expired", "gui.target.missing", "operation.preview.blocked", "permission.denied",
+                "gui.session.expired", "gui.staff.player_required", "gui.staff.player_unknown",
+                "gui.staff.target_missing", "gui.staff.unavailable", "gui.target.missing",
+                "operation.preview.blocked", "permission.denied",
                 "rankup.compatibility_only",
                 "setup.acknowledgement.unknown", "setup.already_active", "setup.baseline.unknown",
                 "setup.draft.invalid", "setup.group.missing", "setup.incomplete",
@@ -423,8 +509,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(106, identities.size());
-        assertEquals(106, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(111, identities.size());
+        assertEquals(111, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -560,7 +646,7 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(84, singleSource.size());
+        assertEquals(89, singleSource.size());
         assertEquals(22, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");

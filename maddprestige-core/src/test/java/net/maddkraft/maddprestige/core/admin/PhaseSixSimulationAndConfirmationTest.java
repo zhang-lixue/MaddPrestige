@@ -182,6 +182,33 @@ class PhaseSixSimulationAndConfirmationTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-B] Player-view permission enters canonical Prestige inspection without simulate authority")
+    void staffInspectionUsesLeastPrivilegeCanonicalPipeline() {
+        UUID actorId = UUID.randomUUID();
+        UUID playerId = UUID.randomUUID();
+        AtomicInteger authorizationReads = new AtomicInteger();
+        OperationPreviewService previews = new OperationPreviewService(
+                ignored -> CompletableFuture.completedFuture(
+                        net.maddkraft.maddprestige.core.plan.RankUpAuthorizationResult.rejected("unused")),
+                ignored -> {
+                    authorizationReads.incrementAndGet();
+                    return CompletableFuture.completedFuture(PrestigeAuthorizationResult.rejected("blocked"));
+                });
+        PermissionSubject viewer = new PermissionSubject(new Actor("player", Optional.of(actorId), "Viewer"),
+                Set.of(PhaseSixPermissions.PLAYER_VIEW));
+        PermissionSubject unprivileged = new PermissionSubject(
+                new Actor("player", Optional.of(UUID.randomUUID()), "Player"), Set.of());
+
+        assertThrows(CompletionException.class,
+                () -> previews.inspectPrestige(viewer, playerId).toCompletableFuture().join());
+        assertEquals(1, authorizationReads.get());
+        AdministrationException denied = assertThrows(AdministrationException.class,
+                () -> previews.inspectPrestige(unprivileged, playerId));
+        assertEquals("permission.denied", denied.code());
+        assertEquals(1, authorizationReads.get());
+    }
+
+    @Test
     @DisplayName("[A27][Phase 9B] Retained rank confirmation is actor/single-use/revision-safe and never executes")
     void confirmationRevalidatesAuthorityAndStaleness() {
         Fixture fixture = new Fixture();

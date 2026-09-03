@@ -31,4 +31,8 @@ public record PlayerGuiInteractionResult(
     public static PlayerGuiInteractionResult closed() {
         return new PlayerGuiInteractionResult(Optional.empty(), true, List.of());
     }
+
+    public static PlayerGuiInteractionResult closed(MessageReference message) {
+        return new PlayerGuiInteractionResult(Optional.empty(), true, List.of(message));
+    }
 }

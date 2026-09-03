@@ -62,7 +62,7 @@ commands:
   maddprestige:
     aliases: [mprestige, mp]
     description: MaddPrestige V2 advanced commands and canonical administration surface.
-    usage: /maddprestige [help|status|prestige|confirm|simulate|why|player|gui|config|setup|doctor|locale|staff]
+    usage: /maddprestige [help|status|prestige|confirm|simulate|why|player|gui|admin|config|setup|doctor|locale|staff]
 permissions:
   maddprestige.use:
     default: true

@@ -154,6 +154,32 @@ class PlayerGuiServiceTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-B] Explicit admin route opens only the actor-bound Staff Dashboard")
+    void routesExplicitStaffDashboard() {
+        StaffGuiService staffRoute = mock(StaffGuiService.class);
+        GuiSessionView view = new GuiSessionView(UUID.randomUUID(), GuiAudience.STAFF,
+                MessageReference.of("gui.title.staff.dashboard"), List.of(),
+                CLOCK.instant().plus(Duration.ofMinutes(5)), GuiScreenKind.STAFF_DASHBOARD, 27, List.of());
+        PermissionSubject staff = new PermissionSubject(new Actor("player", Optional.of(PLAYER), "Staff"),
+                Set.of(PhaseSixPermissions.ADMIN_GUI));
+        when(staffRoute.open(staff)).thenReturn(view);
+        PhaseSixCommandService commands = new PhaseSixCommandService(
+                mock(ContextualHelpService.class), mock(ConfigurationIntrospectionService.class),
+                mock(ConfigurationAdministrationService.class), mock(DoctorService.class), mock(WhyService.class),
+                previews, confirmations, progress, mock(SetupWizardService.class),
+                mock(ManualPrestigeAdministrationService.class), sessions, service, staffRoute,
+                revision::get, Runnable::run);
+
+        var response = commands.execute(new CommandInvocation(staff, List.of("admin")))
+                .toCompletableFuture().join();
+
+        assertEquals(GuiAudience.STAFF, response.guiView().orElseThrow().audience());
+        assertEquals(GuiScreenKind.STAFF_DASHBOARD, response.guiView().orElseThrow().screen());
+        assertTrue(response.messages().isEmpty());
+        verify(staffRoute).open(staff);
+    }
+
+    @Test
     @DisplayName("[Phase 9F-A] Player requirements hide modes and use concise gameplay labels")
     void rendersConcisePlayerRequirements() {
         for (String mode : List.of("ALL", "ANY", "X_OF_N")) {
