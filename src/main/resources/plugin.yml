@@ -93,6 +93,13 @@ permissions:
     default: op
   maddprestige.admin.players.prestige:
     default: op
+    children:
+      maddprestige.admin.players.prestige.set: true
+      maddprestige.admin.players.prestige.reset: true
+  maddprestige.admin.players.prestige.set:
+    default: op
+  maddprestige.admin.players.prestige.reset:
+    default: op
   maddprestige.admin.config.view:
     default: op
   maddprestige.admin.config.edit:

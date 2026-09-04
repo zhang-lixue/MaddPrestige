@@ -354,7 +354,7 @@ class PaperGuiInventoryGuardTest {
             controller.onClick(click(holders.get(8), staff, 13));
             deferred.runNext();
 
-            assertEquals("tmydwc Overview", plain(titles.get(9)));
+            assertEquals("tmydwc", plain(titles.get(9)));
             assertTrue(holders.get(9).actionAt(18).isPresent());
             assertTrue(holders.get(9).actionAt(26).isPresent());
             controller.onClose(close(holders.get(8)));
@@ -368,7 +368,7 @@ class PaperGuiInventoryGuardTest {
             controller.onClick(click(holders.get(10), staff, 18));
             deferred.runNext();
 
-            assertEquals("tmydwc Overview", plain(titles.get(11)));
+            assertEquals("tmydwc", plain(titles.get(11)));
             controller.onClose(close(holders.get(10)));
             assertTrue(holders.get(11).actionAt(24).isPresent());
             controller.onClick(click(holders.get(11), staff, 24));
@@ -381,7 +381,7 @@ class PaperGuiInventoryGuardTest {
             controller.onClick(click(holders.get(12), staff, 18));
             deferred.runNext();
 
-            assertEquals("tmydwc Overview", plain(titles.get(13)));
+            assertEquals("tmydwc", plain(titles.get(13)));
             controller.onClose(close(holders.get(12)));
             assertTrue(holders.get(13).actionAt(20).isPresent());
             controller.onClick(click(holders.get(13), staff, 20));
@@ -401,7 +401,7 @@ class PaperGuiInventoryGuardTest {
             controller.onClick(click(holders.get(15), staff, 18));
             deferred.runNext();
 
-            assertEquals("tmydwc Overview", plain(titles.get(16)));
+            assertEquals("tmydwc", plain(titles.get(16)));
             controller.onClose(close(holders.get(15)));
             controller.onClick(click(holders.get(16), staff, 26));
             deferred.runNext();

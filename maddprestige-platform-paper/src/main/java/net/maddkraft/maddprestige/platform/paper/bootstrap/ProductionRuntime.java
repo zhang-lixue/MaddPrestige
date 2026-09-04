@@ -54,6 +54,7 @@ import net.maddkraft.maddprestige.api.service.StageView;
 import net.maddkraft.maddprestige.api.validation.ValidationReport;
 import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdministrationService;
+import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentPolicy;
 import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
 import net.maddkraft.maddprestige.core.admin.OperationPreviewService;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
@@ -263,9 +264,14 @@ public final class ProductionRuntime implements AutoCloseable {
                         "Rank-up is compatibility-only; use numeric Prestige")),
                 intent -> CompletableFuture.supplyAsync(() -> authorizePrestige(intent), worker));
         PlayerProgressViewService playerViews = new PlayerProgressViewService(previews);
+        SqlitePrestigeAdministrationStore prestigeAdministration =
+                new SqlitePrestigeAdministrationStore(foundation, clock);
         ManualPrestigeAdministrationService manualPrestige = new ManualPrestigeAdministrationService(
-                new SqlitePrestigeAdministrationStore(foundation, clock),
-                () -> activeRevision().orElseThrow(), worker, this::initializePlayerLifecycle);
+                prestigeAdministration, () -> activeRevision().orElseThrow(), worker,
+                this::initializePlayerLifecycle, () -> configuration.active()
+                        .map(active -> new ManualPrestigeAdjustmentPolicy(0,
+                                active.phaseFour().configuration().prestige().limit().maximum()))
+                        .orElseThrow(() -> new IllegalStateException("No active Prestige adjustment policy")));
         CanonicalGuiMutationExecutor mutations = new CanonicalGuiMutationExecutor(administration);
         CanonicalGuiActionExecutor guiActions = new CanonicalGuiActionExecutor(playerViews, previews, confirmations,
                 doctor, administration, mutations);
@@ -289,14 +295,16 @@ public final class ProductionRuntime implements AutoCloseable {
             public CompletionStage<Page> recent(int offset, int limit) {
                 Map<UUID, String> visibleNames = visiblePlayerNames();
                 return CompletableFuture.supplyAsync(() -> historyPage(
-                        prestigeLifecycle.recentHistory(offset, limit), offset, visibleNames, recoveryEvents), worker);
+                        prestigeLifecycle.recentHistory(offset, limit), offset, visibleNames, recoveryEvents,
+                        prestigeAdministration), worker);
             }
 
             @Override
             public CompletionStage<Page> forPlayer(UUID playerId, int offset, int limit) {
                 Map<UUID, String> visibleNames = visiblePlayerNames();
                 return CompletableFuture.supplyAsync(() -> historyPage(
-                        prestigeLifecycle.history(playerId, offset, limit), offset, visibleNames, recoveryEvents), worker);
+                        prestigeLifecycle.history(playerId, offset, limit), offset, visibleNames, recoveryEvents,
+                        prestigeAdministration), worker);
             }
 
             @Override
@@ -305,7 +313,8 @@ public final class ProductionRuntime implements AutoCloseable {
                 OperationId operationId = new OperationId(entryId);
                 return CompletableFuture.supplyAsync(() -> prestigeLifecycle.historyEntry(playerId, operationId)
                         .map(value -> staffHistoryEntry(value, visibleNames,
-                                !recoveryEvents.find(value.operationId(), 1).isEmpty())), worker);
+                                !recoveryEvents.find(value.operationId(), 1).isEmpty(),
+                                prestigeAdministration)), worker);
             }
         };
         StaffSystemStatusSource staffStatus = new StaffSystemStatusSource() {
@@ -327,7 +336,7 @@ public final class ProductionRuntime implements AutoCloseable {
             }
         };
         staffGui = new StaffGuiService(gui, playerViews, staffPlayers,
-                this::activeRevision, staffHistory, staffStatus);
+                this::activeRevision, staffHistory, staffStatus, manualPrestige);
         StaffHistoryCommandService historyCommands = new StaffHistoryCommandService(staffHistory, staffPlayers);
         SetupWizardService setupWizard = new SetupWizardService(administration, providers);
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
@@ -455,10 +464,11 @@ public final class ProductionRuntime implements AutoCloseable {
             net.maddkraft.maddprestige.persistence.PrestigeHistoryPage page,
             int offset,
             Map<UUID, String> visibleNames,
-            SqliteRecoveryEventRepository recoveryEvents) {
+            SqliteRecoveryEventRepository recoveryEvents,
+            SqlitePrestigeAdministrationStore prestigeAdministration) {
         List<StaffHistorySource.Entry> entries = page.entries().stream()
                 .map(entry -> staffHistoryEntry(entry, visibleNames,
-                        !recoveryEvents.find(entry.operationId(), 1).isEmpty()))
+                        !recoveryEvents.find(entry.operationId(), 1).isEmpty(), prestigeAdministration))
                 .toList();
         return new StaffHistorySource.Page(entries, offset > 0,
                 (long) offset + entries.size() < page.totalEntries(), page.totalEntries());
@@ -467,11 +477,21 @@ public final class ProductionRuntime implements AutoCloseable {
     private StaffHistorySource.Entry staffHistoryEntry(
             PrestigeHistoryRecord entry,
             Map<UUID, String> visibleNames,
-            boolean recovered) {
+            boolean recovered,
+            SqlitePrestigeAdministrationStore prestigeAdministration) {
         boolean costRecorded = recordedSnapshot(entry.costsSnapshot());
         boolean rewardRecorded = recordedSnapshot(entry.rewardsSnapshot());
+        StaffHistorySource.Kind kind = switch (entry.eventType()) {
+            case "ADMIN_SET" -> StaffHistorySource.Kind.ADMIN_SET;
+            case "ADMIN_RESET" -> StaffHistorySource.Kind.ADMIN_RESET;
+            default -> StaffHistorySource.Kind.NORMAL_PRESTIGE;
+        };
+        Optional<Actor> actor = kind == StaffHistorySource.Kind.NORMAL_PRESTIGE
+                ? Optional.empty()
+                : prestigeAdministration.adjustmentActor(entry.operationId().value());
         return new StaffHistorySource.Entry(entry.operationId().value(),
                 visibleNames.getOrDefault(entry.playerId(), entry.playerId().toString()),
+                kind, actor.flatMap(Actor::uuid), actor.map(Actor::displayName),
                 entry.currentBefore(), entry.currentAfter(), historyOutcome(entry.result(), recovered),
                 costRecorded, rewardRecorded, Optional.empty(), Optional.empty(),
                 StaffHistoryPresentation.snapshotAmount(entry.costsSnapshot()),

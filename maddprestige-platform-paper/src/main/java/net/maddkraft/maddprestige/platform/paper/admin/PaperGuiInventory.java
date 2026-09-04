@@ -103,6 +103,9 @@ public final class PaperGuiInventory implements InventoryHolder {
             case CONFIGURATION -> Material.KNOWLEDGE_BOOK;
             case HISTORY -> Material.BOOK;
             case SYSTEM_STATUS -> Material.COMPARATOR;
+            case ADMINISTRATION -> Material.ANVIL;
+            case INCREASE -> Material.EMERALD;
+            case DECREASE -> Material.REDSTONE;
             case BACK -> Material.ARROW;
             case CLOSE -> Material.BARRIER;
             case BORDER_PURPLE -> Material.PURPLE_STAINED_GLASS_PANE;

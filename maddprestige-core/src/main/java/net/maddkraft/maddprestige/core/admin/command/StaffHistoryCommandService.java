@@ -92,11 +92,14 @@ public final class StaffHistoryCommandService {
                 return CommandResponse.success("history.empty", lines);
             }
             page.entries().forEach(entry -> lines.add(m(
-                    StaffHistoryPresentation.commandEntryOutcomeKey(entry.outcome()),
+                    entry.kind() == StaffHistorySource.Kind.NORMAL_PRESTIGE
+                            ? StaffHistoryPresentation.commandEntryOutcomeKey(entry.outcome())
+                            : StaffHistoryPresentation.commandKindKey(entry.kind()),
                     "before", entry.before(), "after", entry.after(),
                     "status", StaffHistoryPresentation.outcomeText(entry.outcome()),
                     "value", StaffHistoryPresentation.timestamp(entry.occurredAt()),
-                    "player", player.name(), "id", entry.entryId())));
+                    "player", player.name(), "id", entry.entryId(),
+                    "type", StaffHistoryPresentation.kindText(entry.kind()))));
             long pages = page.totalEntries() == 0L
                     ? 1L : ((page.totalEntries() - 1L) / PAGE_SIZE) + 1L;
             lines.add(m("command.history.page", "current", pageNumber, "total", pages,
@@ -132,17 +135,26 @@ public final class StaffHistoryCommandService {
 
     private static CommandResponse detail(StaffHistorySource.Entry entry) {
         ArrayList<MessageReference> lines = new ArrayList<>();
-        lines.add(m("command.history.detail.header", "before", entry.before(), "after", entry.after()));
+        lines.add(m(entry.kind() == StaffHistorySource.Kind.NORMAL_PRESTIGE
+                        ? "command.history.detail.header" : "command.history.detail.admin_header",
+                "before", entry.before(), "after", entry.after(),
+                "type", StaffHistoryPresentation.kindText(entry.kind())));
+        if (entry.kind() != StaffHistorySource.Kind.NORMAL_PRESTIGE) {
+            entry.actorName().ifPresent(actor ->
+                    lines.add(m("command.history.detail.actor", "player", actor)));
+        }
         lines.add(m(StaffHistoryPresentation.commandDetailOutcomeKey(entry.outcome()),
                 "status", StaffHistoryPresentation.outcomeText(entry.outcome())));
         StaffHistoryPresentation.FinancialOutcome financial =
                 StaffHistoryPresentation.financialOutcome(entry);
-        financial.balance().ifPresent(balance -> lines.add(m("command.history.detail.balance",
-                "before", balance.before(), "after", balance.after())));
-        financial.fallbackCost().ifPresent(value ->
-                lines.add(m("command.history.detail.cost", "value", value)));
-        financial.reward().ifPresent(value ->
-                lines.add(m("command.history.detail.reward", "value", value)));
+        if (entry.kind() == StaffHistorySource.Kind.NORMAL_PRESTIGE) {
+            financial.balance().ifPresent(balance -> lines.add(m("command.history.detail.balance",
+                    "before", balance.before(), "after", balance.after())));
+            financial.fallbackCost().ifPresent(value ->
+                    lines.add(m("command.history.detail.cost", "value", value)));
+            financial.reward().ifPresent(value ->
+                    lines.add(m("command.history.detail.reward", "value", value)));
+        }
         lines.add(m("command.history.detail.time", "value",
                 StaffHistoryPresentation.timestamp(entry.occurredAt())));
         return CommandResponse.success("history.detail", lines);

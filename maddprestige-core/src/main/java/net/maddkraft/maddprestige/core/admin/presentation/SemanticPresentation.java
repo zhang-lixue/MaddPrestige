@@ -607,6 +607,9 @@ public final class SemanticPresentation {
         register(result, "gui_session_expired", "gui.session.expired");
         register(result, "gui_staff_player_unknown", "gui.staff.player_unknown");
         register(result, "gui_staff_player_required", "gui.staff.player_required");
+        register(result, "gui_staff_prestige_administration_unavailable",
+                "gui.staff.prestige_administration_unavailable");
+        register(result, "gui_staff_prestige_review_missing", "gui.staff.prestige_review_missing");
         register(result, "gui_staff_target_missing", "gui.staff.target_missing");
         register(result, "gui_staff_unavailable", "gui.staff.unavailable");
         register(result, "gui_player_self_required", "gui.player.self_required");

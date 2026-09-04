@@ -246,6 +246,19 @@ class PaperMessageServiceTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-C1] Player root and Set/Reset action labels remain concise and distinct")
+    void staffPrestigeAdjustmentPresentationRenders() {
+        assertEquals("tmydwc", plain(messages.render("gui.title.staff.player", Map.of("player", "tmydwc"))));
+        assertEquals("5", plain(messages.render("gui.action.staff.prestige_target", Map.of("target", 5))));
+        assertEquals("tmydwc Set Prestige", plain(messages.render(
+                "gui.title.staff.review_set_prestige", Map.of("player", "tmydwc"))));
+        assertEquals("tmydwc Reset Prestige", plain(messages.render(
+                "gui.title.staff.review_reset_prestige", Map.of("player", "tmydwc"))));
+        assertEquals("Confirm", plain(messages.render("gui.action.staff.confirm_prestige_adjustment")));
+        assertEquals("Reset", plain(messages.render("gui.action.staff.reset_prestige_adjustment")));
+    }
+
+    @Test
     @DisplayName("[Phase 9F-A correction] Preview balance accepts and renders the projected canonical value")
     void previewBalanceProjectionArgumentsRender() {
         var projection = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
@@ -480,6 +493,7 @@ class PaperMessageServiceTest {
                 "gui.mutation.context_missing", "gui.mutation.kind_invalid",
                 "gui.player.self_required", "gui.player.target_missing", "gui.session.actor_mismatch",
                 "gui.session.expired", "gui.staff.player_required", "gui.staff.player_unknown",
+                "gui.staff.prestige_administration_unavailable", "gui.staff.prestige_review_missing",
                 "gui.staff.target_missing", "gui.staff.unavailable", "gui.target.missing",
                 "operation.preview.blocked", "permission.denied",
                 "rankup.compatibility_only",
@@ -509,8 +523,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(111, identities.size());
-        assertEquals(111, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(113, identities.size());
+        assertEquals(113, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -646,7 +660,7 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(89, singleSource.size());
+        assertEquals(91, singleSource.size());
         assertEquals(22, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");

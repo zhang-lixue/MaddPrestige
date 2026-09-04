@@ -144,7 +144,8 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
     }
 
     private static Component renderReference(MessageReference reference, PaperMessageService messages) {
-        if (reference.key().startsWith("command.history.entry.")) {
+        if (reference.key().startsWith("command.history.entry.")
+                || reference.key().startsWith("command.history.kind.")) {
             return renderHistoryEntry(reference, messages);
         }
         if (reference.key().equals("command.history.page")) {

@@ -236,7 +236,7 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
         if (limit < 1 || limit > 1000) {
             throw new IllegalArgumentException("Prestige history limit must be 1-1000");
         }
-        String sql = "SELECT operation_id, source_stage_id, reset_stage_id, current_before, current_after, "
+        String sql = "SELECT operation_id, event_type, source_stage_id, reset_stage_id, current_before, current_after, "
                 + "lifetime_before, lifetime_after, result, costs_snapshot, rewards_snapshot, config_revision_id, "
                 + "occurred_at FROM mp_prestige_history WHERE player_uuid = ? "
                 + "ORDER BY occurred_at DESC, history_id LIMIT ?";
@@ -247,10 +247,11 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             try (ResultSet rows = statement.executeQuery()) {
                 while (rows.next()) {
                     result.add(new PrestigeHistoryRecord(playerId,
-                            new OperationId(UUID.fromString(rows.getString(1))), new StageId(rows.getString(2)),
-                            new StageId(rows.getString(3)), rows.getLong(4), rows.getLong(5), rows.getLong(6),
-                            rows.getLong(7), rows.getString(8), rows.getString(9), rows.getString(10),
-                            new ConfigRevisionId(rows.getString(11)), Instant.parse(rows.getString(12))));
+                            new OperationId(UUID.fromString(rows.getString(1))), rows.getString(2),
+                            new StageId(rows.getString(3)), new StageId(rows.getString(4)), rows.getLong(5),
+                            rows.getLong(6), rows.getLong(7), rows.getLong(8), rows.getString(9),
+                            rows.getString(10), rows.getString(11), new ConfigRevisionId(rows.getString(12)),
+                            Instant.parse(rows.getString(13))));
                 }
             }
             return List.copyOf(result);
@@ -268,7 +269,7 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             throw new IllegalArgumentException("Prestige history page limit must be 1-100");
         }
         String countSql = "SELECT COUNT(*) FROM mp_prestige_history";
-        String pageSql = "SELECT player_uuid, operation_id, source_stage_id, reset_stage_id, "
+        String pageSql = "SELECT player_uuid, operation_id, event_type, source_stage_id, reset_stage_id, "
                 + "current_before, current_after, lifetime_before, lifetime_after, result, costs_snapshot, "
                 + "rewards_snapshot, config_revision_id, occurred_at FROM mp_prestige_history "
                 + "ORDER BY occurred_at DESC, history_id DESC LIMIT ? OFFSET ?";
@@ -285,10 +286,11 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             try (ResultSet rows = page.executeQuery()) {
                 while (rows.next()) {
                     entries.add(new PrestigeHistoryRecord(UUID.fromString(rows.getString(1)),
-                            new OperationId(UUID.fromString(rows.getString(2))), new StageId(rows.getString(3)),
-                            new StageId(rows.getString(4)), rows.getLong(5), rows.getLong(6), rows.getLong(7),
-                            rows.getLong(8), rows.getString(9), rows.getString(10), rows.getString(11),
-                            new ConfigRevisionId(rows.getString(12)), Instant.parse(rows.getString(13))));
+                            new OperationId(UUID.fromString(rows.getString(2))), rows.getString(3),
+                            new StageId(rows.getString(4)), new StageId(rows.getString(5)), rows.getLong(6),
+                            rows.getLong(7), rows.getLong(8), rows.getLong(9), rows.getString(10),
+                            rows.getString(11), rows.getString(12), new ConfigRevisionId(rows.getString(13)),
+                            Instant.parse(rows.getString(14))));
                 }
             }
             return new PrestigeHistoryPage(entries, total);
@@ -308,7 +310,7 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             throw new IllegalArgumentException("Prestige history page limit must be 1-100");
         }
         String countSql = "SELECT COUNT(*) FROM mp_prestige_history WHERE player_uuid = ?";
-        String pageSql = "SELECT operation_id, source_stage_id, reset_stage_id, current_before, current_after, "
+        String pageSql = "SELECT operation_id, event_type, source_stage_id, reset_stage_id, current_before, current_after, "
                 + "lifetime_before, lifetime_after, result, costs_snapshot, rewards_snapshot, config_revision_id, "
                 + "occurred_at FROM mp_prestige_history WHERE player_uuid = ? "
                 + "ORDER BY occurred_at DESC, history_id DESC LIMIT ? OFFSET ?";
@@ -327,10 +329,11 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
             try (ResultSet rows = page.executeQuery()) {
                 while (rows.next()) {
                     entries.add(new PrestigeHistoryRecord(playerId,
-                            new OperationId(UUID.fromString(rows.getString(1))), new StageId(rows.getString(2)),
-                            new StageId(rows.getString(3)), rows.getLong(4), rows.getLong(5), rows.getLong(6),
-                            rows.getLong(7), rows.getString(8), rows.getString(9), rows.getString(10),
-                            new ConfigRevisionId(rows.getString(11)), Instant.parse(rows.getString(12))));
+                            new OperationId(UUID.fromString(rows.getString(1))), rows.getString(2),
+                            new StageId(rows.getString(3)), new StageId(rows.getString(4)), rows.getLong(5),
+                            rows.getLong(6), rows.getLong(7), rows.getLong(8), rows.getString(9),
+                            rows.getString(10), rows.getString(11), new ConfigRevisionId(rows.getString(12)),
+                            Instant.parse(rows.getString(13))));
                 }
             }
             return new PrestigeHistoryPage(entries, total);
@@ -344,7 +347,7 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
     public Optional<PrestigeHistoryRecord> historyEntry(UUID playerId, OperationId operationId) {
         java.util.Objects.requireNonNull(playerId, "player ID");
         java.util.Objects.requireNonNull(operationId, "operation ID");
-        String sql = "SELECT source_stage_id, reset_stage_id, current_before, current_after, "
+        String sql = "SELECT event_type, source_stage_id, reset_stage_id, current_before, current_after, "
                 + "lifetime_before, lifetime_after, result, costs_snapshot, rewards_snapshot, config_revision_id, "
                 + "occurred_at FROM mp_prestige_history WHERE player_uuid = ? AND operation_id = ?";
         try (Connection connection = connections.open();
@@ -356,10 +359,10 @@ public final class SqlitePrestigeLifecycleRepository implements PrestigeLifecycl
                     return Optional.empty();
                 }
                 return Optional.of(new PrestigeHistoryRecord(playerId, operationId,
-                        new StageId(row.getString(1)), new StageId(row.getString(2)),
-                        row.getLong(3), row.getLong(4), row.getLong(5), row.getLong(6),
-                        row.getString(7), row.getString(8), row.getString(9),
-                        new ConfigRevisionId(row.getString(10)), Instant.parse(row.getString(11))));
+                        row.getString(1), new StageId(row.getString(2)), new StageId(row.getString(3)),
+                        row.getLong(4), row.getLong(5), row.getLong(6), row.getLong(7),
+                        row.getString(8), row.getString(9), row.getString(10),
+                        new ConfigRevisionId(row.getString(11)), Instant.parse(row.getString(12))));
             }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load selected Prestige history entry", exception);

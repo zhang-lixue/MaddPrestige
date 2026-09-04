@@ -51,6 +51,22 @@ public final class StaffHistoryPresentation {
         return "gui.item.staff.history.transaction.none";
     }
 
+    public static String kindText(StaffHistorySource.Kind kind) {
+        return switch (Objects.requireNonNull(kind, "history kind")) {
+            case NORMAL_PRESTIGE -> "Prestige";
+            case ADMIN_SET -> "Admin Set";
+            case ADMIN_RESET -> "Admin Reset";
+        };
+    }
+
+    public static String guiKindKey(StaffHistorySource.Kind kind) {
+        return "gui.item.staff.history.kind." + kind.name().toLowerCase(Locale.ROOT);
+    }
+
+    public static String commandKindKey(StaffHistorySource.Kind kind) {
+        return "command.history.kind." + kind.name().toLowerCase(Locale.ROOT);
+    }
+
     /**
      * Selects the most useful truthful financial projection shared by Staff GUI and command history.
      * A complete canonical balance pair supersedes the less useful cost amount; incomplete balance

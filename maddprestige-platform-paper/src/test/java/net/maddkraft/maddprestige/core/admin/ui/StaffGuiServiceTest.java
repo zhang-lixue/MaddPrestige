@@ -418,13 +418,13 @@ class StaffGuiServiceTest {
                 && item.actionId().isPresent()));
         assertEquals("gui.action.staff.refresh", itemAt(overview, 0).title().key());
         assertEquals(GuiItemIcon.REFRESH, itemAt(overview, 0).icon());
-        assertEquals("gui.action.staff.copy_uuid", itemAt(overview, 8).title().key());
+        assertEquals("gui.item.staff.player.info.title", itemAt(overview, 8).title().key());
         assertEquals(GuiItemIcon.PLAYER_INFORMATION, itemAt(overview, 8).icon());
         assertEquals("gui.action.back", itemAt(overview, 18).title().key());
         assertTrue(itemAt(overview, 19).actionId().isEmpty());
         assertEquals("gui.action.staff.prestige_preview", itemAt(overview, 20).title().key());
         assertTrue(itemAt(overview, 21).actionId().isEmpty());
-        assertEquals("gui.item.staff.player.info.title", itemAt(overview, 22).title().key());
+        assertTrue(overview.items().stream().noneMatch(item -> item.slot() == 22));
         assertTrue(itemAt(overview, 23).actionId().isEmpty());
         assertEquals("gui.action.staff.player_history", itemAt(overview, 24).title().key());
         assertTrue(itemAt(overview, 25).actionId().isEmpty());
@@ -432,9 +432,17 @@ class StaffGuiServiceTest {
         GuiDisplayItem playerInfo = overview.items().stream()
                 .filter(item -> item.title().key().equals("gui.item.staff.player.info.title"))
                 .findFirst().orElseThrow();
+        assertEquals(8, playerInfo.slot());
+        assertTrue(playerInfo.actionId().isPresent());
         assertEquals(Optional.of(PLAYER), playerInfo.profilePlayerId());
         assertTrue(playerInfo.lore().stream().anyMatch(line -> line.arguments().containsKey("uuid")));
         assertTrue(playerInfo.lore().stream().anyMatch(line -> line.key().equals("gui.item.staff.player.online")));
+        assertTrue(playerInfo.lore().stream().anyMatch(line ->
+                line.key().equals("gui.item.staff.player.info.copy")));
+        assertEquals(1, overview.items().stream().filter(item ->
+                item.title().key().equals("gui.item.staff.player.info.title")).count());
+        assertTrue(overview.items().stream().noneMatch(item ->
+                item.title().key().equals("gui.action.staff.copy_uuid")));
         assertTrue(requirements.items().stream().anyMatch(item ->
                 item.title().key().equals("gui.item.staff.requirements.summary.title")
                         && item.lore().stream().anyMatch(line ->
@@ -516,7 +524,7 @@ class StaffGuiServiceTest {
         assertEquals("gui.action.forged", forged.code());
 
         GuiSessionView overview = click(route, owner, results, GuiActionKind.STAFF_SELECT_SEARCH_RESULT);
-        GuiDisplayItem identity = itemAt(overview, 22);
+        GuiDisplayItem identity = itemAt(overview, 8);
         assertEquals("gui.item.staff.player.offline", identity.lore().getFirst().key());
         assertEquals(Optional.of(OFFLINE_PLAYER), identity.profilePlayerId());
         assertTrue(identity.lore().stream().anyMatch(line ->
@@ -610,13 +618,13 @@ class StaffGuiServiceTest {
         assertEquals("gui.item.staff.player.state_unavailable", itemAt(overview, 4).lore().getFirst().key());
         assertEquals(Optional.of("Unavailable"), itemAt(overview, 10).lore().getFirst().argument("current"));
         assertEquals(Optional.of("Unavailable"), itemAt(overview, 13).lore().getFirst().argument("value"));
-        assertEquals("gui.item.staff.player.offline", itemAt(overview, 22).lore().getFirst().key());
+        assertEquals("gui.item.staff.player.offline", itemAt(overview, 8).lore().getFirst().key());
         assertEquals(GuiActionKind.STAFF_REFRESH_SEARCH_PLAYER_OVERVIEW,
                 action(overview, GuiActionKind.STAFF_REFRESH_SEARCH_PLAYER_OVERVIEW).kind());
         assertEquals(GuiActionKind.STAFF_COPY_SEARCH_PLAYER_UUID,
                 action(overview, GuiActionKind.STAFF_COPY_SEARCH_PLAYER_UUID).kind());
         assertEquals("gui.action.staff.refresh", itemAt(overview, 0).title().key());
-        assertEquals("gui.action.staff.copy_uuid", itemAt(overview, 8).title().key());
+        assertEquals("gui.item.staff.player.info.title", itemAt(overview, 8).title().key());
         assertTrue(overview.actions().stream().noneMatch(action ->
                 action.kind() == GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW
                         || action.kind() == GuiActionKind.STAFF_VIEW_REQUIREMENTS));
@@ -891,12 +899,12 @@ class StaffGuiServiceTest {
                 overviewRefresh.actionId()).toCompletableFuture().join();
         GuiSessionView offlineOverview = offlineOverviewResult.nextView().orElseThrow();
         assertTrue(offlineOverviewResult.messages().isEmpty());
-        assertEquals("gui.item.staff.player.offline", itemAt(offlineOverview, 22).lore().getFirst().key());
+        assertEquals("gui.item.staff.player.offline", itemAt(offlineOverview, 8).lore().getFirst().key());
 
         known.set(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc", true)));
         GuiSessionView onlineOverview = click(route, subject, offlineOverview,
                 GuiActionKind.STAFF_REFRESH_PLAYER_OVERVIEW);
-        assertEquals("gui.item.staff.player.online", itemAt(onlineOverview, 22).lore().getFirst().key());
+        assertEquals("gui.item.staff.player.online", itemAt(onlineOverview, 8).lore().getFirst().key());
         GuiSessionView staffPreview = click(route, subject, onlineOverview,
                 GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW);
         GuiAction refresh = action(staffPreview, GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
@@ -1079,7 +1087,8 @@ class StaffGuiServiceTest {
                     ADD_CONFIGURATION_VALUE, REMOVE_CONFIGURATION_VALUE,
                     ADD_CONFIGURATION_OBJECT, EDIT_CONFIGURATION_OBJECT,
                     REMOVE_CONFIGURATION_OBJECT, ADD_STAGE, APPLY_CONFIGURATION,
-                    ROLLBACK_CONFIGURATION, DELETE_STAGE -> true;
+                    ROLLBACK_CONFIGURATION, DELETE_STAGE,
+                    STAFF_CONFIRM_PRESTIGE_ADJUSTMENT -> true;
             default -> false;
         };
     }

@@ -45,6 +45,9 @@ public interface StaffHistorySource {
     record Entry(
             UUID entryId,
             String player,
+            Kind kind,
+            Optional<UUID> actorId,
+            Optional<String> actorName,
             long before,
             long after,
             Outcome outcome,
@@ -58,6 +61,9 @@ public interface StaffHistorySource {
         public Entry {
             entryId = Objects.requireNonNull(entryId, "entry ID");
             player = Objects.requireNonNull(player, "player");
+            kind = Objects.requireNonNull(kind, "history kind");
+            actorId = Objects.requireNonNull(actorId, "actor ID");
+            actorName = normalized(actorName, "actor name");
             outcome = Objects.requireNonNull(outcome, "outcome");
             balanceBefore = normalized(balanceBefore, "balance before");
             balanceAfter = normalized(balanceAfter, "balance after");
@@ -66,10 +72,33 @@ public interface StaffHistorySource {
             occurredAt = Objects.requireNonNull(occurredAt, "occurred at");
         }
 
+        public Entry(
+                UUID entryId,
+                String player,
+                long before,
+                long after,
+                Outcome outcome,
+                boolean costRecorded,
+                boolean rewardRecorded,
+                Optional<String> balanceBefore,
+                Optional<String> balanceAfter,
+                Optional<String> costSummary,
+                Optional<String> rewardSummary,
+                Instant occurredAt) {
+            this(entryId, player, Kind.NORMAL_PRESTIGE, Optional.empty(), Optional.empty(), before, after, outcome,
+                    costRecorded, rewardRecorded, balanceBefore, balanceAfter, costSummary, rewardSummary, occurredAt);
+        }
+
         private static Optional<String> normalized(Optional<String> value, String label) {
             Optional<String> checked = Objects.requireNonNull(value, label);
             return checked.map(String::trim).filter(text -> !text.isEmpty());
         }
+    }
+
+    enum Kind {
+        NORMAL_PRESTIGE,
+        ADMIN_SET,
+        ADMIN_RESET
     }
 
     enum Outcome {

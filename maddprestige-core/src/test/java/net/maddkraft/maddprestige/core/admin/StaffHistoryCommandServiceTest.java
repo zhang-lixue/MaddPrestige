@@ -150,6 +150,32 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-C1] Admin Set/Reset command history identifies the actor without fake finances")
+    void administrativeHistoryIsDistinctAndNeverPresentsNormalPrestigeFinances() {
+        UUID entryId = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "tmydwc",
+                StaffHistorySource.Kind.ADMIN_RESET, Optional.of(STAFF), Optional.of("Owner"),
+                8, 0, StaffHistorySource.Outcome.COMPLETED, true, true,
+                Optional.of("$8"), Optional.of("$1"), Optional.of("$7"), Optional.of("$1"), NOW);
+        StaffHistoryCommandService service = service(new HistorySource(List.of(entry), 1));
+
+        CommandResponse summary = service.execute(staff(), List.of("history", "tmydwc"))
+                .toCompletableFuture().join();
+        CommandResponse detail = service.execute(staff(), List.of(
+                "history", "details", "tmydwc", entryId.toString())).toCompletableFuture().join();
+
+        assertEquals("command.history.kind.admin_reset", summary.messages().get(1).key());
+        assertEquals(List.of("command.history.detail.admin_header", "command.history.detail.actor",
+                "command.history.outcome.completed", "command.history.detail.time"),
+                detail.messages().stream().map(MessageReference::key).toList());
+        assertEquals("Admin Reset", detail.messages().getFirst().argument("type").orElseThrow());
+        assertEquals("Owner", detail.messages().get(1).argument("player").orElseThrow());
+        assertTrue(detail.messages().stream().noneMatch(line -> Set.of(
+                "command.history.detail.balance", "command.history.detail.cost",
+                "command.history.detail.reward").contains(line.key())));
+    }
+
+    @Test
     @DisplayName("[Phase 9F-B] Missing, invalid, and cross-player detail selectors fail closed")
     void invalidAndMissingDetailsFailClosed() {
         HistorySource source = new HistorySource(List.of(), 0);

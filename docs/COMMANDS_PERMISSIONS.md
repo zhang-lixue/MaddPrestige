@@ -31,11 +31,16 @@ The ordinary player command is `/prestige`, which silently opens the Player GUI 
 | `/maddprestige config rollback\|rollback-apply ...` | `maddprestige.admin.config.rollback` |
 | `/maddprestige locale reload` | `maddprestige.admin.locale.reload` |
 | `/maddprestige staff prestige set ...` | `maddprestige.admin.players.prestige` |
+| Staff GUI player inspection | `maddprestige.admin.players.view` |
+| Staff GUI Set Prestige | `maddprestige.admin.players.prestige.set` |
+| Staff GUI Reset Prestige | `maddprestige.admin.players.prestige.reset` |
 
 `maddprestige.admin` grants every listed V2 administrative child and defaults to operator. `maddprestige.use`,
 `maddprestige.prestige` defaults true. The retained `maddprestige.rankup` compatibility node does not expose an active
 command or confirmation. `maddprestige.admin.execute` is the separate permission
 for consequential GUI execution. A view-only subject cannot obtain or consume apply authority.
+The Staff GUI exposes Set and Reset separately, and each action requires its narrow permission in addition to player
+inspection authority. The legacy `maddprestige.admin.players.prestige` parent delegates both narrow permissions.
 
 Use tab completion and `/maddprestige help`. Stable result/error codes in logs and API results are intentionally not
 localized even when rendered prose is.
