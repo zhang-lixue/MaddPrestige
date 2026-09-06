@@ -5,7 +5,7 @@ a stage-transition lease, or write stage history. Production stage catalog reads
 blocked as compatibility-only; players use `/prestige` for the Player GUI. The advanced
 `/maddprestige prestige` confirmation route remains available.
 
-Stable stage/rank API types, events, configuration parsing, and historical persistence remain so Phase 8 public
+Stable stage/rank API types, events, configuration parsing, and historical persistence remain so existing public
 contracts and recovery evidence are not broken. They are not current V2 Prestige authority. The historical
 `member-adventurer-veteran` example is correspondingly non-authoritative; use `examples/numeric-prestige`.
 

@@ -26,14 +26,14 @@ import org.junit.jupiter.api.Test;
 
 class PhaseNineAQualificationPackageTest {
     private static final List<String> DOCUMENTS = List.of(
-            "docs/phase9/PHASE9_QUALIFICATION_PLAN.md",
-            "docs/phase9/MADDKRAFT_CLONE_ENVIRONMENT.md",
-            "docs/phase9/MIGRATION_MAPPING.md",
-            "docs/phase9/PROVIDER_TEST_MATRIX.md",
-            "docs/phase9/PRODUCTION_READINESS_CHECKLIST.md");
+            "README.md",
+            "docs/architecture.md",
+            "docs/acceptance.md",
+            "docs/compatibility-baseline.md",
+            "docs/operations/upgrading.md");
 
     @Test
-    @DisplayName("[Phase 9A] Qualification documents retain the non-live and non-production boundary")
+    @DisplayName("[Public docs] Durable release documents retain deployment and compatibility boundaries")
     void qualificationDocumentsAreCompleteAndTruthful() throws IOException {
         Path root = repositoryRoot();
         String combined = "";
@@ -44,20 +44,21 @@ class PhaseNineAQualificationPackageTest {
             assertFalse(text.isBlank(), document);
             combined += text;
         }
-        assertTrue(combined.contains("No real clone was created"));
-        assertTrue(combined.contains("NOT READY FOR PRODUCTION"));
-        assertTrue(combined.contains("A63 remains `Partial`"));
-        assertTrue(combined.contains("No ledger row changes in Phase 9A"));
-        assertTrue(combined.contains("QuickShop-Hikari"));
-        assertTrue(combined.contains("AxTrade"));
-        assertTrue(combined.contains("resource reset"));
+        assertTrue(combined.contains("release candidate"));
+        assertTrue(combined.contains("Production data, permissions, balance, and services were not changed"));
+        assertTrue(combined.contains("Populated pre-numeric V2 schema upgrade and activation: passed"));
+        assertTrue(combined.contains("V1 player/configuration data is not automatically imported"));
+        assertTrue(combined.contains("MySQL"));
+        assertTrue(combined.contains("MariaDB"));
+        assertTrue(combined.contains("resource-world"));
         assertTrue(combined.contains("Court"));
     }
 
     @Test
-    @DisplayName("[A71][A72][Phase 9A] Clone profile compiles with an unmanaged default baseline and exact allowlist")
-    void maddKraftCloneProfileCompilesWithoutProductionBalance() throws IOException {
-        Path profile = repositoryRoot().resolve("qualification/phase9a/maddkraft-clone/progression.yml");
+    @DisplayName("[A71][A72] Archived compatibility profile compiles without a production balance")
+    void archivedCompatibilityProfileCompilesWithoutProductionBalance() throws IOException {
+        Path profile = repositoryRoot().resolve(
+                "examples/compatibility/member-adventurer-veteran/progression.yml");
         String source = read(profile);
         ConfigDraft draft = new ConfigDraft(UUID.randomUUID(), Optional.empty(), Map.of("progression.yml", source),
                 new Actor("SYSTEM", Optional.empty(), "Phase 9A fixture"), Instant.now());
@@ -65,11 +66,11 @@ class PhaseNineAQualificationPackageTest {
 
         assertFalse(compilation.validation().hasErrors(), compilation.validation().findings().toString());
         var stages = compilation.configuration().orElseThrow();
-        assertEquals(List.of("wanderer", "curious", "dreamer", "tea_guest", "wonderlander", "madcap"),
+        assertEquals(List.of("member", "adventurer", "veteran"),
                 stages.order().stream().map(id -> id.value()).toList());
-        assertEquals(Set.of("curious", "dreamer", "tea_guest", "wonderlander", "madcap"),
+        assertEquals(Set.of("Member", "Adventurer", "Veteran"),
                 stages.managedGroups(new ProviderId("luckperms")));
-        assertEquals(ProjectionPolicy.NONE,
+        assertEquals(ProjectionPolicy.GROUP,
                 stages.stages().get(stages.baselineStage().orElseThrow()).projection().policy());
         for (String forbidden : List.of("25000000", "40000000", "500000", "0.18", "rabbit", "decree",
                 "boss", "tea_leaves", "milestone")) {
@@ -78,7 +79,7 @@ class PhaseNineAQualificationPackageTest {
     }
 
     @Test
-    @DisplayName("[A35][A36][Phase 9A] Frozen V1 mapping remains blocked historical evidence, not a deployment gate")
+    @DisplayName("[A35][A36] V1 remains frozen evidence and is never inferred into numeric Prestige")
     void exactLegacyFixtureIsHistoricalSupersededAndNonExecutable() throws IOException {
         Path root = repositoryRoot();
         var detection = new LegacyStageDetector().detect(
@@ -91,44 +92,34 @@ class PhaseNineAQualificationPackageTest {
         assertTrue(codes.contains("legacy.stage.parallel_identity"));
         assertTrue(codes.contains("legacy.config.obsolete_competition"));
 
-        String mapping = read(root.resolve(
-                "qualification/phase9a/maddkraft-clone/legacy-migration-mapping.yml"));
-        assertTrue(mapping.contains("HISTORICAL"));
-        assertTrue(mapping.contains("SUPERSEDED"));
-        assertTrue(mapping.contains("NON-EXECUTABLE"));
-        assertTrue(mapping.contains("execution: blocked"));
-        assertEquals(8, mapping.lines().filter(line -> line.contains("OWNER_DECISION_REQUIRED")).count());
-        assertTrue(mapping.contains("create-luckperms-group"));
-        assertTrue(mapping.contains("activate-production-balance"));
-
-        String policy = read(root.resolve("docs/phase9/MIGRATION_MAPPING.md"));
-        assertTrue(policy.contains("No V1-to-V2 player migration executor will be built"));
-        assertTrue(policy.contains("not deployment requirements"));
-        assertTrue(read(root.resolve("docs/phase9/PRODUCTION_READINESS_CHECKLIST.md"))
-                .contains("Fresh-V2 no-import gate"));
+        assertFalse(Files.exists(root.resolve(
+                "qualification/phase9a/maddkraft-clone/legacy-migration-mapping.yml")));
+        assertFalse(Files.exists(root.resolve(
+                "qualification/phase9a/maddkraft-clone/progression.yml")));
+        String compatibility = read(root.resolve("docs/compatibility-baseline.md"));
+        String upgrading = read(root.resolve("docs/operations/upgrading.md"));
+        assertTrue(compatibility.contains("not automatically imported"));
+        assertTrue(compatibility.contains("starts at Prestige 0"));
+        assertTrue(upgrading.contains("fresh V2 player state starts at Prestige 0"));
+        assertTrue(compatibility.contains("MaddPrestige never creates LuckPerms groups"));
     }
 
     @Test
-    @DisplayName("[Phase 9B correction] A36/A63/A70/A71/A72 remain independent at their exact intended strength")
+    @DisplayName("[Release acceptance] Migration, progression and ownership guarantees remain explicit")
     void numericAcceptanceRowsRemainIndependentAndStrong() throws IOException {
-        String matrix = read(repositoryRoot().resolve("docs/V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md"));
-        String a36 = row(matrix, "A36");
-        String a63 = row(matrix, "A63");
-        String a70 = row(matrix, "A70");
-        String a71 = row(matrix, "A71");
-        String a72 = row(matrix, "A72");
+        Path root = repositoryRoot();
+        String acceptance = read(root.resolve("docs/acceptance.md"));
+        String architecture = read(root.resolve("docs/architecture.md"));
+        String compatibility = read(root.resolve("docs/compatibility-baseline.md"));
 
-        assertTrue(a36.contains("never reads or imports") && a36.contains("starts at P0")
-                && a36.contains("abandoned mapping is not a gate"));
-        assertTrue(a63.contains("populated pre-Phase9B V2 SQLite")
-                && a63.contains("preservation/reporting") && a63.contains("unchanged-restart"));
-        assertTrue(a70.contains("live/provider reads") && a70.contains("requirement evaluation")
-                && a70.contains("independent costs") && a70.contains("rewards/milestones")
-                && a70.contains("P0 -> P1") && a70.contains("persisted Prestige after restart")
-                && a70.contains("externally authoritative") && a70.contains("no rank/stage dependency"));
-        assertTrue(a71.contains("creates no LuckPerms groups") && a71.contains("hierarchy"));
-        assertTrue(a72.contains("supporter/staff/groups/permissions") && a72.contains("unrelated player nodes"));
-        assertEquals(5, Set.of(a36, a63, a70, a71, a72).size());
+        assertTrue(compatibility.contains("not automatically imported")
+                && compatibility.contains("starts at Prestige 0"));
+        assertTrue(acceptance.contains("Populated pre-numeric V2 schema upgrade and activation: passed"));
+        assertTrue(acceptance.contains("numeric P0 -> P1 and P1 -> P2 progression")
+                && acceptance.contains("independent cost/reward behavior"));
+        assertTrue(architecture.contains("advances exactly from `P` to `P + 1`"));
+        assertTrue(compatibility.contains("MaddPrestige never creates LuckPerms groups"));
+        assertTrue(compatibility.contains("staff, supporter, event, and unrelated memberships are preserved"));
     }
 
     @Test
@@ -154,10 +145,6 @@ class PhaseNineAQualificationPackageTest {
 
         String locale = read(root.resolve("maddprestige-platform-paper/src/main/resources/locales/en_US.yml"));
         assertFalse(locale.contains("rank=<rank>"));
-    }
-
-    private static String row(String matrix, String id) {
-        return matrix.lines().filter(line -> line.startsWith("| " + id + " ")).findFirst().orElseThrow();
     }
 
     private static String read(Path path) throws IOException {

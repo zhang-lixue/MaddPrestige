@@ -120,7 +120,7 @@ scaling:
 ```
 
 Use advanced `defaults` plus `segments` only for real range changes. FLAT, LINEAR, EXPONENTIAL, and MANUAL remain the
-same canonical model; there is no separate simple/advanced runtime. See [configuration](CONFIGURATION.md) for exact
+same canonical model; there is no separate simple/advanced runtime. See [configuration](configuration.md) for exact
 inheritance, boundaries, transitions, rounding, floors, caps, and overrides.
 
 LuckPerms is not progression authority. It is needed only when a configured additive reward targets an existing group.

@@ -16,21 +16,21 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class PhaseEightFEvidenceIntegrityTest {
-    private static final Pattern BASELINE = Pattern.compile("(?m)^Baseline: `([0-9a-f]{40})`<br>$");
+    private static final Pattern RELEASE_COMMIT = Pattern.compile("MaddPrestige/commit/([0-9a-f]{40})");
     private static final Pattern UNRESOLVED = Pattern.compile(
             "(?i)\\$(?:base|head|branch)\\b|\\$\\{[A-Za-z_][A-Za-z0-9_.-]*}"
                     + "|%[A-Za-z_][A-Za-z0-9_]*%|\\b(?:TBD|TO_BE_FILLED|PLACEHOLDER_VALUE)\\b|<PLACEHOLDER>");
     private static final List<String> PROVENANCE_DOCUMENTS = List.of(
-            "STATUS.md",
-            "PHASE8F_OWNER_REVIEW_SUMMARY.txt",
-            "docs/V2_PHASE8F_IMPLEMENTATION.md",
-            "docs/V2_PHASE8F_RELEASE_MATRIX.md");
+            "README.md",
+            "docs/acceptance.md",
+            "docs/compatibility-baseline.md",
+            "docs/archive/v2-development/README.md");
     private static final List<String> V2_OPERATOR_DOCUMENTS = List.of(
             "README.md",
-            "docs/INSTALLATION_V2.md",
+            "docs/getting-started.md",
             "docs/QUICK_START.md",
-            "docs/CONFIGURATION.md",
-            "docs/UPGRADE_ROLLBACK_V2.md");
+            "docs/configuration.md",
+            "docs/operations/upgrading.md");
     private static final List<String> V2_PRODUCTION_ROOTS = List.of(
             "maddprestige-api/src/main",
             "maddprestige-core/src/main",
@@ -44,37 +44,27 @@ class PhaseEightFEvidenceIntegrityTest {
                     + "|getConfig\\(|[\"']config\\.yml[\"']");
 
     @Test
-    @DisplayName("[OR8F-01] Release evidence has resolved, exact and consistent Git provenance")
+    @DisplayName("[Release] Durable evidence has resolved and consistent Git provenance")
     void releaseEvidenceHasResolvedExactProvenance() throws IOException, InterruptedException {
         Path root = repositoryRoot();
-        String manifest = read(root.resolve("docs/V2_PHASE8F_FILE_MANIFEST.md"));
-        Matcher matcher = BASELINE.matcher(manifest);
-        assertTrue(matcher.find(), "manifest must contain one exact 40-character baseline SHA");
+        String acceptance = read(root.resolve("docs/acceptance.md"));
+        Matcher matcher = RELEASE_COMMIT.matcher(acceptance);
+        assertTrue(matcher.find(), "acceptance must link one exact 40-character release commit");
         String baseline = matcher.group(1);
-        assertFalse(matcher.find(), "manifest must contain only one baseline declaration");
-
-        for (String document : PROVENANCE_DOCUMENTS) {
-            assertTrue(read(root.resolve(document)).contains(baseline), document + " must name the exact baseline");
-        }
+        assertFalse(matcher.find(), "acceptance must contain only one release-commit link");
         Process process = new ProcessBuilder("git", "merge-base", "--is-ancestor", baseline, "HEAD")
                 .directory(root.toFile()).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         assertEquals(0, process.waitFor(), () -> "recorded baseline is not an ancestor of HEAD: " + output);
 
         ArrayList<String> findings = new ArrayList<>();
-        try (var files = Files.walk(root.resolve("docs"))) {
-            for (Path file : files.filter(Files::isRegularFile)
-                    .filter(path -> path.getFileName().toString().startsWith("V2_PHASE8F_"))
-                    .toList()) {
-                Matcher unresolved = UNRESOLVED.matcher(read(file));
-                if (unresolved.find()) {
-                    findings.add(root.relativize(file) + " -> " + unresolved.group());
-                }
+        for (String document : PROVENANCE_DOCUMENTS) {
+            String text = read(root.resolve(document));
+            assertTrue(text.contains("v2.0.0-rc.1") || text.contains("2.0.0-rc.1"), document);
+            Matcher unresolved = UNRESOLVED.matcher(text);
+            if (unresolved.find()) {
+                findings.add(document + " -> " + unresolved.group());
             }
-        }
-        Matcher summary = UNRESOLVED.matcher(read(root.resolve("PHASE8F_OWNER_REVIEW_SUMMARY.txt")));
-        if (summary.find()) {
-            findings.add("PHASE8F_OWNER_REVIEW_SUMMARY.txt -> " + summary.group());
         }
         assertEquals(List.of(), findings);
     }
@@ -103,16 +93,12 @@ class PhaseEightFEvidenceIntegrityTest {
         assertTrue(plugin.contains(
                 "main: net.maddkraft.maddprestige.platform.paper.bootstrap.MaddPrestigeV2Plugin"));
 
-        String packageAudit = read(root.resolve("docs/V2_PHASE8F_PACKAGE_CONTENT_AUDIT.md"));
-        for (String category : List.of("REQUIRED V2 RUNTIME", "REQUIRED TRANSITIONAL / LEGACY",
-                "PUBLIC REPOSITORY-ONLY", "BUILD/TEST-ONLY", "OPTIONAL DEPENDENCY", "PROHIBITED")) {
-            assertTrue(packageAudit.contains(category), category);
-        }
-        for (String resource : List.of("plugin.yml", "META-INF/MANIFEST.MF", "config.yml",
-                "defaults/progression.yml", "locales/en_US.yml", "META-INF/services/java.sql.Driver",
-                "SQLite", "SnakeYAML", "THIRD-PARTY-NOTICES.txt", "examples/member-adventurer-veteran")) {
-            assertTrue(packageAudit.contains(resource), resource);
-        }
+        String architecture = read(root.resolve("docs/architecture.md"));
+        assertTrue(architecture.contains("maddprestige-distribution"));
+        assertTrue(architecture.contains("legacy V1 source remains frozen"));
+        String readme = read(root.resolve("README.md"));
+        assertTrue(readme.contains("MaddPrestige-2.0.0-rc.1.jar"));
+        assertTrue(readme.contains("examples/compatibility/member-adventurer-veteran"));
 
         ArrayList<String> findings = new ArrayList<>();
         for (String document : V2_OPERATOR_DOCUMENTS) {

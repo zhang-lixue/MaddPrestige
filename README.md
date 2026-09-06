@@ -1,65 +1,124 @@
-# MaddPrestige 2.0
+# MaddPrestige
 
-MaddPrestige V2 is a generic, provider-driven numeric Prestige platform for a single Paper server. Its authoritative
-player progression state is a durable non-negative integer: a successful operation advances `P` to `P + 1`, subject
-to administrator-configured requirements, independent costs, rewards, cooldown, and optional maximum. Stages, ranks,
-LuckPerms groups, seasons, and world resets are not intrinsic to Prestige.
+MaddPrestige is a provider-driven numeric Prestige plugin for a single Paper server. A successful player operation
+advances exactly from Prestige `P` to `P + 1` after the configured requirements and costs are revalidated. Rewards,
+scaling, administration, history, and recovery all use the same revision-bound configuration and durable operation
+model.
 
-Phase 9F is owner-accepted and checkpointed: the Player GUI, read-only Staff GUI, safe player administration,
-revision-bound configuration editors, and final usability pass are complete. Phase 9G is the final release
-qualification. It authorizes no live deployment, V1 player import, production balance, or first-party Prestige Shop;
-the Shop is intentionally deferred until live/beta player feedback defines a useful reward catalog. The candidate is not GA or production-ready until release qualification and owner publication approval are complete.
+The current release is **2.0.0-rc.1**. It is a release candidate: rehearse installation and upgrades on a disposable
+copy before using it on a live server.
 
-## Final Phase 9 release candidate
+## Features
 
-- Java 25.
-- Paper 26.1.2 build 74 stable.
-- LuckPerms 5.5.71 when an active configuration explicitly uses optional permission/group rewards.
-- SQLite is the sole MaddPrestige 2.0 production persistence backend.
-- One Paper process and one server directory per database.
-- MySQL/MariaDB and shared-database/multi-process operation are deferred post-2.0.
+- Numeric Prestige with exact `P -> P + 1` progression
+- Composable `ALL`, `ANY`, and `X_OF_N` requirements
+- Independent, provider-backed costs and rewards
+- Flat, linear, exponential, manual, segmented, and per-level scaling
+- Player GUI at `/prestige`
+- Permission-scoped Staff GUI, player inspection, history, and audit
+- Audited Set/Reset Prestige administration
+- Revision-bound, lossless guided configuration editing
+- Session-bound confirmations and durable crash recovery
+- Optional Vault, mcMMO, LuckPerms, PlaceholderAPI, and other integrations
+- Stable Java API, provider SDK, and Paper events
 
-MaddPrestige does not create LuckPerms groups. The administrator owns those groups and their display/prefix policy.
-Optional providers are required only when an active configuration references them.
+## Requirements
 
-## Start here
+- Java 25
+- Paper 26.1.2 build 74
+- SQLite, embedded in the distribution
+- Optional plugins only when referenced by the active configuration
 
-1. [Install the candidate](docs/INSTALLATION_V2.md).
-2. Follow the [numeric Prestige Quick Start](docs/QUICK_START.md).
-3. Keep [commands and permissions](docs/COMMANDS_PERMISSIONS.md) and
-   [diagnostics](docs/DIAGNOSTICS_TROUBLESHOOTING.md) available to operators.
-4. Read [configuration](docs/CONFIGURATION.md) before making later revisions.
-5. Use the [deployment/rollback runbook](docs/DEPLOYMENT_RUNBOOK.md) for a separately authorized release rehearsal.
+These are the qualified versions, not a promise of compatibility with untested later builds. SQLite is the only
+supported production persistence backend for 2.0, with one Paper process and one server directory per database.
 
-The active stage-free example is under [examples/numeric-prestige](examples/numeric-prestige). The former
-[stage-ladder example](examples/member-adventurer-veteran) is retained as compatibility evidence only. A minimal
-external API consumer is under [examples/provider-sdk](examples/provider-sdk).
+## Quick start
 
-## Public documentation
+1. Download `MaddPrestige-2.0.0-rc.1.jar` from the
+   [2.0.0-rc.1 release](https://github.com/zhang-lixue/MaddPrestige/releases/tag/v2.0.0-rc.1).
+2. Verify its published SHA-256, then place it in the Paper server's `plugins/` directory.
+3. Start Paper once and wait for MaddPrestige to report ready.
+4. Run `/maddprestige status` and `/maddprestige setup discover`.
+5. Validate and apply a deliberate configuration; the shipped configuration is safely dormant.
 
-- [Stage/rank compatibility](docs/STAGES_RANKS.md)
-- [Requirements and scopes](docs/REQUIREMENTS_SCOPES.md)
-- [Costs and rewards](docs/COSTS_REWARDS.md)
-- [Prestige lifecycle](docs/PRESTIGE_LIFECYCLE.md)
-- [Currencies and entitlements](docs/CURRENCIES_ENTITLEMENTS.md)
-- [Seasons and milestones](docs/SEASONS_MILESTONES.md)
-- [Providers and integrations](docs/PROVIDERS_INTEGRATIONS.md)
-- [Provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md)
-- [Migrations, backups, and recovery](docs/MIGRATIONS_BACKUPS_RECOVERY.md)
-- [Upgrade and rollback](docs/UPGRADE_ROLLBACK_V2.md)
-- [Public API and SDK](docs/API_SDK.md)
-- [Paper events](docs/EVENTS.md)
+See [Getting started](docs/getting-started.md) and the [Quick Start](docs/QUICK_START.md) for the complete flow.
 
-Historical V1 operator documents remain in the repository for the accepted transitional package, but they are not V2
-installation or configuration instructions.
+## Player usage
 
-## Build and verify
+`/prestige` opens the Player GUI. Players can inspect their current and next Prestige, requirements, costs, rewards,
+and confirmation state without seeing implementation diagnostics. Advanced read-only explanations remain available
+through `/maddprestige why prestige` and `/maddprestige simulate prestige`.
+
+See the [player guide](docs/player-guide.md).
+
+## Administration
+
+`/maddprestige admin` opens the permission-scoped Staff Dashboard. It provides player lookup and inspection,
+history/audit views, safe Set/Reset Prestige workflows, system status, and bounded configuration editors. Complex
+configuration that cannot be represented losslessly remains read-only and must be edited through the documented
+draft workflow.
+
+See the [staff guide](docs/staff-guide.md), [commands and permissions](docs/commands-permissions.md), and
+[configuration guide](docs/configuration.md).
+
+## Configuration
+
+Configuration is split into versioned YAML documents and compiled into one immutable active revision. Draft,
+validation, diff, apply, rollback, and guided GUI edits all use the same canonical pipeline. MaddPrestige preserves
+comments, ordering, and unsupported keys for supported narrow edits, and fails closed when it cannot do so safely.
+
+The active stage-free example is in [examples/numeric-prestige](examples/numeric-prestige). The former stage-ladder
+sample is retained only as [compatibility evidence](examples/compatibility/member-adventurer-veteran).
+
+## Integrations and compatibility
+
+MaddPrestige does not create LuckPerms groups. Administrators own groups, hierarchy, prefixes, and unrelated
+memberships. Optional providers are activated only when the current configuration references their capabilities.
+
+Read the [compatibility baseline](docs/compatibility-baseline.md), [integrations guide](docs/integrations.md), and
+[provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) before enabling integrations.
+
+## API and extension points
+
+The public API coordinate is:
 
 ```text
+net.maddkraft:maddprestige-api:2.0.0-rc.1
+```
+
+The accepted `2.x-stable-1` compatibility baseline covers the stable Bukkit-free SDK and Paper event surfaces.
+Start with the [API and provider SDK guide](docs/api.md), [Paper events](docs/events.md), and the
+[provider example](examples/provider-sdk).
+
+## Build and test
+
+```powershell
 .\mvnw.cmd --no-transfer-progress clean verify
 ```
 
-The shaded release candidate is `maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar`; the public API
-coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.1`, and the aggregate CycloneDX SBOM is
-`target/bom.json`. Phase 9 preserves the frozen numeric-Prestige backend while adding the completed Player and Staff
-GUI surfaces. Owner deployment approval and production balance selection remain outside this checkpoint.
+The shaded plugin is written to
+`maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar`; the aggregate CycloneDX SBOM is
+`target/bom.json`. See [Contributing](CONTRIBUTING.md) for repository expectations.
+
+## Operations and troubleshooting
+
+- [Deployment](docs/operations/deployment.md)
+- [Upgrading and rollback](docs/operations/upgrading.md)
+- [Migrations, backups, and recovery](docs/operations/recovery.md)
+- [Diagnostics and troubleshooting](docs/operations/troubleshooting.md)
+- [Release acceptance](docs/acceptance.md)
+
+Never copy only a live SQLite main file, edit migration history, or force an active-configuration pointer. Preserve
+the complete stopped plugin-data directory and rehearse restoration before selecting a restored copy for service.
+
+## Known limitations and deferred work
+
+- MySQL, MariaDB, shared-database, and multi-process operation are not supported in 2.0.
+- V1 player/configuration data is not automatically imported into numeric Prestige.
+- External resource-world reset behavior remains outside MaddPrestige ownership and requires environment-specific
+  qualification.
+- A first-party Prestige Shop is intentionally deferred until player feedback defines a useful reward catalog; it is
+  not a launch requirement and no placeholder UI, command, permission, configuration, or persistence surface ships.
+
+Historical development records remain available from the release tag and Git history; see the
+[development archive index](docs/archive/v2-development/README.md).

@@ -1,18 +1,82 @@
-# Maven output
-/target/
-/*/target/
+# Maven and generated build output
+**/target/
+**/out/
 
-# Retained local Paper server (selected immutable evidence is tracked under baseline/)
+# Logs and local diagnostics
+*.log
+*.trace
+hs_err_pid*
+replay_pid*
+
+# Paper/server runtime
 /runtime-test/
+**/plugins/
+**/libraries/
+**/.paper-remapped/
+**/.cache/
+**/cache/
+**/versions/
+**/logs/
+**/world/
+**/world_nether/
+**/world_the_end/
+**/server.properties
+**/bukkit.yml
+**/spigot.yml
+**/paper-global.yml
+**/paper-world-defaults.yml
+**/commands.yml
+**/ops.json
+**/whitelist.json
+**/banned-*.json
+**/usercache.json
+
+# Local databases and journals
+*.db
+*.db-journal
+*.sqlite
+*.sqlite-journal
+*.sqlite-shm
+*.sqlite-wal
+*.wal
+*.shm
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.yml
+secrets*.yaml
 
 # IDE and operating-system state
-/.idea/
-/.vscode/
+.idea/
+.vscode/
+.settings/
+.fleet/
+.classpath
+.project
 *.iml
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Local/transient files
+# Local/transient and patch rejects
 *.tmp
+*.temp
 *.bak
 *.swp
+*.swo
+*.orig
+*.rej
+*.patch
+
+# Intentionally tracked release and characterization fixtures
+!dist/*.jar
+!baseline/v1/external/*.jar
+!baseline/v1/runtime/maddprestige.db
+!qualification/eula.txt

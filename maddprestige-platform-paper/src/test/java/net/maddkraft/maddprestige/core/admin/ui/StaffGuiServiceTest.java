@@ -65,7 +65,7 @@ import org.junit.jupiter.api.Test;
 class StaffGuiServiceTest {
     private static final UUID STAFF = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final UUID OTHER_STAFF = UUID.fromString("22222222-2222-4222-8222-222222222222");
-    private static final UUID PLAYER = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+    private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
     private static final UUID OFFLINE_PLAYER = UUID.fromString("33333333-3333-4333-8333-333333333333");
     private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-b-read-only");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC);
@@ -81,7 +81,7 @@ class StaffGuiServiceTest {
                 (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
                 mock(GuiConfigurationAuthority.class), Duration.ofMinutes(5), CLOCK);
         service = new StaffGuiService(sessions, progress,
-                () -> List.of(new StaffPlayerIdentity(PLAYER, "tmydwc")), revision::get,
+                () -> List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer")), revision::get,
                 historySource(List.of(), List.of()),
                 healthyStatus());
     }
@@ -798,7 +798,7 @@ class StaffGuiServiceTest {
     void rendersPagedAndEmptyHistoryWithoutInternalOperationDetails() {
         List<StaffHistorySource.Entry> entries = java.util.stream.IntStream.range(0, 8)
                 .mapToObj(index -> historyEntry(
-                        index == 0 ? "tmydwc" : "Player " + index,
+                        index == 0 ? "FixturePlayer" : "Player " + index,
                         index, index + 1,
                         index == 1 ? StaffHistorySource.Outcome.FAILED
                                 : index == 2 ? StaffHistorySource.Outcome.RECOVERED
@@ -863,7 +863,7 @@ class StaffGuiServiceTest {
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
                 new PlayerProgressView(PLAYER, preview)));
         List<StaffHistorySource.Entry> selected = new ArrayList<>(java.util.stream.IntStream.range(0, 8)
-                .mapToObj(index -> historyEntry("tmydwc", 5 + index, 6 + index,
+                .mapToObj(index -> historyEntry("FixturePlayer", 5 + index, 6 + index,
                         index == 1 ? StaffHistorySource.Outcome.RECOVERED
                                 : index == 2 ? StaffHistorySource.Outcome.FAILED
                                         : StaffHistorySource.Outcome.COMPLETED,
@@ -915,7 +915,7 @@ class StaffGuiServiceTest {
         assertEquals(Optional.of(PLAYER), historyAction.targetPlayer());
         assertEquals(PLAYER, requestedPlayer.get());
         assertEquals(GuiScreenKind.STAFF_PLAYER_HISTORY, first.screen());
-        assertEquals("tmydwc", first.title().argument("player").orElseThrow());
+        assertEquals("FixturePlayer", first.title().argument("player").orElseThrow());
         assertEquals(7, playerHistoryCards(first).size());
         assertEquals(1, playerHistoryCards(second).size());
         assertTrue(playerHistoryCards(first).stream().allMatch(item ->
@@ -1089,7 +1089,7 @@ class StaffGuiServiceTest {
         assertEquals(GuiScreenKind.STAFF_PLAYER_OVERVIEW, returned.screen());
         GuiDisplayItem selectedPlayer = selection.items().stream()
                 .filter(item -> item.actionId().isPresent()
-                        && item.title().argument("player").filter("tmydwc"::equals).isPresent())
+                        && item.title().argument("player").filter("FixturePlayer"::equals).isPresent())
                 .findFirst().orElseThrow();
         assertEquals(GuiItemIcon.PLAYERS, selectedPlayer.icon());
         assertEquals(Optional.of(PLAYER), selectedPlayer.profilePlayerId());
@@ -1166,7 +1166,7 @@ class StaffGuiServiceTest {
     @DisplayName("[Phase 9F-B] Known offline players resolve explicitly into read-only canonical views")
     void findsKnownOfflinePlayerWithoutFabricatingLiveProviderState() {
         StaffPlayerDirectory directory = directory(List.of(
-                new StaffPlayerIdentity(PLAYER, "tmydwc", true),
+                new StaffPlayerIdentity(PLAYER, "FixturePlayer", true),
                 new StaffPlayerIdentity(OFFLINE_PLAYER, "KnownPlayer", false)));
         OperationPreview unavailable = withoutBalanceProjection(preview(OFFLINE_PLAYER, List.of(
                 leaf("balance", "Unavailable", "8", ExplanationStatus.UNAVAILABLE),
@@ -1341,7 +1341,7 @@ class StaffGuiServiceTest {
 
         GuiSessionView blocked = click(owner, overview, GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW);
         assertEquals(GuiScreenKind.STAFF_PRESTIGE_PREVIEW, blocked.screen());
-        assertEquals("tmydwc", blocked.title().argument("player").orElseThrow());
+        assertEquals("FixturePlayer", blocked.title().argument("player").orElseThrow());
         assertEquals(GuiItemIcon.PROGRESS, itemAt(blocked, 4).icon());
         assertTrue(itemAt(blocked, 4).lore().stream().anyMatch(line ->
                 line.key().equals("gui.item.progress.not_ready")));
@@ -1349,7 +1349,7 @@ class StaffGuiServiceTest {
         GuiDisplayItem identity = itemAt(blocked, 22);
         assertEquals(GuiItemIcon.PLAYERS, identity.icon());
         assertEquals("gui.item.staff.prestige_preview.player", identity.title().key());
-        assertEquals("tmydwc", identity.title().argument("player").orElseThrow());
+        assertEquals("FixturePlayer", identity.title().argument("player").orElseThrow());
         assertEquals(List.of("gui.item.staff.player.online"),
                 identity.lore().stream().map(MessageReference::key).toList());
         assertEquals(Optional.of(PLAYER), identity.profilePlayerId());
@@ -1561,7 +1561,7 @@ class StaffGuiServiceTest {
     @DisplayName("[Phase 9F-B] Staff Preview preserves identity across online and offline refreshes")
     void staffPrestigePreviewRefreshTracksOnlineStateWithoutLosingSelection() {
         AtomicReference<List<StaffPlayerIdentity>> known = new AtomicReference<>(
-                List.of(new StaffPlayerIdentity(PLAYER, "tmydwc")));
+                List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer")));
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
                 new PlayerProgressView(PLAYER, preview())));
         StaffPlayerDirectory directory = new StaffPlayerDirectory() {
@@ -1594,21 +1594,21 @@ class StaffGuiServiceTest {
         assertFalse(copy.mutating());
 
         GuiAction overviewRefresh = action(copied, GuiActionKind.STAFF_REFRESH_PLAYER_OVERVIEW);
-        known.set(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc", false)));
+        known.set(List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer", false)));
         PlayerGuiInteractionResult offlineOverviewResult = route.click(subject, copied.sessionId(),
                 overviewRefresh.actionId()).toCompletableFuture().join();
         GuiSessionView offlineOverview = offlineOverviewResult.nextView().orElseThrow();
         assertTrue(offlineOverviewResult.messages().isEmpty());
         assertEquals("gui.item.staff.player.offline", itemAt(offlineOverview, 8).lore().getFirst().key());
 
-        known.set(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc", true)));
+        known.set(List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer", true)));
         GuiSessionView onlineOverview = click(route, subject, offlineOverview,
                 GuiActionKind.STAFF_REFRESH_PLAYER_OVERVIEW);
         assertEquals("gui.item.staff.player.online", itemAt(onlineOverview, 8).lore().getFirst().key());
         GuiSessionView staffPreview = click(route, subject, onlineOverview,
                 GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW);
         GuiAction refresh = action(staffPreview, GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
-        known.set(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc", false)));
+        known.set(List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer", false)));
 
         GuiSessionView offline = click(route, subject, staffPreview,
                 GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
@@ -1616,7 +1616,7 @@ class StaffGuiServiceTest {
         assertEquals("gui.item.staff.player.offline", itemAt(offline, 22).lore().getFirst().key());
         assertEquals(Optional.of(PLAYER), itemAt(offline, 22).profilePlayerId());
 
-        known.set(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc", true)));
+        known.set(List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer", true)));
         GuiSessionView online = click(route, subject, offline,
                 GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
         assertTrue(online.items().stream().noneMatch(item -> item.slot() == 8));
@@ -1691,7 +1691,7 @@ class StaffGuiServiceTest {
     }
 
     private StaffGuiService service(StaffHistorySource history, StaffSystemStatusSource status) {
-        return service(directory(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc"))), history, status);
+        return service(directory(List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer"))), history, status);
     }
 
     private StaffGuiService service(
