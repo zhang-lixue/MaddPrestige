@@ -92,6 +92,20 @@ class PaperMessageServiceTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-D] Configuration preview renders its document count through the strict allowlist")
+    void configurationPreviewDocumentCountIsNarrowlyAllowed() {
+        var summary = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.config.preview_summary",
+                "draft", "11111111-1111-4111-8111-111111111111",
+                "status", "VALID", "count", 2, "findings", 0);
+
+        assertEquals("Draft 11111111-1111-4111-8111-111111111111: VALID; changed documents=2; findings=0",
+                plain(messages.render(summary)));
+        assertThrows(IllegalArgumentException.class, () -> messages.render(
+                "command.config.preview_summary", Map.of("arbitrary", "2")));
+    }
+
+    @Test
     @DisplayName("[Phase 9F-C2] Guided Money and Reward reviews render concise gameplay values")
     void guidedConfigurationReviewsRenderConciseGameplayValues() {
         assertEquals("Active Configuration", plain(messages.render(
@@ -296,11 +310,14 @@ class PaperMessageServiceTest {
     @DisplayName("[Phase 9F-C1] Player root and Set/Reset action labels remain concise and distinct")
     void staffPrestigeAdjustmentPresentationRenders() {
         assertEquals("tmydwc", plain(messages.render("gui.title.staff.player", Map.of("player", "tmydwc"))));
-        assertEquals("5", plain(messages.render("gui.action.staff.prestige_target", Map.of("target", 5))));
+        assertEquals("tmydwc Set Prestige", plain(messages.render(
+                "gui.title.staff.set_prestige", Map.of("player", "tmydwc"))));
         assertEquals("tmydwc Set Prestige", plain(messages.render(
                 "gui.title.staff.review_set_prestige", Map.of("player", "tmydwc"))));
         assertEquals("tmydwc Reset Prestige", plain(messages.render(
                 "gui.title.staff.review_reset_prestige", Map.of("player", "tmydwc"))));
+        assertEquals("tmydwc is already at Prestige 0.", plain(messages.render(
+                "gui.staff.prestige_already_baseline", Map.of("player", "tmydwc"))));
         assertEquals("Confirm", plain(messages.render("gui.action.staff.confirm_prestige_adjustment")));
         assertEquals("Reset", plain(messages.render("gui.action.staff.reset_prestige_adjustment")));
     }
@@ -387,6 +404,35 @@ class PaperMessageServiceTest {
                 plain(messages.render("gui.item.staff.config_requirements.read_only")),
                 plain(messages.render("gui.item.staff.config_requirements.read_only.edit")));
         assertFalse(combined.toLowerCase(java.util.Locale.ROOT).contains("yaml-first"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] GUI fallback copy stays concise and functional headings stay consistent")
+    void finalGuiPolishUsesConciseCatalogOwnedPresentation() {
+        assertEquals("Configuration editing is unavailable.", plain(messages.render(
+                "gui.staff.configuration_administration_unavailable")));
+        assertEquals("This input is outdated. Reopen the editor.", plain(messages.render(
+                "gui.staff.configuration_revision_missing")));
+        assertEquals("This configuration action is unavailable. Reopen the current view.", plain(messages.render(
+                "gui.mutation.kind_invalid")));
+        assertEquals("Money editing is unavailable.", plain(messages.render(
+                "gui.item.staff.level.money.unavailable")));
+        assertEquals("Reward editing is unavailable.", plain(messages.render(
+                "gui.item.staff.level.reward.unavailable")));
+        assertEquals("Click to edit this reward.", plain(messages.render(
+                "gui.item.staff.level.reward.edit")));
+        assertEquals("Click to inspect scaling.", plain(messages.render(
+                "gui.item.staff.level.scaling.open")));
+        assertEquals("Read-only.", plain(messages.render("gui.item.staff.scaling.yaml")));
+        assertEquals("This parameter is read-only.", plain(messages.render(
+                "gui.item.staff.scaling.read_only")));
+        assertEquals("Prestige preview unavailable.", plain(messages.render(
+                "gui.item.staff.prestige_preview.unavailable")));
+
+        Component milestones = messages.render("gui.item.milestones.title");
+        assertEquals("Milestones", plain(milestones));
+        assertEquals(TextDecoration.State.TRUE,
+                textNode(milestones, "Milestones").decoration(TextDecoration.BOLD));
     }
 
     @Test
@@ -541,7 +587,8 @@ class PaperMessageServiceTest {
                 "config.draft.concurrent_edit", "config.draft.expired", "config.draft.owner_mismatch",
                 "config.draft.unknown", "config.edit.rejected", "config.history.finalize_failed",
                 "config.gui.level.invalid", "config.gui.level_page.invalid", "config.gui.money.invalid",
-                "config.gui.money.non_terminating", "config.gui.money.unavailable",
+                "config.gui.money.non_terminating", "config.gui.money.pair_mismatch",
+                "config.gui.money.unavailable",
                 "config.gui.money.unsupported", "config.gui.money_page.invalid",
                 "config.gui.requirements.unavailable",
                 "config.gui.total_skill_level.invalid", "config.gui.total_skill_level.unsupported",
@@ -550,7 +597,8 @@ class PaperMessageServiceTest {
                 "config.gui.scaling.invalid", "config.gui.scaling.override.invalid",
                 "config.gui.scaling.unsupported",
                 "config.gui.review.actor_mismatch", "config.gui.review.expired",
-                "config.gui.review.replayed", "config.guided_money.rejected", "config.guided_scaling.rejected",
+                "config.gui.review.replayed", "config.guided_money.invariant",
+                "config.guided_money.rejected", "config.guided_scaling.rejected",
                 "config.guided_scaling_override.rejected",
                 "config.list.rejected", "config.path.not_editable", "config.path.not_listable",
                 "config.path.type_mismatch", "config.path.unknown", "config.preview.candidate_missing",
@@ -604,8 +652,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(141, identities.size());
-        assertEquals(141, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(143, identities.size());
+        assertEquals(143, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -670,13 +718,15 @@ class PaperMessageServiceTest {
                 Map.entry("config.draft.changed_during_apply", 2),
                 Map.entry("config.draft.concurrent_edit", 8),
                 Map.entry("config.gui.money.invalid", 2),
+                Map.entry("config.gui.money.pair_mismatch", 2),
+                Map.entry("config.gui.money.unsupported", 2),
                 Map.entry("config.gui.review.actor_mismatch", 5),
                 Map.entry("config.gui.review.expired", 5),
                 Map.entry("config.gui.review.replayed", 5),
                 Map.entry("config.gui.reward.invalid", 2),
                 Map.entry("config.guided_scaling_override.rejected", 2),
                 Map.entry("config.path.not_listable", 2),
-                Map.entry("config.path.unknown", 9),
+                Map.entry("config.path.unknown", 11),
                 Map.entry("config.preview.required", 2),
                 Map.entry("config.preview.stale", 2),
                 Map.entry("config.revision.stale", 3),
@@ -693,7 +743,8 @@ class PaperMessageServiceTest {
                 "config.acknowledgement.unknown", "config.active.absent", "config.apply.kind_mismatch",
                 "config.document.missing", "config.draft.apply_in_progress", "config.draft.cancelled",
                 "config.draft.changed_during_apply", "config.draft.concurrent_edit", "config.path.not_listable",
-                "config.gui.money.invalid", "config.gui.review.actor_mismatch", "config.gui.review.expired",
+                "config.gui.money.invalid", "config.gui.money.pair_mismatch", "config.gui.money.unsupported",
+                "config.gui.review.actor_mismatch", "config.gui.review.expired",
                 "config.gui.review.replayed", "config.gui.reward.invalid",
                 "config.guided_scaling_override.rejected", "config.path.unknown", "config.preview.required",
                 "config.preview.stale", "config.revision.stale",
@@ -751,7 +802,7 @@ class PaperMessageServiceTest {
         }
 
         assertEquals(113, singleSource.size());
-        assertEquals(28, multiSource.size());
+        assertEquals(30, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
         java.util.HashSet<String> accounted = new java.util.HashSet<>(audited);

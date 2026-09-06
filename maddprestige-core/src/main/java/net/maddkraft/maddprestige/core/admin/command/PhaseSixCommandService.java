@@ -400,7 +400,9 @@ public final class PhaseSixCommandService {
         requireSize(arguments, 2, "config draft");
         UUID draft = configuration.beginDraft(subject, "command");
         return completed(CommandResponse.success("config.draft.created", List.of(
-                m("command.config.draft_created", "draft", draft), m("command.config.production_unchanged"))));
+                m("command.config.draft_created", "draft", draft),
+                m("command.config.draft_controls", "draft", draft),
+                m("command.config.production_unchanged"))));
     }
 
     private CompletionStage<CommandResponse> configSet(PermissionSubject subject, List<String> arguments) {
@@ -858,7 +860,7 @@ public final class PhaseSixCommandService {
     private static List<MessageReference> renderPreview(ConfigurationPreview preview, boolean details) {
         ArrayList<MessageReference> lines = new ArrayList<>();
         lines.add(m("command.config.preview_summary", "draft", preview.draftId(), "status",
-                preview.validation().hasErrors() ? "BLOCKED" : "VALID", "documents",
+                preview.validation().hasErrors() ? "BLOCKED" : "VALID", "count",
                 preview.changedDocuments().size(), "findings", preview.validation().findings().size()));
         if (details) {
             lines.add(m("command.config.preview_header", "draft", preview.draftId(), "base",
@@ -982,8 +984,9 @@ public final class PhaseSixCommandService {
     }
 
     private static String scalingSegmentsPath(String scalingPath) {
-        if (!scalingPath.matches("requirements\\.requirements\\.[a-z][a-z0-9_-]{0,63}\\.scaling")) {
-            throw new IllegalArgumentException("Invalid requirement scaling path: " + scalingPath);
+        if (!scalingPath.matches("(?:requirements\\.requirements\\.[a-z][a-z0-9_-]{0,63}\\.scaling"
+                + "|prestige\\.(?:cost|reward)-scaling\\.[a-z][a-z0-9_-]{0,63})")) {
+            throw new IllegalArgumentException("Invalid scaling path: " + scalingPath);
         }
         return scalingPath + ".segments";
     }

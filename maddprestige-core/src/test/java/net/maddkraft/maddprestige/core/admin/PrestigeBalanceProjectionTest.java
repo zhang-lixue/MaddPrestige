@@ -48,6 +48,20 @@ class PrestigeBalanceProjectionTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-D] Paired guided Money requirement and cost expose one truthful shortfall")
+    void derivesPairedGuidedMoneyShortfall() {
+        ExplanationNode requirement = balanceRequirement("1", "4", "GREATER_OR_EQUAL",
+                ExplanationStatus.UNSATISFIED);
+        ExplanationNode root = new ExplanationNode("requirement.group", ExplanationStatus.UNSATISFIED,
+                "Not Ready", Map.of("mode", "ALL"), List.of(requirement));
+
+        Optional<MetricValue> missing = PrestigeBalanceProjection.requiredAdditionalBalance(
+                root, List.of(money("4")), true);
+
+        assertEquals(Optional.of("3"), missing.map(MetricValue::canonical));
+    }
+
+    @Test
     @DisplayName("[Phase 9F-B] Canonical blocked balance declines to invent unsupported requirement shortfalls")
     void rejectsUnsupportedRequirementShortfall() {
         ExplanationNode requirement = balanceRequirement("1", "8", "LESS_OR_EQUAL",

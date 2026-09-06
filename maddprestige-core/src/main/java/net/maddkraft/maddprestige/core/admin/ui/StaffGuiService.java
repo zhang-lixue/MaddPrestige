@@ -15,7 +15,6 @@ import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdministrationService;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentKind;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentReview;
-import net.maddkraft.maddprestige.core.admin.ManualPrestigeTargetPage;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
@@ -108,7 +107,7 @@ public final class StaffGuiService {
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = new ArrayList<>();
         Summary summary = safeSummary();
-        items.add(GuiDisplayItem.display(4, GuiItemIcon.STAFF,
+        items.add(GuiDisplayItem.display(4, GuiItemIcon.OVERVIEW,
                 m("gui.item.staff.overview.title"), List.of(
                         m(summary.configurationActive()
                                 ? "gui.item.staff.overview.configuration.active"
@@ -139,7 +138,7 @@ public final class StaffGuiService {
                 statusActionKey(summary.health()), PhaseSixPermissions.ADMIN_GUI, revision, null);
         actions.add(statusAction);
         items.add(GuiDisplayItem.action(16, GuiItemIcon.SYSTEM_STATUS, statusAction.label(),
-                List.of(m("gui.item.staff.system_status.lore", "status", statusText(summary.health()))),
+                List.of(m("gui.item.staff.system_status.lore")),
                 statusAction.actionId(), false));
         addClose(actions, items, revision);
         addBorder(items);
@@ -215,14 +214,10 @@ public final class StaffGuiService {
             case STAFF_REQUIREMENTS_PREVIOUS, STAFF_REQUIREMENTS_NEXT ->
                     requirements(subject, target(action), page(action));
             case STAFF_MANAGE_PLAYER -> managePlayer(subject, target(action));
-            case STAFF_SET_PRESTIGE -> prestigeTargets(subject, target(action), 0);
-            case STAFF_ADJUST_PRESTIGE_TARGET -> prestigeTargets(subject, target(action), page(action));
-            case STAFF_REVIEW_PRESTIGE_SET -> completed(prestigeReviewView(subject, known(target(action)),
-                    prestigeReview(action), page(action)));
+            case STAFF_SET_PRESTIGE -> prestigeSetInput(subject, target(action));
             case STAFF_REVIEW_PRESTIGE_RESET -> prestigeResetReview(subject, target(action));
             case STAFF_CONFIRM_PRESTIGE_ADJUSTMENT -> confirmPrestigeAdjustment(subject, prestigeReview(action));
             case STAFF_BACK_MANAGE_PLAYER -> managePlayer(subject, target(action));
-            case STAFF_BACK_PRESTIGE_SELECTOR -> prestigeTargets(subject, target(action), page(action));
             case STAFF_BACK_DASHBOARD -> completed(open(subject));
             case STAFF_BACK_PLAYER_MANAGEMENT -> completed(playerManagement(subject));
             case STAFF_BACK_PLAYER_LIST -> completed(onlinePlayerSelection(subject));
@@ -248,6 +243,8 @@ public final class StaffGuiService {
         String normalized;
         try {
             normalized = switch (action.kind()) {
+                case STAFF_REVIEW_PRESTIGE_SET -> String.valueOf(validatePrestigeSetInput(
+                        subject, action, input, expectedRevision));
                 case STAFF_REVIEW_PRESTIGE_MONEY -> configurationAdministration().validateMoneyInput(
                         subject, configurationLevel(action), input, expectedRevision);
                 case STAFF_REVIEW_PRESTIGE_REWARD -> configurationAdministration().validateRewardInput(
@@ -267,9 +264,17 @@ public final class StaffGuiService {
                         PlayerGuiInteractionResult.stay(m(scalingInvalidMessage(action.kind()))));
             }
             throw exception;
+        } catch (IllegalArgumentException exception) {
+            if (action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_SET) {
+                return CompletableFuture.completedFuture(
+                        PlayerGuiInteractionResult.stay(m("gui.staff.prestige_input.invalid")));
+            }
+            throw exception;
         }
         GuiAction consumed = sessions.authorizeStaffClick(subject, sessionId, actionId);
         return switch (consumed.kind()) {
+            case STAFF_REVIEW_PRESTIGE_SET ->
+                    reviewPrestigeSet(subject, consumed, normalized, expectedRevision);
             case STAFF_REVIEW_PRESTIGE_MONEY ->
                     reviewMoney(subject, consumed, normalized, expectedRevision);
             case STAFF_REVIEW_PRESTIGE_REWARD ->
@@ -298,6 +303,8 @@ public final class StaffGuiService {
             GuiAction action = sessions.authorizeStaffInput(subject, sessionId, actionId);
             ConfigRevisionId expectedRevision = configurationRevision(action);
             switch (action.kind()) {
+                case STAFF_REVIEW_PRESTIGE_SET -> validatePrestigeSetInput(
+                        subject, action, input, expectedRevision);
                 case STAFF_REVIEW_PRESTIGE_MONEY -> configurationAdministration().validateMoneyInput(
                         subject, configurationLevel(action), input, expectedRevision);
                 case STAFF_REVIEW_PRESTIGE_REWARD -> configurationAdministration().validateRewardInput(
@@ -312,7 +319,7 @@ public final class StaffGuiService {
                 default -> throw invalidStaffAction();
             }
             return true;
-        } catch (AdministrationException exception) {
+        } catch (AdministrationException | IllegalArgumentException | IllegalStateException exception) {
             return false;
         }
     }
@@ -1484,7 +1491,9 @@ public final class StaffGuiService {
                         revision, playerId);
                 actions.add(reset);
                 items.add(GuiDisplayItem.action(15, GuiItemIcon.DECREASE, reset.label(),
-                        List.of(m("gui.item.staff.reset_prestige.lore")), reset.actionId(), false));
+                        List.of(m(state.currentPrestige() == 0
+                                ? "gui.item.staff.reset_prestige.already_baseline"
+                                : "gui.item.staff.reset_prestige.lore")), reset.actionId(), false));
             }
             addBack(actions, items, GuiActionKind.STAFF_BACK_PLAYER_OVERVIEW, revision, playerId);
             addClose(actions, items, revision);
@@ -1495,65 +1504,65 @@ public final class StaffGuiService {
         });
     }
 
-    private CompletionStage<PlayerGuiInteractionResult> prestigeTargets(
+    private CompletionStage<PlayerGuiInteractionResult> prestigeSetInput(
             PermissionSubject subject,
-            UUID playerId,
-            int pageIndex) {
+            UUID playerId) {
         StaffPlayerIdentity identity = known(playerId);
-        return prestigeAdministration().targets(subject, playerId, pageIndex, PAGE_SIZE).thenApply(page -> {
+        return prestigeAdministration().inspect(subject, playerId).thenApply(state -> {
             Optional<ConfigRevisionId> revision = activeRevision.get();
-            ArrayList<GuiAction> actions = new ArrayList<>();
-            ArrayList<GuiDisplayItem> items = new ArrayList<>();
-            items.add(GuiDisplayItem.display(4, GuiItemIcon.ADMINISTRATION,
-                    m("gui.item.staff.set_prestige.summary.title"), List.of(
-                            m("gui.item.staff.manage_player.current", "current", page.currentPrestige()),
-                            m("gui.item.staff.set_prestige.page", "current", page.page() + 1))));
-            int firstSlot = 10 + Math.max(0, (PAGE_SIZE - page.targets().size()) / 2);
-            for (int index = 0; index < page.targets().size(); index++) {
-                ManualPrestigeAdjustmentReview review = page.targets().get(index);
-                GuiAction choose = prestigeAction(GuiActionKind.STAFF_REVIEW_PRESTIGE_SET,
-                        "gui.action.staff.prestige_target", PhaseSixPermissions.PLAYER_PRESTIGE_SET,
-                        false, Optional.of(review.configRevision()), playerId, review, pageIndex,
-                        "target", review.targetPrestige());
-                actions.add(choose);
-                items.add(GuiDisplayItem.action(firstSlot + index,
-                        review.targetPrestige() > review.currentPrestige()
-                                ? GuiItemIcon.INCREASE : GuiItemIcon.DECREASE,
-                        choose.label(), List.of(),
-                        choose.actionId(), false));
-            }
-            if (page.hasPrevious()) {
-                addPage(actions, items, GuiActionKind.STAFF_ADJUST_PRESTIGE_TARGET,
-                        "gui.action.staff.previous_page", 19, PhaseSixPermissions.PLAYER_PRESTIGE_SET,
-                        revision, playerId, pageIndex - 1);
-            }
-            if (page.hasNext()) {
-                addPage(actions, items, GuiActionKind.STAFF_ADJUST_PRESTIGE_TARGET,
-                        "gui.action.staff.next_page", 25, PhaseSixPermissions.PLAYER_PRESTIGE_SET,
-                        revision, playerId, pageIndex + 1);
-            }
-            addBack(actions, items, GuiActionKind.STAFF_BACK_MANAGE_PLAYER, revision, playerId);
-            addClose(actions, items, revision);
-            addBorder(items);
-            return PlayerGuiInteractionResult.navigate(sessions.storeStaffScreen(subject,
+            ConfigRevisionId expectedRevision = revision.orElseThrow(() ->
+                    new IllegalStateException("Set Prestige input requires an active configuration revision"));
+            GuiAction back = action(GuiActionKind.STAFF_BACK_MANAGE_PLAYER, "gui.action.back",
+                    PhaseSixPermissions.PLAYER_PRESTIGE_SET, revision, playerId);
+            GuiAction submit = prestigeInputAction(GuiActionKind.STAFF_REVIEW_PRESTIGE_SET,
+                    "gui.action.staff.numeric_input.review", PhaseSixPermissions.PLAYER_PRESTIGE_SET,
+                    expectedRevision, playerId, state.currentPrestige(), state.stateRevision());
+            List<GuiAction> actions = List.of(back, submit);
+            List<GuiDisplayItem> items = List.of(
+                    GuiDisplayItem.display(0, GuiItemIcon.INCREASE,
+                            m("gui.item.staff.numeric_input.value", "value", state.currentPrestige()), List.of()),
+                    GuiDisplayItem.action(1, GuiItemIcon.BACK, back.label(), List.of(), back.actionId(), false),
+                    GuiDisplayItem.action(2, GuiItemIcon.CONFIRM, submit.label(),
+                            List.of(m("gui.item.staff.numeric_input.review")), submit.actionId(), true));
+            return PlayerGuiInteractionResult.navigate(sessions.storeStaffTextInput(subject,
                     m("gui.title.staff.set_prestige", "player", identity.name()), actions,
-                    GuiScreenKind.STAFF_PRESTIGE_SELECTOR, SIZE, items));
+                    GuiScreenKind.STAFF_PRESTIGE_SET_INPUT, items,
+                    new GuiTextInput(String.valueOf(state.currentPrestige()))));
         });
+    }
+
+    private CompletionStage<PlayerGuiInteractionResult> reviewPrestigeSet(
+            PermissionSubject subject,
+            GuiAction action,
+            String input,
+            ConfigRevisionId expectedRevision) {
+        UUID playerId = target(action);
+        StaffPlayerIdentity identity = known(playerId);
+        return prestigeAdministration().reviewSetInput(subject, playerId, input, expectedRevision,
+                        prestigeInputStateRevision(action))
+                .thenApply(review -> PlayerGuiInteractionResult.navigate(
+                        prestigeReviewView(subject, identity, review)));
     }
 
     private CompletionStage<PlayerGuiInteractionResult> prestigeResetReview(
             PermissionSubject subject,
             UUID playerId) {
         StaffPlayerIdentity identity = known(playerId);
-        return prestigeAdministration().reviewReset(subject, playerId).thenApply(review ->
-                PlayerGuiInteractionResult.navigate(prestigeReviewView(subject, identity, review, 0)));
+        return prestigeAdministration().inspect(subject, playerId).thenCompose(state -> {
+            if (state.currentPrestige() == 0) {
+                return managePlayer(subject, playerId).thenApply(result -> PlayerGuiInteractionResult.navigate(
+                        result.nextView().orElseThrow(),
+                        m("gui.staff.prestige_already_baseline", "player", identity.name())));
+            }
+            return prestigeAdministration().reviewReset(subject, playerId).thenApply(review ->
+                    PlayerGuiInteractionResult.navigate(prestigeReviewView(subject, identity, review)));
+        });
     }
 
     private GuiSessionView prestigeReviewView(
             PermissionSubject subject,
             StaffPlayerIdentity identity,
-            ManualPrestigeAdjustmentReview review,
-            int selectorPage) {
+            ManualPrestigeAdjustmentReview review) {
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = new ArrayList<>();
         String kind = review.kind() == ManualPrestigeAdjustmentKind.SET ? "Set Prestige" : "Reset Prestige";
@@ -1571,17 +1580,17 @@ public final class StaffGuiService {
                 reset ? "gui.action.staff.reset_prestige_adjustment"
                         : "gui.action.staff.confirm_prestige_adjustment",
                 review.kind().permission(), true,
-                Optional.of(review.configRevision()), identity.playerId(), review, selectorPage);
+                Optional.of(review.configRevision()), identity.playerId(), review, 0);
         actions.add(confirm);
         items.add(GuiDisplayItem.action(22, reset ? GuiItemIcon.BLOCKED : GuiItemIcon.CONFIRM,
                 confirm.label(), List.of(),
                 confirm.actionId(), false));
         GuiActionKind backKind = review.kind() == ManualPrestigeAdjustmentKind.SET
-                ? GuiActionKind.STAFF_BACK_PRESTIGE_SELECTOR : GuiActionKind.STAFF_BACK_MANAGE_PLAYER;
+                ? GuiActionKind.STAFF_SET_PRESTIGE : GuiActionKind.STAFF_BACK_MANAGE_PLAYER;
         GuiAction back = new GuiAction(UUID.randomUUID(), backKind, m("gui.action.back"),
                 review.kind().permission(), false, Optional.of(review.configRevision()),
                 Optional.of(identity.playerId()), Optional.empty(), Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.of(selectorPage));
+                Optional.empty(), Optional.empty());
         actions.add(back);
         items.add(GuiDisplayItem.action(18, GuiItemIcon.BACK, back.label(), List.of(), back.actionId(), false));
         addClose(actions, items, Optional.of(review.configRevision()));
@@ -1622,23 +1631,17 @@ public final class StaffGuiService {
         Optional<ConfigRevisionId> revision = Optional.of(preview.configRevision());
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = PlayerGuiService.staffPreviewItems(preview);
-        items.add(GuiDisplayItem.display(22,
-                preview.executable() ? GuiItemIcon.READY : GuiItemIcon.BLOCKED,
-                m(preview.executable()
-                        ? "gui.item.staff.prestige_preview.ready"
-                        : "gui.item.staff.prestige_preview.not_ready"), List.of()));
         GuiAction refresh = action(GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW,
                 "gui.action.staff.refresh", PhaseSixPermissions.PLAYER_VIEW,
                 revision, identity.playerId());
         actions.add(refresh);
-        items.add(GuiDisplayItem.action(20, GuiItemIcon.PROGRESS, refresh.label(),
+        items.add(GuiDisplayItem.action(20, GuiItemIcon.REFRESH, refresh.label(),
                 List.of(m("gui.item.staff.refresh.lore")), refresh.actionId(), false));
-        items.add(GuiDisplayItem.profiledDisplay(21, GuiItemIcon.PLAYERS,
-                m("gui.item.staff.player.info.title"),
+        items.add(GuiDisplayItem.profiledDisplay(22, GuiItemIcon.PLAYERS,
+                m("gui.item.staff.prestige_preview.player", "player", identity.name()),
                 List.of(m(identity.online()
-                                ? "gui.item.staff.player.online"
-                                : "gui.item.staff.player.offline"),
-                        m("gui.item.staff.player.uuid", "uuid", identity.playerId())),
+                        ? "gui.item.staff.player.online"
+                        : "gui.item.staff.player.offline")),
                 identity.playerId()));
         GuiAction playerHistory = action(GuiActionKind.STAFF_VIEW_PLAYER_HISTORY,
                 "gui.action.staff.player_history", PhaseSixPermissions.PLAYER_VIEW,
@@ -1650,6 +1653,7 @@ public final class StaffGuiService {
                 revision, identity.playerId());
         addClose(actions, items, revision);
         addBorder(items);
+        items.removeIf(item -> item.slot() == 8);
         return sessions.storeStaffScreen(subject,
                 m("gui.title.staff.prestige_preview", "player", identity.name()), actions,
                 GuiScreenKind.STAFF_PRESTIGE_PREVIEW, SIZE, items);
@@ -1900,6 +1904,42 @@ public final class StaffGuiService {
                 "Return to the selected Prestige level and reopen the editor."));
     }
 
+    private long validatePrestigeSetInput(
+            PermissionSubject subject,
+            GuiAction action,
+            String input,
+            ConfigRevisionId expectedRevision) {
+        long targetPrestige = prestigeAdministration().validateSetInput(subject, input, expectedRevision);
+        if (targetPrestige == prestigeInputCurrent(action)) {
+            throw new IllegalArgumentException("Set Prestige target already equals current Prestige");
+        }
+        return targetPrestige;
+    }
+
+    private static long prestigeInputCurrent(GuiAction action) {
+        String value = action.mutationContext().flatMap(GuiMutationContext::configPath)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Set Prestige input has no server-owned current value"));
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException("Set Prestige input has an invalid server-owned current value",
+                    exception);
+        }
+    }
+
+    private static long prestigeInputStateRevision(GuiAction action) {
+        String value = action.mutationContext().flatMap(GuiMutationContext::value)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Set Prestige input has no server-owned player-state revision"));
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalStateException(
+                    "Set Prestige input has an invalid server-owned player-state revision", exception);
+        }
+    }
+
     private static AdministrationException invalidStaffAction() {
         return new AdministrationException("gui.action.staff_invalid",
                 "The selected control does not belong to the current Staff GUI.",
@@ -2028,7 +2068,7 @@ public final class StaffGuiService {
                 PhaseSixPermissions.ADMIN_GUI, false, revision, Optional.ofNullable(playerId),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(pageIndex));
         actions.add(refresh);
-        items.add(GuiDisplayItem.action(23, GuiItemIcon.PROGRESS, refresh.label(), List.of(),
+        items.add(GuiDisplayItem.action(23, GuiItemIcon.REFRESH, refresh.label(), List.of(),
                 refresh.actionId(), false));
     }
 
@@ -2073,6 +2113,23 @@ public final class StaffGuiService {
             UUID playerId) {
         return new GuiAction(UUID.randomUUID(), kind, m(label), permission, false, revision,
                 Optional.ofNullable(playerId), Optional.empty(), Optional.empty());
+    }
+
+    private static GuiAction prestigeInputAction(
+            GuiActionKind kind,
+            String label,
+            String permission,
+            ConfigRevisionId revision,
+            UUID playerId,
+            long currentPrestige,
+            long stateRevision) {
+        GuiMutationContext context = new GuiMutationContext(Optional.empty(),
+                Optional.of(String.valueOf(currentPrestige)), Optional.of(String.valueOf(stateRevision)),
+                Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(), Optional.empty());
+        return new GuiAction(UUID.randomUUID(), kind, m(label), permission, false, Optional.of(revision),
+                Optional.of(playerId), Optional.empty(), Optional.empty(), Optional.empty(),
+                Optional.of(context), Optional.empty(), Optional.empty());
     }
 
     private static GuiAction configurationAction(

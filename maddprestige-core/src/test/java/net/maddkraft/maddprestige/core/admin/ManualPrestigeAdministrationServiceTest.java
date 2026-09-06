@@ -82,9 +82,21 @@ class ManualPrestigeAdministrationServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, "six"));
         assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, "-1"));
         assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, "0"));
+        assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, "+1"));
+        assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, "1.0"));
+        assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, "1e1"));
+        assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER, " 1"));
         assertThrows(IllegalArgumentException.class, () -> service.reviewSetInput(setter, PLAYER,
                 "9223372036854775808"));
         assertThrows(IllegalArgumentException.class, () -> service.reviewSet(setter, PLAYER, 11));
+        assertEquals(10, service.validateSetInput(setter, "10", REVISION));
+        assertThrows(IllegalArgumentException.class, () -> service.validateSetInput(setter, "11", REVISION));
+
+        ConfigRevisionId staleInputRevision = REVISION;
+        revision.set(new ConfigRevisionId("phase9f-c1-input-replaced"));
+        assertThrows(IllegalStateException.class,
+                () -> service.validateSetInput(setter, "8", staleInputRevision));
+        revision.set(REVISION);
 
         ManualPrestigeAdjustmentReview forgedZero = new ManualPrestigeAdjustmentReview(UUID.randomUUID(),
                 ManualPrestigeAdjustmentKind.SET, PLAYER, 6, 0, 4, REVISION);

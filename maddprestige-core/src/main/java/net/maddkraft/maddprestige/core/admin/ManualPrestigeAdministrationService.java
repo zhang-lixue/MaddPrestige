@@ -96,14 +96,58 @@ public final class ManualPrestigeAdministrationService {
             PermissionSubject subject,
             UUID playerId,
             String input) {
-        Objects.requireNonNull(input, "Prestige input");
+        ConfigRevisionId expectedRevision = activeRevision.get();
+        long target = validateSetInput(subject, input, expectedRevision);
+        return review(subject, playerId, target, ManualPrestigeAdjustmentKind.SET,
+                Optional.of(expectedRevision), Optional.empty());
+    }
+
+    /** Validates an actor/revision-bound Staff GUI target without creating mutation authority. */
+    public long validateSetInput(
+            PermissionSubject subject,
+            String input,
+            ConfigRevisionId expectedRevision) {
+        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        String candidate = Objects.requireNonNull(input, "Prestige input");
+        ConfigRevisionId expected = Objects.requireNonNull(expectedRevision, "expected revision");
+        if (!activeRevision.get().equals(expected)) {
+            throw new IllegalStateException("Active configuration changed while Set Prestige input was open");
+        }
+        if (candidate.isEmpty() || candidate.codePoints().anyMatch(character ->
+                character < '0' || character > '9')) {
+            throw new IllegalArgumentException("Prestige must be a whole number without signs or exponents");
+        }
         final long target;
         try {
-            target = Long.parseLong(input);
+            target = Long.parseLong(candidate);
         } catch (NumberFormatException exception) {
-            throw new IllegalArgumentException("Prestige must be a whole number", exception);
+            throw new IllegalArgumentException("Prestige target is outside the supported numeric range", exception);
         }
-        return reviewSet(subject, playerId, target);
+        validateSetTarget(target);
+        return target;
+    }
+
+    /** Prepares a Set review only when the input session's configuration revision remains current. */
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewSetInput(
+            PermissionSubject subject,
+            UUID playerId,
+            String input,
+            ConfigRevisionId expectedRevision) {
+        long target = validateSetInput(subject, input, expectedRevision);
+        return review(subject, playerId, target, ManualPrestigeAdjustmentKind.SET,
+                Optional.of(expectedRevision), Optional.empty());
+    }
+
+    /** Prepares a Set review only when both the input's config and player-state revisions remain current. */
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewSetInput(
+            PermissionSubject subject,
+            UUID playerId,
+            String input,
+            ConfigRevisionId expectedRevision,
+            long expectedStateRevision) {
+        long target = validateSetInput(subject, input, expectedRevision);
+        return review(subject, playerId, target, ManualPrestigeAdjustmentKind.SET,
+                Optional.of(expectedRevision), Optional.of(expectedStateRevision));
     }
 
     public CompletionStage<ManualPrestigeAdjustmentReview> reviewReset(
@@ -185,15 +229,33 @@ public final class ManualPrestigeAdministrationService {
             UUID playerId,
             long targetPrestige,
             ManualPrestigeAdjustmentKind kind) {
+        return review(subject, playerId, targetPrestige, kind, Optional.empty(), Optional.empty());
+    }
+
+    private CompletionStage<ManualPrestigeAdjustmentReview> review(
+            PermissionSubject subject,
+            UUID playerId,
+            long targetPrestige,
+            ManualPrestigeAdjustmentKind kind,
+            Optional<ConfigRevisionId> expectedRevision,
+            Optional<Long> expectedStateRevision) {
         Objects.requireNonNull(subject, "subject");
         Objects.requireNonNull(playerId, "player ID");
         return CompletableFuture.supplyAsync(() -> {
+            ConfigRevisionId revision = activeRevision.get();
+            if (expectedRevision.isPresent() && !expectedRevision.orElseThrow().equals(revision)) {
+                throw new IllegalStateException("Active configuration changed while Set Prestige review was prepared");
+            }
             PlayerPrestigeState current = state(playerId);
+            if (expectedStateRevision.isPresent()
+                    && expectedStateRevision.orElseThrow() != current.stateRevision()) {
+                throw new IllegalStateException("Player Prestige changed while Set Prestige input was open");
+            }
             if (current.currentPrestige() == targetPrestige) {
                 throw new IllegalArgumentException("Administrative Prestige target already equals current Prestige");
             }
             return new ManualPrestigeAdjustmentReview(UUID.randomUUID(), kind, playerId,
-                    current.currentPrestige(), targetPrestige, current.stateRevision(), activeRevision.get());
+                    current.currentPrestige(), targetPrestige, current.stateRevision(), revision);
         }, worker);
     }
 

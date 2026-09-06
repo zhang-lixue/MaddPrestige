@@ -175,8 +175,8 @@ public final class PlayerGuiService {
             items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIRM, proceed.label(),
                     List.of(), proceed.actionId(), true));
         } else {
-            items.add(GuiDisplayItem.display(22, GuiItemIcon.BLOCKED,
-                    m("gui.item.blocked.title"), List.of()));
+            items.removeIf(item -> item.icon() == GuiItemIcon.BALANCE);
+            addBlockedBalance(items, preview, 10);
         }
         addBack(actions, items, revision, playerId);
         addClose(actions, items, revision, playerId);
@@ -209,11 +209,11 @@ public final class PlayerGuiService {
             return items;
         }
         items.removeIf(item -> item.icon() == GuiItemIcon.BALANCE);
-        addBlockedStaffBalance(items, preview, 10);
+        addBlockedBalance(items, preview, 10);
         return items;
     }
 
-    private static void addBlockedStaffBalance(
+    private static void addBlockedBalance(
             List<GuiDisplayItem> items,
             OperationPreview preview,
             int slot) {

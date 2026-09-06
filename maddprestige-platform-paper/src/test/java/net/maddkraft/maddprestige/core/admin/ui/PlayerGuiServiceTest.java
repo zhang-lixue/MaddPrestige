@@ -293,7 +293,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A owner UX] Blocked Preview keeps an inert red Not Ready control")
+    @DisplayName("[Phase 9F-D] Blocked Preview shows truthful shortfall without a redundant status item")
     void blockedPreviewCannotCreateConfirmation() {
         OperationPreview blocked = blockedCostPreview();
         when(progress.view(any(), eq(PLAYER)))
@@ -305,12 +305,10 @@ class PlayerGuiServiceTest {
 
         assertTrue(main.items().stream().noneMatch(item -> item.icon() == GuiItemIcon.READY
                 || item.icon() == GuiItemIcon.BLOCKED));
-        GuiDisplayItem blockedItem = itemAt(previewView, 22);
-        assertEquals(GuiItemIcon.BLOCKED, blockedItem.icon());
-        assertEquals("gui.item.blocked.title", blockedItem.title().key());
-        assertTrue(blockedItem.lore().isEmpty());
-        assertTrue(blockedItem.actionId().isEmpty());
-        assertFalse(blockedItem.highlighted());
+        assertTrue(previewView.items().stream().noneMatch(item -> item.slot() == 22
+                || item.icon() == GuiItemIcon.READY || item.icon() == GuiItemIcon.BLOCKED));
+        assertTrue(itemAt(previewView, 4).lore().stream()
+                .anyMatch(line -> line.key().equals("gui.item.progress.not_ready")));
         assertTrue(previewView.actions().stream().anyMatch(action -> action.kind() == GuiActionKind.BACK_PLAYER));
         assertTrue(previewView.actions().stream().anyMatch(action -> action.kind() == GuiActionKind.CLOSE_PLAYER
                 && action.label().key().equals("gui.action.close")));
@@ -325,9 +323,13 @@ class PlayerGuiServiceTest {
             assertTrue(view.items().stream().noneMatch(item -> item.icon() == GuiItemIcon.COST
                     || item.title().key().equals("gui.item.cost.title")));
         }
-        assertEquals(Optional.of("$12"), itemAt(main, 10).lore().getFirst().argument("current"));
-        assertEquals(Optional.of("$12"), itemAt(previewView, 10).lore().getFirst().argument("current"));
-        assertEquals(Optional.of("$8"), itemAt(previewView, 10).lore().getFirst().argument("projected"));
+        assertEquals(Optional.of("$1"), itemAt(main, 10).lore().getFirst().argument("current"));
+        GuiDisplayItem balance = itemAt(previewView, 10);
+        assertEquals(Optional.of("$1"), balance.lore().getFirst().argument("current"));
+        assertEquals("gui.item.balance.missing", balance.lore().get(1).key());
+        assertEquals(Optional.of("$3"), balance.lore().get(1).argument("missing"));
+        assertTrue(balance.lore().stream().noneMatch(line -> line.argument("projected").isPresent()
+                || line.diagnosticForm().contains("$-")));
         verify(confirmations, never()).preparePrestige(any(), any());
     }
 
@@ -539,13 +541,13 @@ class PlayerGuiServiceTest {
 
     private static OperationPreview blockedCostPreview() {
         OperationPreview base = preview("ALL", "1", "2", false, List.of(), List.of("$1"), List.of(), 4, 5);
-        base = withBalanceProjection(base, "12", "8");
+        base = withBalanceProjection(base, "1", "-1", "3");
         List<AuthorizationBlocker> blockers = List.of(
                 AuthorizationBlocker.of(AuthorizationBlockerKind.REQUIREMENT_UNSATISFIED,
                         "Prestige requirements are not satisfied", "requirement", "prestige", "status", "PARTIAL"),
                 AuthorizationBlocker.of(AuthorizationBlockerKind.COST_PREFLIGHT_BLOCKED,
                         "Cost preflight blocked: insufficient balance", "id", "vault-cost", "provider",
-                        "vault_economy_cost", "amount", "5", "type", "vault_economy", "status", "BLOCKED",
+                        "vault_economy_cost", "amount", "4", "type", "vault_economy", "status", "BLOCKED",
                         "detail", "insufficient balance"));
         return new OperationPreview(base.kind(), base.playerId(), false, base.stateChange(), base.requirements(),
                 base.costs(), base.rewards(), base.milestones(), base.consequences(),
@@ -618,11 +620,22 @@ class PlayerGuiServiceTest {
             OperationPreview preview,
             String current,
             String projected) {
+        return withBalanceProjection(preview, current, projected, null);
+    }
+
+    private static OperationPreview withBalanceProjection(
+            OperationPreview preview,
+            String current,
+            String projected,
+            String missing) {
         List<MessageReference> details = preview.semanticDetails().stream()
                 .filter(reference -> !reference.key().equals("command.preview.balance_projection"))
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
-        details.add(MessageReference.of("command.preview.balance_projection",
-                "current", current, "projected", projected));
+        details.add(missing == null
+                ? MessageReference.of("command.preview.balance_projection",
+                        "current", current, "projected", projected)
+                : MessageReference.of("command.preview.balance_projection",
+                        "current", current, "projected", projected, "missing", missing));
         return new OperationPreview(preview.kind(), preview.playerId(), preview.executable(), preview.stateChange(),
                 preview.requirements(), preview.costs(), preview.rewards(), preview.milestones(),
                 preview.consequences(), preview.blockers(), preview.configRevision(), preview.providerGenerations(),

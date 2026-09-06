@@ -117,20 +117,18 @@ class StaffPrestigeMutationGuiTest {
                 action.kind() == GuiActionKind.STAFF_SET_PRESTIGE));
         assertTrue(setManagement.actions().stream().noneMatch(action ->
                 action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_RESET));
-        GuiSessionView selector = click(service, setter, setManagement, GuiActionKind.STAFF_SET_PRESTIGE);
-        GuiDisplayItem target = itemFor(selector, GuiActionKind.STAFF_REVIEW_PRESTIGE_SET);
-        assertEquals("gui.action.staff.prestige_target", target.title().key());
-        assertEquals(Set.of("target"), target.title().arguments().keySet());
-        assertTrue(target.lore().isEmpty());
-        assertEquals(1, selector.actions().stream()
-                .filter(action -> action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_SET)
-                .map(GuiAction::prestigeAdjustment).map(Optional::orElseThrow)
-                .mapToLong(net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentReview::targetPrestige)
-                .min().orElseThrow());
-        assertTrue(selector.actions().stream()
-                .filter(action -> action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_SET)
-                .map(GuiAction::prestigeAdjustment).map(Optional::orElseThrow)
-                .noneMatch(review -> review.targetPrestige() == 0));
+        GuiSessionView input = click(service, setter, setManagement, GuiActionKind.STAFF_SET_PRESTIGE);
+        assertEquals(GuiScreenKind.STAFF_PRESTIGE_SET_INPUT, input.screen());
+        assertEquals("6", input.textInput().orElseThrow().initialValue());
+        assertTrue(input.actions().stream().noneMatch(action -> action.prestigeAdjustment().isPresent()));
+        GuiAction submit = action(input, GuiActionKind.STAFF_REVIEW_PRESTIGE_SET);
+        assertFalse(service.acceptsNumericInput(setter, input.sessionId(), submit.actionId(), "6"));
+        assertTrue(service.acceptsNumericInput(setter, input.sessionId(), submit.actionId(), "20"));
+        assertFalse(service.acceptsNumericInput(setter, input.sessionId(), submit.actionId(), "0"));
+        assertFalse(service.acceptsNumericInput(setter, input.sessionId(), submit.actionId(), "21"));
+        GuiSessionView largeTargetReview = service.submitNumericInput(setter, input.sessionId(),
+                submit.actionId(), "20").toCompletableFuture().join().nextView().orElseThrow();
+        assertReview(largeTargetReview, ManualPrestigeAdjustmentKind.SET, 6, 20);
 
         PermissionSubject resetter = staff(UUID.randomUUID(), PhaseSixPermissions.ADMIN_GUI,
                 PhaseSixPermissions.PLAYER_VIEW, PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
@@ -140,6 +138,69 @@ class StaffPrestigeMutationGuiTest {
                 action.kind() == GuiActionKind.STAFF_SET_PRESTIGE));
         assertTrue(resetOnly.actions().stream().anyMatch(action ->
                 action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_RESET));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] Set Prestige typed input rejects non-canonical and no-op values without consuming")
+    void setPrestigeTypedInputValidatesBeforeReviewWithoutPagination() {
+        PermissionSubject owner = owner(STAFF);
+        GuiSessionView management = click(service, owner, overview(service, owner),
+                GuiActionKind.STAFF_MANAGE_PLAYER);
+        GuiSessionView input = click(service, owner, management, GuiActionKind.STAFF_SET_PRESTIGE);
+        GuiAction submit = action(input, GuiActionKind.STAFF_REVIEW_PRESTIGE_SET);
+
+        for (String invalid : List.of("0", "-1", "1.5", "1e2", "9223372036854775808", "6", "21")) {
+            assertFalse(service.acceptsNumericInput(owner, input.sessionId(), submit.actionId(), invalid), invalid);
+        }
+        PlayerGuiInteractionResult invalid = service.submitNumericInput(owner, input.sessionId(),
+                submit.actionId(), "6").toCompletableFuture().join();
+        assertEquals("gui.staff.prestige_input.invalid", invalid.messages().getFirst().key());
+        assertTrue(invalid.nextView().isEmpty());
+
+        assertTrue(service.acceptsNumericInput(owner, input.sessionId(), submit.actionId(), "8"));
+        GuiSessionView review = service.submitNumericInput(owner, input.sessionId(), submit.actionId(), "8")
+                .toCompletableFuture().join().nextView().orElseThrow();
+        assertReview(review, ManualPrestigeAdjustmentKind.SET, 6, 8);
+        assertEquals(GuiScreenKind.STAFF_PRESTIGE_SET_INPUT,
+                click(service, owner, review, GuiActionKind.STAFF_SET_PRESTIGE).screen());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] Reset at baseline remains visible and returns a concise no-op without review or write")
+    void resetAtBaselineIsFriendlyNoOpWithoutReviewOrWrite() {
+        store.state.set(state(0, 9));
+        PermissionSubject owner = owner(STAFF);
+        GuiSessionView management = click(service, owner, overview(service, owner),
+                GuiActionKind.STAFF_MANAGE_PLAYER);
+        GuiDisplayItem reset = itemFor(management, GuiActionKind.STAFF_REVIEW_PRESTIGE_RESET);
+
+        assertEquals(15, reset.slot());
+        assertEquals("gui.action.staff.reset_prestige", reset.title().key());
+        assertEquals(List.of("gui.item.staff.reset_prestige.already_baseline"),
+                reset.lore().stream().map(MessageReference::key).toList());
+
+        PlayerGuiInteractionResult result = clickResult(service, owner, management,
+                GuiActionKind.STAFF_REVIEW_PRESTIGE_RESET);
+
+        GuiSessionView refreshed = result.nextView().orElseThrow();
+        assertEquals(GuiScreenKind.STAFF_PLAYER_MANAGEMENT_ACTIONS, refreshed.screen());
+        assertEquals("gui.staff.prestige_already_baseline", result.messages().getFirst().key());
+        assertEquals("tmydwc", result.messages().getFirst().argument("player").orElseThrow());
+        assertTrue(refreshed.actions().stream().noneMatch(action ->
+                action.kind() == GuiActionKind.STAFF_CONFIRM_PRESTIGE_ADJUSTMENT));
+        assertTrue(store.adjustments.isEmpty());
+        assertEquals(0, store.state.get().currentPrestige());
+        assertEquals(0, store.state.get().lifetimePrestige());
+        assertEquals(9, store.state.get().stateRevision());
+
+        GuiSessionView input = click(service, owner, refreshed, GuiActionKind.STAFF_SET_PRESTIGE);
+        assertEquals(GuiScreenKind.STAFF_PRESTIGE_SET_INPUT, input.screen());
+        assertEquals("0", input.textInput().orElseThrow().initialValue());
+        GuiAction submit = action(input, GuiActionKind.STAFF_REVIEW_PRESTIGE_SET);
+        GuiSessionView setReview = service.submitNumericInput(owner, input.sessionId(), submit.actionId(), "20")
+                .toCompletableFuture().join().nextView().orElseThrow();
+        assertReview(setReview, ManualPrestigeAdjustmentKind.SET, 0, 20);
+        assertTrue(store.adjustments.isEmpty());
     }
 
     @Test
@@ -170,6 +231,16 @@ class StaffPrestigeMutationGuiTest {
     @DisplayName("[Phase 9F-C1] Stale, forged, cross-staff, logout, and identity-loss authority fails closed")
     void rejectsInvalidMutationAuthorityWithoutWriting() {
         PermissionSubject owner = owner(STAFF);
+        GuiSessionView management = click(service, owner, overview(service, owner),
+                GuiActionKind.STAFF_MANAGE_PLAYER);
+        GuiSessionView staleInput = click(service, owner, management, GuiActionKind.STAFF_SET_PRESTIGE);
+        GuiAction inputSubmit = action(staleInput, GuiActionKind.STAFF_REVIEW_PRESTIGE_SET);
+        store.state.set(state(7, 5));
+        assertThrows(CompletionException.class, () -> service.submitNumericInput(owner,
+                staleInput.sessionId(), inputSubmit.actionId(), "8").toCompletableFuture().join());
+        assertTrue(store.adjustments.isEmpty());
+
+        store.state.set(state(6, 4));
         GuiSessionView staleState = setReview(service, owner, 8);
         store.state.set(state(7, 5));
         assertThrows(CompletionException.class, () -> clickResult(service, owner, staleState,
@@ -300,16 +371,10 @@ class StaffPrestigeMutationGuiTest {
             long target) {
         GuiSessionView management = click(route, subject, overview(route, subject),
                 GuiActionKind.STAFF_MANAGE_PLAYER);
-        GuiSessionView selector = click(route, subject, management, GuiActionKind.STAFF_SET_PRESTIGE);
-        while (selector.actions().stream().noneMatch(action -> action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_SET
-                && action.prestigeAdjustment().orElseThrow().targetPrestige() == target)) {
-            selector = click(route, subject, selector, GuiActionKind.STAFF_ADJUST_PRESTIGE_TARGET);
-        }
-        GuiAction choose = selector.actions().stream().filter(action ->
-                action.kind() == GuiActionKind.STAFF_REVIEW_PRESTIGE_SET
-                        && action.prestigeAdjustment().orElseThrow().targetPrestige() == target)
-                .findFirst().orElseThrow();
-        return click(route, subject, selector, choose);
+        GuiSessionView input = click(route, subject, management, GuiActionKind.STAFF_SET_PRESTIGE);
+        GuiAction submit = action(input, GuiActionKind.STAFF_REVIEW_PRESTIGE_SET);
+        return route.submitNumericInput(subject, input.sessionId(), submit.actionId(), String.valueOf(target))
+                .toCompletableFuture().join().nextView().orElseThrow();
     }
 
     private static void assertReview(

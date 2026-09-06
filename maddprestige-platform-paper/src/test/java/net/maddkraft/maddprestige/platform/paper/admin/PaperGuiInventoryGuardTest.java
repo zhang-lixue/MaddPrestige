@@ -157,6 +157,9 @@ class PaperGuiInventoryGuardTest {
         assertEquals(Material.RED_CONCRETE, PaperGuiInventory.material(GuiItemIcon.BLOCKED));
         assertEquals(Material.LIME_CONCRETE, PaperGuiInventory.material(GuiItemIcon.CONFIRM));
         assertEquals(Material.COMPASS, PaperGuiInventory.material(GuiItemIcon.STAFF));
+        assertEquals(Material.SPYGLASS, PaperGuiInventory.material(GuiItemIcon.OVERVIEW));
+        assertFalse(PaperGuiInventory.material(GuiItemIcon.OVERVIEW)
+                .equals(PaperGuiInventory.material(GuiItemIcon.REFRESH)));
         assertEquals(Material.PLAYER_HEAD, PaperGuiInventory.material(GuiItemIcon.PLAYERS));
         assertEquals(Material.NAME_TAG, PaperGuiInventory.material(GuiItemIcon.PLAYER_INFORMATION));
         assertEquals(Material.KNOWLEDGE_BOOK, PaperGuiInventory.material(GuiItemIcon.CONFIGURATION));
@@ -1352,6 +1355,8 @@ class PaperGuiInventoryGuardTest {
         assertTrue(visible.contains("Inspect a player."));
         assertTrue(visible.contains("View active Prestige configuration."));
         assertTrue(visible.contains("Review recent activity and exceptions."));
+        assertTrue(visible.contains("Review operational health."));
+        assertFalse(visible.contains("(Available)"));
         assertFalse(visible.contains("Original"));
         assertFalse(visible.contains("Read-Only"));
         assertFalse(visible.contains("Revision:"));
@@ -1639,7 +1644,7 @@ class PaperGuiInventoryGuardTest {
 
     private static GuiSessionView staffDashboardView() {
         List<GuiDisplayItem> items = List.of(
-                GuiDisplayItem.display(4, GuiItemIcon.STAFF,
+                GuiDisplayItem.display(4, GuiItemIcon.OVERVIEW,
                         MessageReference.of("gui.item.staff.overview.title"),
                         List.of(MessageReference.of("gui.item.staff.overview.configuration.active"),
                                 MessageReference.of("gui.item.staff.overview.providers",
@@ -1655,8 +1660,7 @@ class PaperGuiInventoryGuardTest {
                         List.of(MessageReference.of("gui.item.staff.history.lore"))),
                 GuiDisplayItem.display(16, GuiItemIcon.SYSTEM_STATUS,
                         MessageReference.of("gui.action.staff.system_status.healthy"),
-                        List.of(MessageReference.of("gui.item.staff.system_status.lore",
-                                "status", "Available"))),
+                        List.of(MessageReference.of("gui.item.staff.system_status.lore"))),
                 GuiDisplayItem.display(26, GuiItemIcon.CLOSE,
                         MessageReference.of("gui.action.close"), List.of()));
         return new GuiSessionView(UUID.randomUUID(), GuiAudience.STAFF,

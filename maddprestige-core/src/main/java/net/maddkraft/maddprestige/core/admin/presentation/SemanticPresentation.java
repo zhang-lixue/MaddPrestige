@@ -566,6 +566,7 @@ public final class SemanticPresentation {
         register(result, "config_gui_level_page_invalid", "config.gui.level_page.invalid");
         register(result, "config_gui_money_invalid", "config.gui.money.invalid");
         register(result, "config_gui_money_non_terminating", "config.gui.money.non_terminating");
+        register(result, "config_gui_money_pair_mismatch", "config.gui.money.pair_mismatch");
         register(result, "config_gui_money_page_invalid", "config.gui.money_page.invalid");
         register(result, "config_gui_money_unavailable", "config.gui.money.unavailable");
         register(result, "config_gui_money_unsupported", "config.gui.money.unsupported");
@@ -583,6 +584,7 @@ public final class SemanticPresentation {
         register(result, "config_gui_review_actor_mismatch", "config.gui.review.actor_mismatch");
         register(result, "config_gui_review_expired", "config.gui.review.expired");
         register(result, "config_gui_review_replayed", "config.gui.review.replayed");
+        register(result, "config_guided_money_invariant", "config.guided_money.invariant");
         register(result, "config_guided_money_rejected", "config.guided_money.rejected");
         register(result, "config_guided_scaling_rejected", "config.guided_scaling.rejected");
         register(result, "config_guided_scaling_override_rejected", "config.guided_scaling_override.rejected");

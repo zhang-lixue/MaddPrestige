@@ -13,6 +13,7 @@ import net.maddkraft.maddprestige.api.metric.MetricProvider;
 import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
@@ -32,23 +33,27 @@ public final class CommandCompletionService {
     private final SetupWizardService setup;
     private final OperationConfirmationService confirmations;
     private final StaffHistoryCommandService staffHistory;
+    private final ConfigurationAdministrationService configuration;
 
     public CommandCompletionService() {
         this.setup = null;
         this.confirmations = null;
         this.staffHistory = null;
+        this.configuration = null;
     }
 
     public CommandCompletionService(SetupWizardService setup) {
         this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = null;
         this.staffHistory = null;
+        this.configuration = null;
     }
 
     public CommandCompletionService(SetupWizardService setup, OperationConfirmationService confirmations) {
         this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
         this.staffHistory = null;
+        this.configuration = null;
     }
 
     public CommandCompletionService(
@@ -58,18 +63,41 @@ public final class CommandCompletionService {
         this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
         this.staffHistory = Objects.requireNonNull(staffHistory, "staff history");
+        this.configuration = null;
+    }
+
+    public CommandCompletionService(
+            SetupWizardService setup,
+            OperationConfirmationService confirmations,
+            StaffHistoryCommandService staffHistory,
+            ConfigurationAdministrationService configuration) {
+        this.setup = Objects.requireNonNull(setup, SETUP_COMMAND);
+        this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
+        this.staffHistory = Objects.requireNonNull(staffHistory, "staff history");
+        this.configuration = Objects.requireNonNull(configuration, "configuration");
     }
 
     public CommandCompletionService(OperationConfirmationService confirmations) {
         this.setup = null;
         this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
         this.staffHistory = null;
+        this.configuration = null;
+    }
+
+    public CommandCompletionService(
+            OperationConfirmationService confirmations,
+            ConfigurationAdministrationService configuration) {
+        this.setup = null;
+        this.confirmations = Objects.requireNonNull(confirmations, "confirmations");
+        this.staffHistory = null;
+        this.configuration = Objects.requireNonNull(configuration, "configuration");
     }
 
     public CommandCompletionService(StaffHistoryCommandService staffHistory) {
         this.setup = null;
         this.confirmations = null;
         this.staffHistory = Objects.requireNonNull(staffHistory, "staff history");
+        this.configuration = null;
     }
 
     public void refresh(ProviderRegistry providers, SchemaRegistry schema, StageConfiguration stages) {
@@ -217,13 +245,13 @@ public final class CommandCompletionService {
             return catalog.get().schemaPaths();
         }
         if (operation.equals("list") && subject.has(PhaseSixPermissions.CONFIG_VIEW)) {
-            return tokens.size() == 3 ? catalog.get().draftIds()
+            return tokens.size() == 3 ? draftIds(subject)
                     : tokens.size() == 4 ? catalog.get().structuralPaths() : List.of();
         }
         if (Set.of("set", "add", "remove").contains(operation)
                 && subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
             if (tokens.size() == 3) {
-                return catalog.get().draftIds();
+                return draftIds(subject);
             }
             if (tokens.size() == 4) {
                 if (operation.equals("set")) {
@@ -239,15 +267,28 @@ public final class CommandCompletionService {
         }
         if (Set.of("segment-add", "segment-edit", "segment-remove").contains(operation)
                 && subject.has(PhaseSixPermissions.CONFIG_EDIT) && tokens.size() == 3) {
-            return catalog.get().draftIds();
+            return draftIds(subject);
         }
-        if (Set.of("validate", "diff", CANCEL, ACKNOWLEDGE).contains(operation)
-                && tokens.size() == 3) {
-            return catalog.get().draftIds();
+        if (Set.of("validate", "diff").contains(operation) && tokens.size() == 3
+                && (subject.has(PhaseSixPermissions.CONFIG_VIEW)
+                || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+            return draftIds(subject);
         }
-        if (Set.of(APPLY, "rollback-apply").contains(operation)) {
+        if (operation.equals(CANCEL) && tokens.size() == 3
+                && (subject.has(PhaseSixPermissions.CONFIG_EDIT)
+                || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+            return draftIds(subject);
+        }
+        if (operation.equals(ACKNOWLEDGE) && tokens.size() == 3
+                && (subject.has(PhaseSixPermissions.CONFIG_APPLY)
+                || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+            return draftIds(subject);
+        }
+        if ((operation.equals(APPLY) && subject.has(PhaseSixPermissions.CONFIG_APPLY))
+                || (operation.equals("rollback-apply")
+                && subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
             if (tokens.size() == 3) {
-                return catalog.get().draftIds();
+                return draftIds(subject);
             }
             if (tokens.size() == 4) {
                 ArrayList<String> revisions = new ArrayList<>(catalog.get().revisionIds());
@@ -259,6 +300,13 @@ public final class CommandCompletionService {
             return catalog.get().revisionIds();
         }
         return List.of();
+    }
+
+    private List<String> draftIds(PermissionSubject subject) {
+        if (configuration == null) {
+            return catalog.get().draftIds();
+        }
+        return configuration.ownedDraftIds(subject).stream().map(UUID::toString).toList();
     }
 
     private List<String> setupCandidates(List<String> tokens) {

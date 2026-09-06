@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
+import net.kyori.adventure.text.event.HoverEvent;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
@@ -151,6 +152,12 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
         if (reference.key().equals("command.history.page")) {
             return renderHistoryPage(reference, messages);
         }
+        if (reference.key().equals("command.config.draft_created")) {
+            return renderDraftCreated(reference, messages);
+        }
+        if (reference.key().equals("command.config.draft_controls")) {
+            return renderDraftControls(reference, messages);
+        }
         if (!reference.key().equals("command.preview.confirmation_controls")) {
             return messages.render(reference);
         }
@@ -164,6 +171,49 @@ public final class PaperPhaseSixCommandAdapter implements CommandExecutor, TabCo
                 .clickEvent(ClickEvent.copyToClipboard(confirmation));
         return confirm.append(Component.space()).append(copy).append(Component.space())
                 .append(messages.render("command.preview.session_validity"));
+    }
+
+    private static Component renderDraftCreated(MessageReference reference, PaperMessageService messages) {
+        Component created = messages.render(reference);
+        String draft = reference.arguments().get("draft");
+        if (draft == null || !uuid(draft)) {
+            return created;
+        }
+        return created.append(Component.space()).append(draftAction(
+                messages,
+                "command.config.draft_copy_action",
+                "command.config.draft_copy_hover",
+                ClickEvent.copyToClipboard(draft)));
+    }
+
+    private static Component renderDraftControls(MessageReference reference, PaperMessageService messages) {
+        String draft = reference.arguments().get("draft");
+        if (draft == null || !uuid(draft)) {
+            return messages.render(reference);
+        }
+        Component validate = draftAction(
+                messages,
+                "command.config.draft_validate_action",
+                "command.config.draft_validate_hover",
+                ClickEvent.runCommand("/maddprestige config validate " + draft));
+        Component diff = draftAction(
+                messages,
+                "command.config.draft_diff_action",
+                "command.config.draft_diff_hover",
+                ClickEvent.runCommand("/maddprestige config diff " + draft));
+        Component cancel = draftAction(
+                messages,
+                "command.config.draft_cancel_action",
+                "command.config.draft_cancel_hover",
+                ClickEvent.runCommand("/maddprestige config cancel " + draft));
+        return validate.append(Component.space()).append(diff).append(Component.space()).append(cancel);
+    }
+
+    private static Component draftAction(
+            PaperMessageService messages, String labelKey, String hoverKey, ClickEvent clickEvent) {
+        return messages.render(labelKey)
+                .clickEvent(clickEvent)
+                .hoverEvent(HoverEvent.showText(messages.render(hoverKey)));
     }
 
     private static Component renderHistoryEntry(MessageReference reference, PaperMessageService messages) {

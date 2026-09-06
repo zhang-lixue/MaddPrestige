@@ -5,6 +5,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -217,7 +218,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
         administration.editGuidedMoney(subject, draftId,
                 new ScalingOverrideEdit("requirements.requirements." + binding.requirement().id().value()
                         + ".scaling", binding.requirementSegment(), prestigeLevel, validation.multiplier()),
-                "requirements.costs." + binding.cost().id().value() + ".amount", normalizedAmount);
+                binding.pair());
         ConfigRevisionId baseRevision = revision(validation.snapshot());
         return administration.preview(subject, draftId).thenApply(preview -> {
             if (preview.stale()) {
@@ -548,7 +549,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
         UUID draftId = administration.beginDraft(subject, "staff-gui:configuration:scaling");
         administration.editGuidedScalingParameter(subject, draftId, new ScalingParameterEdit(
                 "requirements.requirements." + binding.requirement().id().value() + ".scaling",
-                binding.segmentIndex(), parameter, validation.normalizedValue()));
+                binding.segmentIndex(), parameter, validation.normalizedValue()), binding.pair());
         ConfigRevisionId baseRevision = revision(validation.snapshot());
         return administration.preview(subject, draftId).thenApply(preview -> {
             if (preview.stale()) {
@@ -637,7 +638,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                 : "staff-gui:configuration:scaling-override-add";
         UUID draftId = administration.beginDraft(subject, sourceSurface);
         administration.editGuidedScalingOverride(subject, draftId, new ScalingOverrideEdit(
-                scalingPath(binding), binding.segmentIndex(), prestigeLevel, validation.normalizedValue()));
+                scalingPath(binding), binding.segmentIndex(), prestigeLevel, validation.normalizedValue()),
+                binding.pair());
         return prepareScalingOverrideReview(subject, validation.snapshot(), binding, draftId,
                 Optional.of(validation.normalizedValue()));
     }
@@ -655,7 +657,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
         requireExistingScalingOverride(binding);
         UUID draftId = administration.beginDraft(subject, "staff-gui:configuration:scaling-override-removal");
         administration.removeGuidedScalingOverride(subject, draftId, new ScalingOverrideRemoval(
-                scalingPath(binding), binding.segmentIndex(), prestigeLevel));
+                scalingPath(binding), binding.segmentIndex(), prestigeLevel), binding.pair());
         return prepareScalingOverrideReview(subject, snapshot, binding, draftId, Optional.empty());
     }
 
@@ -757,12 +759,17 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                 requirement.scaling(), requirement.catchUp(), prestigeLevel - 1, ExactDecimal.ZERO).target().lower();
         CostDefinition effectiveCost = phaseFour.valueScaling().scale(cost, prestigeLevel);
         int segment = requirementSegment(requirement, prestigeLevel);
+        var costScaling = phaseFour.valueScaling().costs().get(cost.id());
+        boolean existingPair = costScaling != null
+                && requirement.target().lower().asNumber().compareTo(cost.amount().asNumber()) == 0
+                && requirement.scaling().segments().equals(costScaling.segments());
         boolean editable = segment >= 0 && requirement.target().lower().asNumber().signum() > 0
-                && !phaseFour.valueScaling().costs().containsKey(cost.id());
+                && !requirement.catchUp().enabled()
+                && (costScaling == null || existingPair);
         String scaling = scalingDescription(requirement, prestigeLevel);
         return new MoneyBinding(requirement, cost, canonical(effectiveRequirement.asNumber()),
                 canonical(effectiveCost.amount().asNumber()), canonical(requirement.target().lower().asNumber()),
-                segment, scaling, editable);
+                segment, scaling, editable, guidedMoneyPair(requirement, cost));
     }
 
     private Optional<MoneyBinding> optionalMoneyBinding(
@@ -848,20 +855,11 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             PermissionSubject subject,
             ActivePhaseFourConfiguration snapshot,
             long prestigeLevel) {
-        PhaseThreeConfiguration phaseThree = snapshot.priorPhases().phaseThree().configuration();
-        PhaseFourConfiguration phaseFour = snapshot.phaseFour().configuration();
-        RequirementNode root = phaseFour.prestige().requirementTreeId().map(phaseThree.trees()::get)
-                .orElseThrow(CanonicalGuidedConfigurationAdministration::unsupportedScalingEditor);
-        List<RequirementDefinition> requirements = leaves(root).stream()
-                .filter(value -> value.target().upper().isEmpty())
-                .filter(value -> value.target().lower().type() == MetricValueType.CURRENCY_AMOUNT)
-                .filter(value -> value.providerId().value().equals(VAULT_BALANCE_PROVIDER))
-                .filter(value -> value.metricId().value().equals("balance"))
-                .toList();
-        if (requirements.size() != 1) {
+        MoneyBinding money = moneyBinding(snapshot, prestigeLevel);
+        if (!money.editable()) {
             throw unsupportedScalingEditor();
         }
-        RequirementDefinition requirement = requirements.getFirst();
+        RequirementDefinition requirement = money.requirement();
         int segmentIndex = requirementSegment(requirement, prestigeLevel);
         if (segmentIndex < 0) {
             throw unsupportedScalingEditor();
@@ -884,7 +882,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                 revision(snapshot), prestigeLevel, segment.mode(), canonical(segment.base().asBigDecimal()),
                 canonical(segment.rate().asBigDecimal()), canonical(effective.asNumber()), override,
                 editable, complex, overrideManageable);
-        return new ScalingBinding(requirement, segmentIndex, view);
+        return new ScalingBinding(requirement, segmentIndex, view, money.pair());
     }
 
     private boolean explicitScalingParameter(
@@ -902,6 +900,45 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                         .key("requirements").key(requirement.id().value()).key("scaling")
                         .key("segments").index(segmentIndex).key(parameter.yamlField())))
                 .orElse(false);
+    }
+
+    private static GuidedMoneyScalingPair guidedMoneyPair(
+            RequirementDefinition requirement,
+            CostDefinition cost) {
+        LinkedHashMap<String, Object> profile = new LinkedHashMap<>();
+        profile.put("segments", requirement.scaling().segments().stream()
+                .map(CanonicalGuidedConfigurationAdministration::scalingSegmentStructure)
+                .toList());
+        String requirementPath = "requirements.requirements." + requirement.id().value() + ".scaling";
+        return new GuidedMoneyScalingPair(
+                requirement.id().value(),
+                cost.id().value(),
+                requirementPath,
+                "requirements.costs." + cost.id().value() + ".amount",
+                canonical(requirement.target().lower().asNumber()),
+                new StructuredConfigurationValue(profile));
+    }
+
+    private static Map<String, Object> scalingSegmentStructure(PrestigeScalingSegment segment) {
+        LinkedHashMap<String, Object> fields = new LinkedHashMap<>();
+        fields.put("start-prestige", segment.startLevel());
+        fields.put("end-prestige", segment.endLevel().isPresent()
+                ? segment.endLevel().getAsLong() : "unlimited");
+        fields.put("mode", segment.mode().name());
+        fields.put("transition", segment.transition().name());
+        fields.put("base", segment.base().asBigDecimal());
+        fields.put("rate", segment.rate().asBigDecimal());
+        fields.put("rounding", segment.rounding().name());
+        fields.put("quantum", segment.roundingQuantum().asBigDecimal());
+        segment.floor().ifPresent(value -> fields.put("floor", value.asBigDecimal()));
+        segment.cap().ifPresent(value -> fields.put("cap", value.asBigDecimal()));
+        if (!segment.overrides().isEmpty()) {
+            LinkedHashMap<String, Object> overrides = new LinkedHashMap<>();
+            segment.overrides().forEach((level, value) ->
+                    overrides.put(Long.toString(level), value.asBigDecimal()));
+            fields.put("overrides", overrides);
+        }
+        return fields;
     }
 
     private RewardBinding rewardBinding(ActivePhaseFourConfiguration snapshot, long prestigeLevel) {
@@ -1410,7 +1447,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             String requirementBase,
             int requirementSegment,
             String scalingDescription,
-            boolean editable) {
+            boolean editable,
+            GuidedMoneyScalingPair pair) {
         private String currentDisplay() {
             return requirementAmount.equals(costAmount)
                     ? requirementAmount : requirementAmount + " requirement / " + costAmount + " cost";
@@ -1445,7 +1483,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     private record ScalingBinding(
             RequirementDefinition requirement,
             int segmentIndex,
-            GuidedScalingConfigurationView view) {
+            GuidedScalingConfigurationView view,
+            GuidedMoneyScalingPair pair) {
     }
 
     private record ScalingInputValidation(

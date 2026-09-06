@@ -96,10 +96,14 @@ class StaffGuiServiceTest {
         assertEquals(GuiScreenKind.STAFF_DASHBOARD, allowed.screen());
         assertEquals(27, allowed.inventorySize());
         assertEquals("gui.item.staff.overview.title", itemAt(allowed, 4).title().key());
+        assertEquals(GuiItemIcon.OVERVIEW, itemAt(allowed, 4).icon());
         assertEquals("gui.action.staff.players", itemAt(allowed, 10).title().key());
         assertEquals("gui.action.staff.configuration", itemAt(allowed, 12).title().key());
         assertEquals("gui.action.staff.history", itemAt(allowed, 14).title().key());
         assertEquals("gui.action.staff.system_status.healthy", itemAt(allowed, 16).title().key());
+        assertEquals(List.of("gui.item.staff.system_status.lore"),
+                itemAt(allowed, 16).lore().stream().map(MessageReference::key).toList());
+        assertTrue(itemAt(allowed, 16).lore().getFirst().arguments().isEmpty());
         assertEquals("gui.action.close", itemAt(allowed, 26).title().key());
         assertTrue(allowed.actions().stream().anyMatch(action ->
                 action.kind() == GuiActionKind.STAFF_OPEN_PLAYERS));
@@ -1000,6 +1004,7 @@ class StaffGuiServiceTest {
                 action.kind() == GuiActionKind.STAFF_SYSTEM_STATUS_PREVIOUS));
         assertEquals(GuiScreenKind.STAFF_SYSTEM_STATUS, refreshed.screen());
         assertEquals(1, statusCards(refreshed).size());
+        assertEquals(GuiItemIcon.REFRESH, itemAt(refreshed, 23).icon());
         assertFalse(second.sessionId().equals(refreshed.sessionId()));
         assertTrue(refreshedResult.messages().isEmpty());
         assertFalse(refresh.mutating());
@@ -1222,8 +1227,9 @@ class StaffGuiServiceTest {
         GuiSessionView preview = click(route, owner, overviewAgain,
                 GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW);
         assertEquals(GuiScreenKind.STAFF_PRESTIGE_PREVIEW, preview.screen());
-        assertEquals("gui.item.staff.player.offline", itemAt(preview, 21).lore().getFirst().key());
-        assertEquals(GuiItemIcon.BLOCKED, itemAt(preview, 22).icon());
+        assertTrue(preview.items().stream().noneMatch(item -> item.slot() == 8));
+        assertEquals("gui.item.staff.player.offline", itemAt(preview, 22).lore().getFirst().key());
+        assertTrue(itemAt(preview, 22).lore().stream().noneMatch(line -> line.arguments().containsKey("uuid")));
         assertTrue(itemAt(preview, 10).lore().stream().anyMatch(line ->
                 line.argument("current").filter("Unavailable"::equals).isPresent()));
         assertTrue(preview.actions().stream().allMatch(action -> !action.mutating()));
@@ -1336,9 +1342,17 @@ class StaffGuiServiceTest {
         GuiSessionView blocked = click(owner, overview, GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW);
         assertEquals(GuiScreenKind.STAFF_PRESTIGE_PREVIEW, blocked.screen());
         assertEquals("tmydwc", blocked.title().argument("player").orElseThrow());
-        assertEquals(GuiItemIcon.BLOCKED, itemAt(blocked, 22).icon());
-        assertEquals("gui.item.staff.prestige_preview.not_ready", itemAt(blocked, 22).title().key());
-        assertTrue(itemAt(blocked, 22).actionId().isEmpty());
+        assertEquals(GuiItemIcon.PROGRESS, itemAt(blocked, 4).icon());
+        assertTrue(itemAt(blocked, 4).lore().stream().anyMatch(line ->
+                line.key().equals("gui.item.progress.not_ready")));
+        assertTrue(blocked.items().stream().noneMatch(item -> item.slot() == 8));
+        GuiDisplayItem identity = itemAt(blocked, 22);
+        assertEquals(GuiItemIcon.PLAYERS, identity.icon());
+        assertEquals("gui.item.staff.prestige_preview.player", identity.title().key());
+        assertEquals("tmydwc", identity.title().argument("player").orElseThrow());
+        assertEquals(List.of("gui.item.staff.player.online"),
+                identity.lore().stream().map(MessageReference::key).toList());
+        assertEquals(Optional.of(PLAYER), identity.profilePlayerId());
         GuiDisplayItem balance = itemAt(blocked, 10);
         assertTrue(balance.lore().stream().anyMatch(line ->
                 line.key().equals("gui.item.balance.current")
@@ -1361,10 +1375,14 @@ class StaffGuiServiceTest {
         assertTrue(itemAt(blocked, 16).lore().stream().anyMatch(line ->
                 line.argument("value").filter("$1"::equals).isPresent()));
         GuiAction refresh = action(blocked, GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
-        assertEquals(GuiItemIcon.PROGRESS, itemAt(blocked, 20).icon());
+        assertEquals(GuiItemIcon.REFRESH, itemAt(blocked, 20).icon());
         assertEquals(Optional.of(refresh.actionId()), itemAt(blocked, 20).actionId());
-        assertTrue(blocked.actions().stream().anyMatch(action ->
-                action.kind() == GuiActionKind.STAFF_VIEW_PLAYER_HISTORY));
+        assertEquals(Optional.of(action(blocked, GuiActionKind.STAFF_BACK_PLAYER_OVERVIEW).actionId()),
+                itemAt(blocked, 18).actionId());
+        assertEquals(Optional.of(action(blocked, GuiActionKind.STAFF_VIEW_PLAYER_HISTORY).actionId()),
+                itemAt(blocked, 24).actionId());
+        assertEquals(Optional.of(action(blocked, GuiActionKind.STAFF_CLOSE).actionId()),
+                itemAt(blocked, 26).actionId());
         assertTrue(blocked.actions().stream().filter(action -> action.kind() != GuiActionKind.STAFF_CLOSE)
                 .allMatch(action -> action.targetPlayer().filter(PLAYER::equals).isPresent()));
         assertTrue(blocked.actions().stream().allMatch(action -> !action.mutating()));
@@ -1386,9 +1404,10 @@ class StaffGuiServiceTest {
                 leaf("balance", "12", "8", ExplanationStatus.SATISFIED),
                 leaf("total_level", "1", "1", ExplanationStatus.SATISFIED)), true));
         GuiSessionView ready = click(owner, blocked, GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
-        assertEquals(GuiItemIcon.READY, itemAt(ready, 22).icon());
-        assertEquals("gui.item.staff.prestige_preview.ready", itemAt(ready, 22).title().key());
-        assertTrue(itemAt(ready, 22).actionId().isEmpty());
+        assertTrue(itemAt(ready, 4).lore().stream().anyMatch(line ->
+                line.key().equals("gui.item.progress.ready")));
+        assertTrue(ready.items().stream().noneMatch(item -> item.slot() == 8));
+        assertEquals("gui.item.staff.prestige_preview.player", itemAt(ready, 22).title().key());
         assertTrue(itemAt(ready, 10).lore().stream().anyMatch(line ->
                 line.key().equals("gui.item.balance.projected")
                         && line.argument("current").filter("$12"::equals).isPresent()
@@ -1593,13 +1612,15 @@ class StaffGuiServiceTest {
 
         GuiSessionView offline = click(route, subject, staffPreview,
                 GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
-        assertEquals("gui.item.staff.player.offline", itemAt(offline, 21).lore().getFirst().key());
-        assertEquals(Optional.of(PLAYER), itemAt(offline, 21).profilePlayerId());
+        assertTrue(offline.items().stream().noneMatch(item -> item.slot() == 8));
+        assertEquals("gui.item.staff.player.offline", itemAt(offline, 22).lore().getFirst().key());
+        assertEquals(Optional.of(PLAYER), itemAt(offline, 22).profilePlayerId());
 
         known.set(List.of(new StaffPlayerIdentity(PLAYER, "tmydwc", true)));
         GuiSessionView online = click(route, subject, offline,
                 GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW);
-        assertEquals("gui.item.staff.player.online", itemAt(online, 21).lore().getFirst().key());
+        assertTrue(online.items().stream().noneMatch(item -> item.slot() == 8));
+        assertEquals("gui.item.staff.player.online", itemAt(online, 22).lore().getFirst().key());
         assertEquals(PLAYER, refresh.targetPlayer().orElseThrow());
         assertTrue(List.of(copied, offlineOverview, onlineOverview, staffPreview, offline, online).stream()
                 .flatMap(view -> view.actions().stream()).allMatch(action -> !action.mutating()));

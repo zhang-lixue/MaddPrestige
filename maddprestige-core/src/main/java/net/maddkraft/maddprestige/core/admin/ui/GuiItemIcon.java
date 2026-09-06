@@ -14,6 +14,7 @@ public enum GuiItemIcon {
     MILESTONE,
     CONFIRM,
     STAFF,
+    OVERVIEW,
     PLAYERS,
     PLAYER_INFORMATION,
     CONFIGURATION,

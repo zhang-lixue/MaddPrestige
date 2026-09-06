@@ -345,7 +345,7 @@ public final class ProductionRuntime implements AutoCloseable {
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
                 doctor, why, previews, confirmations, playerViews, setupWizard,
                 manualPrestige, gui, playerGui, staffGui, historyCommands, this::activeRevision, worker);
-        completion = new CommandCompletionService(setupWizard, confirmations, historyCommands);
+        completion = new CommandCompletionService(setupWizard, confirmations, historyCommands, administration);
 
         providerLifecycle = providers.addLifecycleListener(ignored -> recomposeForProviderLifecycle());
         startup.ifPresent(this::publishStartup);

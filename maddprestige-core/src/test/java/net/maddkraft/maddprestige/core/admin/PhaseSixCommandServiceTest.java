@@ -238,6 +238,11 @@ class PhaseSixCommandServiceTest {
         assertTrue(detailedPreview.successful(), detailedPreview.code() + ": " + detailedPreview.lines());
         assertTrue(normalPreview.messages().stream().anyMatch(message ->
                 message.key().equals("command.config.preview_summary")));
+        MessageReference previewSummary = normalPreview.messages().stream()
+                .filter(message -> message.key().equals("command.config.preview_summary"))
+                .findFirst().orElseThrow();
+        assertTrue(previewSummary.argument("count").isPresent());
+        assertFalse(previewSummary.argument("documents").isPresent());
         assertTrue(normalPreview.messages().stream().anyMatch(message ->
                 message.key().equals("command.setup.experience_requirement")));
         assertTrue(normalPreview.messages().stream().noneMatch(message ->
@@ -477,6 +482,19 @@ class PhaseSixCommandServiceTest {
 
         assertTrue(removed.successful());
         assertEquivalentDrafts(fixture, owner, directDraft, commandDraft);
+
+        UUID directCostDraft = fixture.configuration.beginDraft(owner, "direct-cost-segment");
+        UUID commandCostDraft = fixture.configuration.beginDraft(owner, "command-cost-segment");
+        String costScalingPath = "prestige.cost-scaling.payment";
+        fixture.configuration.addStructuredObject(owner, directCostDraft, costScalingPath + ".segments",
+                Optional.empty(), continued);
+        var costAdded = fixture.commands.execute(new CommandInvocation(owner, List.of(
+                "config", "segment-add", commandCostDraft.toString(), costScalingPath,
+                "1", "unlimited", "LINEAR", "EXPLICIT_BASE", "1", "0.5", "-")))
+                .toCompletableFuture().join();
+
+        assertTrue(costAdded.successful());
+        assertEquivalentDrafts(fixture, owner, directCostDraft, commandCostDraft);
     }
 
     @Test

@@ -104,6 +104,7 @@ public final class PaperGuiInventory implements PaperGuiViewHolder {
             case MILESTONE -> Material.BEACON;
             case CONFIRM -> Material.LIME_CONCRETE;
             case STAFF -> Material.COMPASS;
+            case OVERVIEW -> Material.SPYGLASS;
             case PLAYERS -> Material.PLAYER_HEAD;
             case PLAYER_INFORMATION -> Material.NAME_TAG;
             case CONFIGURATION -> Material.KNOWLEDGE_BOOK;
