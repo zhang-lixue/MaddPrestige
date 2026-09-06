@@ -211,9 +211,7 @@ class PhaseEightDPublicDocumentationTest {
                 "maddprestige-persistence/pom.xml", "maddprestige-platform-paper/pom.xml",
                 "maddprestige-integrations/pom.xml", "maddprestige-testkit/pom.xml",
                 "maddprestige-distribution/pom.xml", "examples/provider-sdk/pom.xml",
-                "qualification/phase8b-paper-harness/pom.xml",
                 "qualification/phase8c-paper-harness/pom.xml",
-                "qualification/phase8d-paper-harness/pom.xml",
                 "qualification/phase8e-alpha-provider/pom.xml",
                 "qualification/phase8e-beta-provider/pom.xml",
                 "qualification/phase8e-paper-harness/pom.xml");
