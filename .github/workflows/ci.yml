@@ -23,7 +23,9 @@ jobs:
       - name: Verify frozen V1 source and artifacts
         shell: bash
         run: |
-          git diff --exit-code v1.2.0-baseline -- src dist baseline/v1/runtime baseline/v1/external ':(exclude)src/main/resources/plugin.yml'
+          git diff --exit-code v1.2.0-baseline -- src dist/MaddPrestige-1.2.0.jar baseline/v1/runtime baseline/v1/external ':(exclude)src/main/resources/plugin.yml'
+          test ! -e dist/MaddPrestige-1.0.0.jar
+          test ! -e dist/MaddPrestige-1.1.0.jar
           test -z "$(git status --porcelain -- src dist baseline/v1/runtime baseline/v1/external)"
       - name: Verify authorized V2 production descriptor
         shell: bash

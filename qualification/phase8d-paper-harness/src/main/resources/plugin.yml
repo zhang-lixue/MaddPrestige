@@ -1,8 +1,0 @@
-name: Phase8D-Harness
-version: '1.0.0'
-main: net.maddkraft.qualification.phase8d.Phase8DQualificationHarness
-description: Disposable two-boot Phase 8D A70 qualification harness.
-author: MaddKraft
-api-version: '26.1.2'
-load: POSTWORLD
-depend: [MaddPrestige, LuckPerms]
