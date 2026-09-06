@@ -106,6 +106,18 @@ class PaperMessageServiceTest {
     }
 
     @Test
+    @DisplayName("[Phase 9G] Doctor summary renders its bounded diagnostic counts through the strict allowlist")
+    void doctorSummaryCountsAreNarrowlyAllowed() {
+        var summary = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.doctor.summary",
+                "blocked", 0, "warnings", 1, "deferred", 2, "healthy", 8);
+
+        assertEquals("Blocked=0; warnings=1; deferred=2; healthy=8", plain(messages.render(summary)));
+        assertThrows(IllegalArgumentException.class, () -> messages.render(
+                "command.doctor.summary", Map.of("arbitrary", "8")));
+    }
+
+    @Test
     @DisplayName("[Phase 9F-C2] Guided Money and Reward reviews render concise gameplay values")
     void guidedConfigurationReviewsRenderConciseGameplayValues() {
         assertEquals("Active Configuration", plain(messages.render(

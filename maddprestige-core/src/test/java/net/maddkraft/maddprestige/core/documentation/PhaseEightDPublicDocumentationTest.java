@@ -65,7 +65,7 @@ class PhaseEightDPublicDocumentationTest {
             "examples/provider-sdk/README.md", "docs/V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md",
             "docs/V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md", "examples/numeric-prestige/README.md");
     private static final Set<String> COMMAND_ROOTS = Set.of("help", "status", "rankup", "prestige", "confirm",
-            "simulate", "why", "player", "gui", "config", "setup", "doctor", "locale", "staff");
+            "simulate", "why", "player", "gui", "admin", "history", "config", "setup", "doctor", "locale", "staff");
     private static final Pattern LINK = Pattern.compile("\\[[^]]+]\\((?!https?://|#)([^)]+)\\)");
     private static final Pattern COMMAND = Pattern.compile("/maddprestige(?:\\s+([a-z][a-z-]*))?");
     private static final Pattern PERMISSION = Pattern.compile("`(maddprestige(?:\\.[a-z]+)+)`");

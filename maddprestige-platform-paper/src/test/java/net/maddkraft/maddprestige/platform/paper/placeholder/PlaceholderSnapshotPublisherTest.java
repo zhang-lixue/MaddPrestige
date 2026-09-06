@@ -12,10 +12,10 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
@@ -106,7 +106,7 @@ class PlaceholderSnapshotPublisherTest {
         private final AtomicReference<PlaceholderSnapshotPublisher.InitializationResult> initialization =
                 new AtomicReference<>(PlaceholderSnapshotPublisher.InitializationResult.dormantResult());
         private final AtomicInteger initializations = new AtomicInteger();
-        private final List<LogRecord> records = new ArrayList<>();
+        private final List<LogRecord> records = new CopyOnWriteArrayList<>();
         private final Logger logger = Logger.getLogger("placeholder-publisher-" + playerId);
         private final PlaceholderSnapshotPublisher publisher;
         private Runnable scheduledTick;

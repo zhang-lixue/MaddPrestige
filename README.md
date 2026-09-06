@@ -5,12 +5,12 @@ player progression state is a durable non-negative integer: a successful operati
 to administrator-configured requirements, independent costs, rewards, cooldown, and optional maximum. Stages, ranks,
 LuckPerms groups, seasons, and world resets are not intrinsic to Prestige.
 
-Phase 9D is accepted and merged: the candidate passed an isolated 42-plugin MaddKraft clone, genuine player P0→P1
-and P1→P2 operations, provider/scaling/session checks, and deterministic exactly-once crash recovery. Phase 9E is the
-uncommitted production-readiness/backend-freeze review. It is not GA or production-ready and authorizes no live
-deployment, V1 player import, or production balance.
+Phase 9F is owner-accepted and checkpointed: the Player GUI, read-only Staff GUI, safe player administration,
+revision-bound configuration editors, and final usability pass are complete. Phase 9G is the final release
+qualification. It authorizes no live deployment, V1 player import, production balance, or first-party Prestige Shop;
+the Shop is intentionally deferred until live/beta player feedback defines a useful reward catalog. The candidate is not GA or production-ready until release qualification and owner publication approval are complete.
 
-## Final Phase 8 release candidate
+## Final Phase 9 release candidate
 
 - Java 25.
 - Paper 26.1.2 build 74 stable.
@@ -61,5 +61,5 @@ installation or configuration instructions.
 
 The shaded release candidate is `maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar`; the public API
 coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.1`, and the aggregate CycloneDX SBOM is
-`target/bom.json`. The Phase 9E review freezes the non-GUI backend; final GUI/UI work, owner deployment approval, and
-production balance selection remain outside this checkpoint.
+`target/bom.json`. Phase 9 preserves the frozen numeric-Prestige backend while adding the completed Player and Staff
+GUI surfaces. Owner deployment approval and production balance selection remain outside this checkpoint.

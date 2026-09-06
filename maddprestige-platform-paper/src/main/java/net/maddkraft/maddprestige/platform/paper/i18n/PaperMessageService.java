@@ -34,11 +34,13 @@ public final class PaperMessageService {
     private static final Pattern KEY = Pattern.compile("[a-z0-9][a-z0-9_.-]{0,127}");
     private static final MiniMessage STRICT_MINI_MESSAGE = MiniMessage.builder().strict(true).build();
     private static final Set<String> TEMPLATE_ARGUMENTS = Set.of(
-            "acknowledgement", "active", "after", "allowed", "amount", "base", "before", "blockers", "canonical",
+            "acknowledgement", "active", "after", "allowed", "amount", "base", "before", "blocked", "blockers",
+            "canonical",
             "code",
             "completion", "component", "confirmation", "configured_cost", "configured_reward", "count", "counter",
             "cooldown_remaining", "currency", "current", "current_lifetime",
-            "current_prestige", "current_stage", "delta", "detail", "disposition", "document", "draft", "expires",
+            "current_prestige", "current_stage", "deferred", "delta", "detail", "disposition", "document", "draft",
+            "expires",
             "eligible_at", "errors", "findings", "formula", "group", "hash", "healthy", "id", "intended_target",
             "kind",
             "indicator", "label", "level", "lifetime", "missing",
@@ -52,7 +54,7 @@ public final class PaperMessageService {
             "scaling", "scope", "stage",
             "source", "status", "target", "threshold", "total",
             "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "uuid", "value", "variant",
-            "version");
+            "version", "warnings");
     private static final TagResolver VALIDATION_ARGUMENTS = TagResolver.resolver(TEMPLATE_ARGUMENTS.stream()
             .map(name -> Placeholder.unparsed(name, "value"))
             .toList());

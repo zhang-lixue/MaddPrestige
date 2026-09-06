@@ -22,6 +22,9 @@ The ordinary player command is `/prestige`, which silently opens the Player GUI 
 
 | Command family | Permission |
 |---|---|
+| `/maddprestige admin` | `maddprestige.admin.gui` | Open the Staff Dashboard; deeper views/actions require their narrow permissions |
+| `/maddprestige history <player> [page]` | `maddprestige.admin.players.view` | Canonical selected-player history with paginated details |
+| `/maddprestige history details <player> <entry>` | `maddprestige.admin.players.view` | One canonical history/audit entry |
 | `/maddprestige doctor [details]` | `maddprestige.admin.doctor` |
 | `/maddprestige setup ...` | `maddprestige.admin.setup` |
 | `/maddprestige setup preview [session-id] [details]` | `maddprestige.admin.setup` |
@@ -48,7 +51,7 @@ localized even when rendered prose is.
 Normal player and administrator preview includes the effective Prestige transition, requirements, costs, rewards, and
 blockers. `details` expands Doctor, Why, setup preview, and simulation with provenance. `config get` returns one
 effective value with `CONFIGURED`, `INHERITED_DEFAULT`, or `NOT_SET`; `config explain` adds provenance and schema
-metadata. `config validate` is concise and `config diff` is the full draft diagnostic view.
+metadata. `config draft` returns actor-owned `[Copy Draft ID]`, `[Validate]`, `[Diff]`, and `[Cancel]` actions; authorized completion suggests only retained draft IDs. `config validate` is concise and `config diff` is the full draft diagnostic view.
 
 Numeric Prestige is the only active progression operation. A caller that invokes the old typed `rankup` form receives
 an explicit compatibility-only blocker, but ordinary usage/help/completion does not advertise it. No stage-management,

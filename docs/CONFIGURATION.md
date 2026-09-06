@@ -35,7 +35,9 @@ into configuration.
 
 A requirement reads a typed provider metric and decides eligibility. A requirement never consumes its target. A cost
 names a provider-owned value consumed only by a confirmed operation. A reward is an independent additive action. The
-Prestige lifecycle references their stable IDs:
+guided Money editor is a bounded exception: it intentionally keeps the Money requirement and consumed cost paired at
+one canonical effective amount, including scaling and overrides. Advanced YAML may still model independent requirements
+and costs. The Prestige lifecycle references their stable IDs:
 
 ```yaml
 prestige:
@@ -106,7 +108,8 @@ authoring path.
 
 ## Draft workflow
 
-1. `config draft` creates a private resumable draft.
+1. `config draft` creates a private resumable draft and returns `[Copy Draft ID]`, `[Validate]`, `[Diff]`, and
+   `[Cancel]` actions. Completion exposes only retained drafts owned by the authorized actor.
 2. `config get`, `config explain`, `config search`, and `config list` inspect effective schema-owned paths.
 3. `config set`, `config add`, and `config remove` edit scalar/list paths. Scaling segments use the bounded
    `config segment-add`, `config segment-edit`, and `config segment-remove` commands; each accepts typed

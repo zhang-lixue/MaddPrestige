@@ -28,6 +28,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
@@ -2049,13 +2050,18 @@ class PhaseSixConfigurationAdministrationTest {
         var authority = fixture.service.prepareAcknowledgement(OWNER, draft);
         CountDownLatch start = new CountDownLatch(1);
 
-        var first = CompletableFuture.supplyAsync(() -> confirm(fixture, authority.acknowledgementId(), start));
-        var second = CompletableFuture.supplyAsync(() -> confirm(fixture, authority.acknowledgementId(), start));
-        start.countDown();
-        List<String> results = List.of(first.join(), second.join());
+        try (var workers = Executors.newFixedThreadPool(2)) {
+            var first = CompletableFuture.supplyAsync(
+                    () -> confirm(fixture, authority.acknowledgementId(), start), workers);
+            var second = CompletableFuture.supplyAsync(
+                    () -> confirm(fixture, authority.acknowledgementId(), start), workers);
+            start.countDown();
+            List<String> results = List.of(first.join(), second.join());
 
-        assertEquals(1, results.stream().filter("success"::equals).count());
-        assertEquals(1, results.stream().filter("config.acknowledgement.already_used"::equals).count());
+            assertEquals(1, results.stream().filter("success"::equals).count(), results::toString);
+            assertEquals(1, results.stream().filter("config.acknowledgement.already_used"::equals).count(),
+                    results::toString);
+        }
         assertEquals(2, fixture.history.recent(10).size());
     }
 

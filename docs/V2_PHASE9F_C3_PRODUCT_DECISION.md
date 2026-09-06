@@ -13,4 +13,4 @@ revision-bound administration separate from progression. Those boundaries leave 
 speculative abstraction now. Future design starts only after player evidence defines the rewards, Prestige gates,
 currency and cost model, purchase limits, persistence, and audit requirements.
 
-The next planned phase is **Phase 9F-D — final GUI polish and usability**.
+Phase 9F-D is complete. The next phase is **Phase 9G — final acceptance and release qualification**.
