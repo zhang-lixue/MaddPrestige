@@ -16,6 +16,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.regex.Pattern;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -73,6 +78,79 @@ class PaperMessageServiceTest {
         assertEquals("<click:run_command:'/op me'><red><value>legacy�name</red></click>",
                 rendered);
         assertTrue(rendered.contains("<value>"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 correction] Guided configuration levels render through the strict argument allowlist")
+    void guidedConfigurationLevelArgumentIsNarrowlyAllowed() {
+        var level = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.action.staff.prestige_level", "level", 6);
+
+        assertEquals("6", plain(messages.render(level)));
+        assertThrows(IllegalArgumentException.class, () -> messages.render(
+                "gui.action.staff.prestige_level", Map.of("arbitrary", "6")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] Configuration preview renders its document count through the strict allowlist")
+    void configurationPreviewDocumentCountIsNarrowlyAllowed() {
+        var summary = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.config.preview_summary",
+                "draft", "11111111-1111-4111-8111-111111111111",
+                "status", "VALID", "count", 2, "findings", 0);
+
+        assertEquals("Draft 11111111-1111-4111-8111-111111111111: VALID; changed documents=2; findings=0",
+                plain(messages.render(summary)));
+        assertThrows(IllegalArgumentException.class, () -> messages.render(
+                "command.config.preview_summary", Map.of("arbitrary", "2")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9G] Doctor summary renders its bounded diagnostic counts through the strict allowlist")
+    void doctorSummaryCountsAreNarrowlyAllowed() {
+        var summary = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.doctor.summary",
+                "blocked", 0, "warnings", 1, "deferred", 2, "healthy", 8);
+
+        assertEquals("Blocked=0; warnings=1; deferred=2; healthy=8", plain(messages.render(summary)));
+        assertThrows(IllegalArgumentException.class, () -> messages.render(
+                "command.doctor.summary", Map.of("arbitrary", "8")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Money and Reward reviews render concise gameplay values")
+    void guidedConfigurationReviewsRenderConciseGameplayValues() {
+        assertEquals("Active Configuration", plain(messages.render(
+                "gui.item.staff.configuration.detail.title")));
+        assertEquals("Prestige Range: 1+", plain(messages.render(
+                "gui.item.staff.configuration.range", Map.of("value", "1+"))));
+        assertEquals("Scaling Profiles: 1", plain(messages.render(
+                "gui.item.staff.configuration.scaling", Map.of("count", 1))));
+        assertEquals("Configure Prestige levels.", plain(messages.render(
+                "gui.item.staff.prestige_levels.lore")));
+        assertEquals("Revision: r-current", plain(messages.render(
+                "gui.item.staff.configuration.revision", Map.of("revision", "r-current"))));
+
+        assertEquals("Money", plain(messages.render("gui.item.staff.money.review.title")));
+        assertEquals("Prestige 6", plain(messages.render(
+                "gui.item.staff.money.review.level", Map.of("level", 6))));
+        assertEquals("$7 → $6", plain(messages.render(
+                "gui.item.staff.money.review.change", Map.of("before", "7", "after", "6"))));
+
+        assertEquals("Reward", plain(messages.render("gui.item.staff.reward.review.title")));
+        assertEquals("Prestige 6", plain(messages.render(
+                "gui.item.staff.reward.review.level", Map.of("level", 6))));
+        assertEquals("$1 → $2", plain(messages.render(
+                "gui.item.staff.reward.review.change", Map.of("before", "1", "after", "2"))));
+
+        assertEquals("Type: Linear", plain(messages.render(
+                "gui.item.staff.scaling.type", Map.of("mode", "Linear"))));
+        assertEquals("Effective at Prestige 6: 6", plain(messages.render(
+                "gui.item.staff.scaling.effective", Map.of("level", 6, "value", "6"))));
+        assertEquals("0.5 → 1.25", plain(messages.render(
+                "gui.item.staff.scaling.review.change", Map.of("before", "0.5", "after", "1.25"))));
+        assertEquals("Invalid increment. Enter a non-negative plain decimal.", plain(messages.render(
+                "gui.staff.scaling_input.invalid")));
     }
 
     @Test
@@ -159,6 +237,220 @@ class PaperMessageServiceTest {
                 net.maddkraft.maddprestige.platform.paper.admin.PaperGuiInventory.renderTitle(view, messages)));
         assertEquals("FAZA SIEDEM", plain(messages.render(
                 net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of("phase7.usage"))));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B] Canonical history Details action uses an exact injection-safe command target")
+    void historyEntryRendersClickableStableDetailTarget() {
+        String entry = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        var reference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.entry.recovered",
+                "before", 2, "after", 3, "status", "Recovered",
+                "value", "Sep 2, 2026 • 1:24 PM", "player", "tmydwc", "id", entry);
+        var response = net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                "history.summary", List.of(reference));
+
+        Component rendered = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(response, messages).getFirst();
+
+        assertTrue(plain(rendered).contains("2 → 3  Recovered"));
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND,
+                rendered.clickEvent().action());
+        assertEquals("/maddprestige history details tmydwc " + entry,
+                rendered.clickEvent().value());
+
+        var unsafe = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.entry.completed", "before", 1, "after", 2,
+                "status", "Completed", "value", "now", "player", "bad player", "id", entry);
+        Component safelyUnlinked = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(unsafe)), messages).getFirst();
+        assertEquals(null, safelyUnlinked.clickEvent());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B UX] History pages expose only safe available Previous and Next actions")
+    void historyPaginationRendersSafeDirectionalActions() {
+        var firstReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.page", "current", 1, "total", 2, "player", "tmydwc",
+                "previous", "", "next", 2);
+        Component first = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(firstReference)), messages).getFirst();
+
+        assertEquals("Page 1 / 2   [Next →]", plain(first));
+        assertEquals(null, textNodeOrNull(first, "[← Previous]"));
+        Component next = textNode(first, "[Next →]");
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND,
+                next.clickEvent().action());
+        assertEquals("/maddprestige history tmydwc 2", next.clickEvent().value());
+
+        var lastReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.page", "current", 2, "total", 2, "player", "tmydwc",
+                "previous", 1, "next", "");
+        Component last = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(lastReference)), messages).getFirst();
+
+        assertEquals("[← Previous]   Page 2 / 2", plain(last));
+        assertEquals(null, textNodeOrNull(last, "[Next →]"));
+        Component previous = textNode(last, "[← Previous]");
+        assertEquals(net.kyori.adventure.text.event.ClickEvent.Action.RUN_COMMAND,
+                previous.clickEvent().action());
+        assertEquals("/maddprestige history tmydwc 1", previous.clickEvent().value());
+
+        var unsafeReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "command.history.page", "current", 1, "total", 2, "player", "bad player",
+                "previous", "", "next", 2);
+        Component unsafe = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
+                        "history.summary", List.of(unsafeReference)), messages).getFirst();
+        assertEquals("Page 1 / 2", plain(unsafe));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A correction] Player requirement count omits evaluation terminology")
+    void playerRequirementProgressArgumentsRender() {
+        var progress = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirements.progress.incomplete", "progress", 1, "total", 2);
+
+        assertEquals("1 / 2", plain(messages.render(progress)));
+        assertEquals("", plain(messages.render("gui.item.separator")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C1] Player root and Set/Reset action labels remain concise and distinct")
+    void staffPrestigeAdjustmentPresentationRenders() {
+        assertEquals("tmydwc", plain(messages.render("gui.title.staff.player", Map.of("player", "tmydwc"))));
+        assertEquals("tmydwc Set Prestige", plain(messages.render(
+                "gui.title.staff.set_prestige", Map.of("player", "tmydwc"))));
+        assertEquals("tmydwc Set Prestige", plain(messages.render(
+                "gui.title.staff.review_set_prestige", Map.of("player", "tmydwc"))));
+        assertEquals("tmydwc Reset Prestige", plain(messages.render(
+                "gui.title.staff.review_reset_prestige", Map.of("player", "tmydwc"))));
+        assertEquals("tmydwc is already at Prestige 0.", plain(messages.render(
+                "gui.staff.prestige_already_baseline", Map.of("player", "tmydwc"))));
+        assertEquals("Confirm", plain(messages.render("gui.action.staff.confirm_prestige_adjustment")));
+        assertEquals("Reset", plain(messages.render("gui.action.staff.reset_prestige_adjustment")));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A correction] Preview balance accepts and renders the projected canonical value")
+    void previewBalanceProjectionArgumentsRender() {
+        var projection = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.balance.projected", "current", "$7", "projected", "$1");
+
+        assertEquals("$7 → $1", plain(messages.render(projection)));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-B] Blocked balance shortfall is concise and warning-colored")
+    void blockedBalanceShortfallRenders() {
+        var shortfall = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.balance.missing", "missing", "$7");
+
+        Component rendered = messages.render(shortfall);
+
+        assertEquals("Needs $7 more", plain(rendered));
+        assertAllTextColor(rendered, NamedTextColor.RED);
+        assertFalse(rendered.decoration(TextDecoration.BOLD) == TextDecoration.State.TRUE);
+        assertFalse(rendered.decoration(TextDecoration.ITALIC) == TextDecoration.State.TRUE);
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A owner UX] Preview state actions are concise, bold, and semantically colored")
+    void eligiblePlayerGuiPresentationUsesGameplayHierarchy() {
+        Component ready = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirements.progress.complete", "progress", 2, "total", 2));
+        Component blocked = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirements.progress.incomplete", "progress", 1, "total", 2));
+        Component money = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirement.money.met", "label", "Money", "current", "$8", "target", "$5"));
+        Component skill = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
+                "gui.item.requirement.total_skill_level.met", "label", "Total Skill Level",
+                "current", 1, "target", 1));
+        Component confirmHeading = messages.render("gui.action.confirm");
+        Component blockedAction = messages.render("gui.item.blocked.title");
+
+        assertAllTextColor(ready, NamedTextColor.GREEN);
+        assertAllTextColor(blocked, NamedTextColor.RED);
+        assertEffectiveTextColor(money, "✓", NamedTextColor.GREEN);
+        assertEffectiveTextColor(money, "Money", NamedTextColor.GOLD);
+        assertNeutralTextColor(money, "$8");
+        assertNeutralTextColor(money, "$5");
+        assertEffectiveTextColor(skill, "✓", NamedTextColor.GREEN);
+        assertEffectiveTextColor(skill, "Total Skill Level", NamedTextColor.AQUA);
+        assertNeutralTextColor(skill, "1");
+        assertEquals("Confirm", plain(confirmHeading));
+        assertEffectiveTextColor(confirmHeading, "Confirm", NamedTextColor.GREEN);
+        assertEquals(TextDecoration.State.TRUE,
+                textNode(confirmHeading, "Confirm").decoration(TextDecoration.BOLD));
+        assertEquals("Not Ready", plain(blockedAction));
+        assertEffectiveTextColor(blockedAction, "Not Ready", NamedTextColor.RED);
+        assertEquals(TextDecoration.State.TRUE,
+                textNode(blockedAction, "Not Ready").decoration(TextDecoration.BOLD));
+        String playerFacing = (plain(confirmHeading) + " " + plain(blockedAction))
+                .toLowerCase(java.util.Locale.ROOT);
+        assertFalse(playerFacing.contains("session-bound"));
+        assertFalse(playerFacing.contains("player-bound"));
+        assertFalse(playerFacing.contains("single-use"));
+        assertFalse(playerFacing.contains("revalidat"));
+        assertFalse(playerFacing.contains("token"));
+        assertFalse(playerFacing.contains("operation"));
+        assertFalse(playerFacing.contains("backend"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Requirement editor tooltips use concise staff-facing language")
+    void requirementEditorTooltipsAreConcise() {
+        assertEquals("Current: $6", plain(messages.render(
+                "gui.item.staff.config_requirements.money.value", Map.of("value", "6"))));
+        assertEquals("Current: 1", plain(messages.render(
+                "gui.item.staff.config_requirements.total_skill_level.current", Map.of("current", "1"))));
+        assertEquals("Read-only", plain(messages.render(
+                "gui.item.staff.config_requirements.read_only")));
+        assertEquals("Edit this requirement in configuration.", plain(messages.render(
+                "gui.item.staff.config_requirements.read_only.edit")));
+
+        String combined = String.join(" ",
+                plain(messages.render("gui.item.staff.config_requirements.read_only")),
+                plain(messages.render("gui.item.staff.config_requirements.read_only.edit")));
+        assertFalse(combined.toLowerCase(java.util.Locale.ROOT).contains("yaml-first"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] GUI fallback copy stays concise and functional headings stay consistent")
+    void finalGuiPolishUsesConciseCatalogOwnedPresentation() {
+        assertEquals("Configuration editing is unavailable.", plain(messages.render(
+                "gui.staff.configuration_administration_unavailable")));
+        assertEquals("This input is outdated. Reopen the editor.", plain(messages.render(
+                "gui.staff.configuration_revision_missing")));
+        assertEquals("This configuration action is unavailable. Reopen the current view.", plain(messages.render(
+                "gui.mutation.kind_invalid")));
+        assertEquals("Money editing is unavailable.", plain(messages.render(
+                "gui.item.staff.level.money.unavailable")));
+        assertEquals("Reward editing is unavailable.", plain(messages.render(
+                "gui.item.staff.level.reward.unavailable")));
+        assertEquals("Click to edit this reward.", plain(messages.render(
+                "gui.item.staff.level.reward.edit")));
+        assertEquals("Click to inspect scaling.", plain(messages.render(
+                "gui.item.staff.level.scaling.open")));
+        assertEquals("Read-only.", plain(messages.render("gui.item.staff.scaling.yaml")));
+        assertEquals("This parameter is read-only.", plain(messages.render(
+                "gui.item.staff.scaling.read_only")));
+        assertEquals("Prestige preview unavailable.", plain(messages.render(
+                "gui.item.staff.prestige_preview.unavailable")));
+
+        Component milestones = messages.render("gui.item.milestones.title");
+        assertEquals("Milestones", plain(milestones));
+        assertEquals(TextDecoration.State.TRUE,
+                textNode(milestones, "Milestones").decoration(TextDecoration.BOLD));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-A owner UX] Player GUI close control uses a concise label")
+    void playerGuiCloseLabelIsConcise() {
+        assertEquals("Close", plain(messages.render("gui.action.close")));
     }
 
     @Test
@@ -306,6 +598,20 @@ class PaperMessageServiceTest {
                 "config.draft.changed_during_prepare", "config.draft.concurrent_change",
                 "config.draft.concurrent_edit", "config.draft.expired", "config.draft.owner_mismatch",
                 "config.draft.unknown", "config.edit.rejected", "config.history.finalize_failed",
+                "config.gui.level.invalid", "config.gui.level_page.invalid", "config.gui.money.invalid",
+                "config.gui.money.non_terminating", "config.gui.money.pair_mismatch",
+                "config.gui.money.unavailable",
+                "config.gui.money.unsupported", "config.gui.money_page.invalid",
+                "config.gui.requirements.unavailable",
+                "config.gui.total_skill_level.invalid", "config.gui.total_skill_level.unsupported",
+                "config.gui.reward.invalid", "config.gui.reward.unavailable",
+                "config.gui.reward.unsupported", "config.gui.reward_page.invalid",
+                "config.gui.scaling.invalid", "config.gui.scaling.override.invalid",
+                "config.gui.scaling.unsupported",
+                "config.gui.review.actor_mismatch", "config.gui.review.expired",
+                "config.gui.review.replayed", "config.guided_money.invariant",
+                "config.guided_money.rejected", "config.guided_scaling.rejected",
+                "config.guided_scaling_override.rejected",
                 "config.list.rejected", "config.path.not_editable", "config.path.not_listable",
                 "config.path.type_mismatch", "config.path.unknown", "config.preview.candidate_missing",
                 "config.preview.required", "config.preview.stale", "config.remove.rejected",
@@ -318,9 +624,19 @@ class PaperMessageServiceTest {
                 "config.validation.blocked", "config.value.not_allowed", "confirmation.actor_mismatch",
                 "confirmation.already_used", "confirmation.ambiguous", "confirmation.config_stale",
                 "confirmation.expired", "confirmation.none_pending", "confirmation.revalidation_failed",
-                "confirmation.session_ended", "confirmation.unknown", "gui.action.forged", "gui.action.stale",
-                "gui.mutation.context_missing", "gui.mutation.kind_invalid", "gui.session.actor_mismatch",
-                "gui.session.expired", "gui.target.missing", "operation.preview.blocked", "permission.denied",
+                "confirmation.session_ended", "confirmation.unknown", "gui.action.forged",
+                "gui.action.player_invalid", "gui.action.replayed", "gui.action.staff_invalid",
+                "gui.action.stale",
+                "gui.mutation.context_missing", "gui.mutation.kind_invalid",
+                "gui.player.self_required", "gui.player.target_missing", "gui.session.actor_mismatch",
+                "gui.session.expired", "gui.staff.player_required", "gui.staff.player_unknown",
+                "gui.staff.configuration_administration_unavailable",
+                "gui.staff.configuration_level_invalid",
+                "gui.staff.configuration_level_missing", "gui.staff.configuration_revision_missing",
+                "gui.staff.configuration_review_missing",
+                "gui.staff.prestige_administration_unavailable", "gui.staff.prestige_review_missing",
+                "gui.staff.target_missing", "gui.staff.unavailable", "gui.target.missing",
+                "operation.preview.blocked", "permission.denied",
                 "rankup.compatibility_only",
                 "setup.acknowledgement.unknown", "setup.already_active", "setup.baseline.unknown",
                 "setup.draft.invalid", "setup.group.missing", "setup.incomplete",
@@ -348,8 +664,8 @@ class PaperMessageServiceTest {
         Map<String, String> identities = net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation
                 .administrationSemanticIdentities();
 
-        assertEquals(102, identities.size());
-        assertEquals(102, new java.util.HashSet<>(identities.values()).size(),
+        assertEquals(143, identities.size());
+        assertEquals(143, new java.util.HashSet<>(identities.values()).size(),
                 "each reviewed code owns one exact semantic identity");
         assertTrue(java.util.Collections.disjoint(new java.util.HashSet<>(identities.values()), Set.of(
                 "permission", "expired", "authority", "stale", "configuration", "missing", "invalid",
@@ -405,20 +721,29 @@ class PaperMessageServiceTest {
                 Map.entry("config.acknowledgement.actor_mismatch", 2),
                 Map.entry("config.acknowledgement.already_used", 2),
                 Map.entry("config.acknowledgement.unknown", 2),
-                Map.entry("config.active.absent", 3),
+                Map.entry("config.active.absent", 4),
                 Map.entry("config.apply.failed", 2),
                 Map.entry("config.apply.kind_mismatch", 3),
                 Map.entry("config.document.missing", 4),
                 Map.entry("config.draft.apply_in_progress", 2),
                 Map.entry("config.draft.cancelled", 2),
                 Map.entry("config.draft.changed_during_apply", 2),
-                Map.entry("config.draft.concurrent_edit", 4),
+                Map.entry("config.draft.concurrent_edit", 8),
+                Map.entry("config.gui.money.invalid", 2),
+                Map.entry("config.gui.money.pair_mismatch", 2),
+                Map.entry("config.gui.money.unsupported", 2),
+                Map.entry("config.gui.review.actor_mismatch", 5),
+                Map.entry("config.gui.review.expired", 5),
+                Map.entry("config.gui.review.replayed", 5),
+                Map.entry("config.gui.reward.invalid", 2),
+                Map.entry("config.guided_scaling_override.rejected", 2),
                 Map.entry("config.path.not_listable", 2),
-                Map.entry("config.path.unknown", 4),
+                Map.entry("config.path.unknown", 11),
                 Map.entry("config.preview.required", 2),
                 Map.entry("config.preview.stale", 2),
-                Map.entry("config.revision.stale", 2),
-                Map.entry("config.validation.blocked", 2),
+                Map.entry("config.revision.stale", 3),
+                Map.entry("config.validation.blocked", 7),
+                Map.entry("gui.action.player_invalid", 3),
                 Map.entry("rankup.compatibility_only", 4),
                 Map.entry("setup.preview.required", 2),
                 Map.entry("stage.change.remap_invalid", 2),
@@ -430,8 +755,13 @@ class PaperMessageServiceTest {
                 "config.acknowledgement.unknown", "config.active.absent", "config.apply.kind_mismatch",
                 "config.document.missing", "config.draft.apply_in_progress", "config.draft.cancelled",
                 "config.draft.changed_during_apply", "config.draft.concurrent_edit", "config.path.not_listable",
-                "config.path.unknown", "config.preview.required", "config.preview.stale", "config.revision.stale",
-                "rankup.compatibility_only", "setup.preview.required", "stage.change.remap_invalid",
+                "config.gui.money.invalid", "config.gui.money.pair_mismatch", "config.gui.money.unsupported",
+                "config.gui.review.actor_mismatch", "config.gui.review.expired",
+                "config.gui.review.replayed", "config.gui.reward.invalid",
+                "config.guided_scaling_override.rejected", "config.path.unknown", "config.preview.required",
+                "config.preview.stale", "config.revision.stale",
+                "gui.action.player_invalid", "rankup.compatibility_only", "setup.preview.required",
+                "stage.change.remap_invalid",
                 "stage.compatibility_only");
         Set<String> discriminated = Set.of("config.apply.failed", "config.validation.blocked");
         java.util.HashSet<String> reviewed = new java.util.HashSet<>(compatible);
@@ -483,8 +813,8 @@ class PaperMessageServiceTest {
             assertTrue(audited.add(rows.group(1)), "duplicate single-source audit row: " + rows.group(1));
         }
 
-        assertEquals(81, singleSource.size());
-        assertEquals(21, multiSource.size());
+        assertEquals(113, singleSource.size());
+        assertEquals(30, multiSource.size());
         assertEquals(singleSource, audited,
                 "a new or reclassified single-source code requires deliberate semantic-audit evidence");
         java.util.HashSet<String> accounted = new java.util.HashSet<>(audited);
@@ -1219,5 +1549,69 @@ class PaperMessageServiceTest {
 
     private static String plain(net.kyori.adventure.text.Component component) {
         return PlainTextComponentSerializer.plainText().serialize(component);
+    }
+
+    private static void assertAllTextColor(Component component, NamedTextColor expected) {
+        assertAllTextColor(component, null, expected);
+    }
+
+    private static void assertAllTextColor(Component component, TextColor inherited, NamedTextColor expected) {
+        TextColor effective = component.color() == null ? inherited : component.color();
+        if (component instanceof TextComponent text && !text.content().isBlank()) {
+            assertEquals(expected, effective, text.content());
+        }
+        component.children().forEach(child -> assertAllTextColor(child, effective, expected));
+    }
+
+    private static void assertEffectiveTextColor(
+            Component component,
+            String text,
+            NamedTextColor expected) {
+        assertEquals(expected, effectiveTextColor(component, text, null));
+    }
+
+    private static void assertNeutralTextColor(Component component, String text) {
+        TextColor color = effectiveTextColor(component, text, null);
+        assertTrue(color == null || color.equals(NamedTextColor.WHITE) || color.equals(NamedTextColor.GRAY),
+                () -> text + " uses non-neutral color " + color);
+    }
+
+    private static TextColor effectiveTextColor(Component component, String text, TextColor inherited) {
+        TextColor effective = component.color() == null ? inherited : component.color();
+        if (component instanceof TextComponent textComponent && textComponent.content().equals(text)) {
+            return effective;
+        }
+        return component.children().stream()
+                .map(child -> effectiveTextColor(child, text, effective))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static Component textNode(Component component, String text) {
+        if (component instanceof TextComponent textComponent && textComponent.content().equals(text)) {
+            return component;
+        }
+        return component.children().stream()
+                .map(child -> textNodeOrNull(child, text))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElseThrow();
+    }
+
+    private static Component textNodeOrNull(Component component, String text) {
+        if (component instanceof TextComponent textComponent && textComponent.content().equals(text)) {
+            return component;
+        }
+        return component.children().stream()
+                .map(child -> textNodeOrNull(child, text))
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+    }
+
+    private static boolean containsDecoration(Component component, TextDecoration decoration) {
+        return component.decoration(decoration) == TextDecoration.State.TRUE
+                || component.children().stream().anyMatch(child -> containsDecoration(child, decoration));
     }
 }

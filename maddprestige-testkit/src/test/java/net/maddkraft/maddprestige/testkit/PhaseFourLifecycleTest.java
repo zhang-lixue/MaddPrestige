@@ -181,6 +181,20 @@ class PhaseFourLifecycleTest {
                     .history(fixture.playerId, CURRENCY, 10).size());
             assertTrue(fixture.lifecycle.awarded(fixture.playerId, MILESTONE, "once"));
             assertEquals(1, fixture.lifecycle.history(fixture.playerId, 10).size());
+            var recent = fixture.lifecycle.recentHistory(0, 1);
+            assertEquals(1, recent.totalEntries());
+            assertEquals(fixture.playerId, recent.entries().getFirst().playerId());
+            assertTrue(fixture.lifecycle.recentHistory(1, 1).entries().isEmpty());
+            var playerHistory = fixture.lifecycle.history(fixture.playerId, 0, 1);
+            assertEquals(1, playerHistory.totalEntries());
+            assertEquals(fixture.playerId, playerHistory.entries().getFirst().playerId());
+            assertEquals(plan.operationId(), fixture.lifecycle
+                    .historyEntry(fixture.playerId, plan.operationId()).orElseThrow().operationId());
+            assertTrue(fixture.lifecycle.historyEntry(UUID.randomUUID(), plan.operationId()).isEmpty());
+            assertTrue(fixture.lifecycle.history(fixture.playerId, 1, 1).entries().isEmpty());
+            var unrelatedHistory = fixture.lifecycle.history(UUID.randomUUID(), 0, 1);
+            assertEquals(0, unrelatedHistory.totalEntries());
+            assertTrue(unrelatedHistory.entries().isEmpty());
             assertTrue(new SqlitePlayerStageRepository(database.foundation())
                     .history(fixture.playerId, 10).isEmpty());
             assertTrue(restarted.recover(100).isEmpty());

@@ -32,6 +32,20 @@ public final class BukkitPaperTaskScheduler implements PaperTaskScheduler {
         return result;
     }
 
+    @Override
+    public <T> CompletionStage<T> submitDeferred(ExecutionThread thread, Supplier<T> task) {
+        Objects.requireNonNull(thread, "thread");
+        Objects.requireNonNull(task, "task");
+        CompletableFuture<T> result = new CompletableFuture<>();
+        Runnable invocation = () -> complete(result, task);
+        if (thread == ExecutionThread.PAPER_SERVER_THREAD) {
+            Bukkit.getScheduler().runTask(plugin, invocation);
+        } else {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, invocation);
+        }
+        return result;
+    }
+
     private static <T> CompletionStage<T> completed(Supplier<T> task) {
         CompletableFuture<T> result = new CompletableFuture<>();
         complete(result, task);

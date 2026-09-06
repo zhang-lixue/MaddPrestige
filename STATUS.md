@@ -1,39 +1,33 @@
 # MaddPrestige V2 status
 
-**Current phase:** Phase 9E production-readiness consolidation and backend freeze; owner-review candidate
+**Current phase:** Phase 9G final acceptance and release qualification
 
-**Last updated:** 2026-08-30
+**Last updated:** 2026-09-06
 
-**Branch / baseline:** `v2/phase-9e` / `f25821c173bc7f2c320c7f0281378d8f41cb71c8`
+**Branch / accepted baseline:** `v2/phase-9f` / `484369d628757d71c16cc62f987fec3002327cf1`
 
 **Frozen Phase 8F provenance baseline:** `993599dc47cacc76b6372302d338d1850bf2896e`
 
-## Accepted baseline
+## Accepted Phase 9 product
 
-Phase 9D is merged and formally closed. Its isolated 42-plugin MaddKraft clone and real-player checks passed numeric
-P0→P1/P1→P2, ALL/ANY/X_OF_N, insufficient-cost safety, all six scaling cases, session invalidation, PAPI 2.12.3,
-live mcMMO `total_level`, LuckPerms preservation, and deterministic exactly-once crash recovery. Production was not
-mutated and no production balance was selected.
+Phase 9F-A through 9F-D are owner-accepted and checkpointed. The product includes the ordinary `/prestige` Player
+GUI, read-only Staff administration and history views, safe audited Set/Reset Prestige, and revision-bound guided
+configuration editing for Money, Reward, Total Skill Level, Linear Base/Increment, and per-level Override. Complex
+configuration remains lossless and read-only where no bounded editor exists. Numeric Prestige remains the sole active
+progression model and successful player operations remain exactly `P -> P + 1`.
 
-## Phase 9E candidate
+The guided Money editor preserves one canonical effective amount for both its requirement and consumed cost. Generic
+advanced configuration still supports independent requirements and costs. The first-party Prestige Shop is explicitly
+DEFERRED for V2 and is not a launch blocker; no Shop UI, command, permission, configuration, or persistence placeholder
+is included.
 
-Phase 9E classifies every one of the 46 Phase 9D paths, removes unreachable stage/rank/dead Phase 1 fields from the
-production discovery catalog, hides rank-up from ordinary command metadata/help/completion, replaces real-player IDs
-in test fixtures, freezes player/staff backend contracts, publishes the actual provider capability matrix, and adds a
-concise deployment/rollback runbook. Stable rank/stage signatures remain compatibility-only and fail closed.
+## Qualification status
 
-A genuine retained populated schema-11 pre-Phase-9B V2 SQLite artifact was qualified in a disposable copy. The
-production backup-first migration to schema 12, archival stage disposition, safe numeric P0 authority, preservation,
-restart idempotence, and rollback restore all passed; the read-only source hash remained unchanged. A63 is now PASS.
-A74 remains PARTIAL pending an actual external resource-world reset in staging. A75 remains NOT APPLICABLE because no
-Court plugin exists.
+The accepted 42-plugin isolated-clone evidence covers real player progression, live Vault/mcMMO/LuckPerms and
+PlaceholderAPI integration, session invalidation, failure handling, and deterministic exactly-once crash recovery.
+A63 is PASS. A74 remains PARTIAL because an actual external resource-world reset is unavailable in the qualification
+environment. A75 is NOT APPLICABLE because no Court plugin exists.
 
-The five sparse V2 default documents remain two lines each and select no gameplay/provider/currency/shop values.
-Internal currency remains generic. The first-party Prestige shop, final player/staff GUI, visual polish, production
-balance, live deployment, and Phase 10 remain outside this phase.
-
-Two clean verification runs each passed 630 tests in 111 suites with zero failures, errors, or skips and zero
-Checkstyle violations. The 16,578,515-byte JAR is
-`93F6C330007AF3E41EB2C734334FCA566E7C33286E4615CFAC043078EFD62830`; the 190,831-byte aggregate SBOM is
-`3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E`. Both artifacts reproduced byte-for-byte.
-Changes remain intentionally uncommitted and unpushed.
+Phase 9G reruns clean-clone, reactor, reproducibility, artifact, restart, permission, command, localization, and bounded
+runtime gates. It does not authorize production deployment, select production balance, push, open a pull request,
+merge, or publish a release.

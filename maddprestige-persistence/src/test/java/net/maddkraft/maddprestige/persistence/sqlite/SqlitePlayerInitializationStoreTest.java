@@ -61,6 +61,7 @@ class SqlitePlayerInitializationStoreTest {
         assertEquals(0, prestige.currentPrestige());
         assertEquals(0, prestige.lifetimePrestige());
         assertEquals(0, prestige.stateRevision());
+        assertEquals(List.of(playerId), new SqlitePlayerPrestigeRepository(sqlite).knownPlayerIds());
         assertEquals(scopeId, prestige.prestigeScope());
         assertEquals(baseline, new SqliteRequirementStateRepository(sqlite).findBaseline(baselineKey).orElseThrow());
         assertTrue(count(sqlite, "mp_operations") == 0);

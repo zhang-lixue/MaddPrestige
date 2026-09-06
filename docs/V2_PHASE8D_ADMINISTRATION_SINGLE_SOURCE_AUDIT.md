@@ -3,12 +3,12 @@
 **Candidate:** Owner Review Correction Pass 6 for independent Owner Review 7<br>
 **Baseline:** `d481a9db7cd67108ff77f97e2d64d737e9096276`<br>
 **Date:** 2026-08-22<br>
-**Scope:** all 77 codes with exactly one literal production `AdministrationException` construction site
+**Current scope:** all 113 codes with exactly one literal production `AdministrationException` construction site
 
 ## Method and result
 
-The current production inventory contains 130 literal exception occurrences and 98 public administration codes. The
-21 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 77 remaining codes
+The current production inventory contains 206 literal exception occurrences and 141 public administration codes. The
+28 codes with multiple occurrences remain covered by `V2_PHASE8D_ADMINISTRATION_MULTI_THROW_AUDIT.md`; the 113 remaining codes
 are enumerated below. Each row was checked directly against the named production branch, not inferred from its code or
 developer exception text. The review compares the exact trigger, safety consequence, catalog-owned remediation and
 structured facts with the selected public semantic identity.
@@ -31,8 +31,22 @@ Phase 9C Owner Review Correction Pass 1 adds seven exact schema-confined structu
 add/edit/remove, map-key requirements, and list-index selection. Each failure occurs before draft replacement or active
 publication and carries the canonical collection path or rejected selector where applicable.
 
-Result: all 77 single-source codes have accurate catalog semantics. Together with the current 21-code multi-source
-register, all 98 known public administration failures have been checked against their production source condition.
+Phase 9F-A adds four exact Player GUI safety identities for consumed-action replay, missing canonical confirmation
+authority, self-only opening, and missing server-owned player targets. The multi-source
+`gui.action.player_invalid` identity remains separately reviewed by the compatibility registry.
+
+Phase 9F-B adds five precise, single-source Staff GUI failures: invalid staff-flow action, offline selected player,
+non-player staff actor, missing server-owned staff target, and unavailable Staff GUI runtime. They remain distinct from
+the accepted Player GUI and generic target contracts so their public summaries and recovery guidance stay exact.
+
+Phase 9F-C2 adds guided-configuration identities covering level/page bounds, unsupported Money and Reward shapes,
+exact scaling representation, actor-bound review lifecycle, lossless draft rejection, missing server-owned GUI context,
+and the bounded Total Skill Level editor. Requirement discovery, COUNT validation, and complex-shape rejection are
+separate fail-closed identities. Shared validation and review-lifecycle identities join the separately reviewed
+multi-source compatibility register.
+
+Result: all 113 single-source codes have accurate catalog semantics. Together with the current 28-code multi-source
+register, all 141 known public administration failures have been checked against their production source condition.
 
 Source locations are relative to
 `maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/`.
@@ -55,6 +69,23 @@ Source locations are relative to
 | `config.draft.owner_mismatch` | `admin/config/CAS.java:1070` | `config_draft_owner_mismatch` | The requesting actor differs from the draft creator. | Draft authority is not transferable. | Have its owner continue or open a separate draft. | — |
 | `config.draft.unknown` | `admin/config/CAS.java:1061` | `config_draft_unknown` | The draft ID is absent from the retained registry. | No absent or discarded draft is revived. | Open a new draft from current active configuration. | — |
 | `config.edit.rejected` | `admin/config/CAS.java:1137` | `config_edit_rejected` | Typed scalar conversion or lossless replacement rejects the value/YAML shape. | The draft remains unchanged. | Correct the value or use the structured editor owning that shape. | `path`, `type`, `value` |
+| `config.gui.level.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:310` | `config_gui_level_invalid` | A requested Prestige level is outside the positive configured/visual-editor range. | No level projection or mutation draft is created. | Return to Prestige Levels and choose an available level. | — |
+| `config.gui.level_page.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:68` | `config_gui_level_page_invalid` | A requested page begins beyond the configured Prestige range. | No fabricated or out-of-range level choices are rendered. | Reopen Prestige Levels and choose an available page. | — |
+| `config.gui.money.non_terminating` | `admin/config/CanonicalGuidedConfigurationAdministration.java:290` | `config_gui_money_non_terminating` | The chosen amount cannot be expressed as an exact finite multiplier of the active requirement base. | No rounded or approximate scaling override is written. | Choose another exact amount or use the advanced canonical workflow. | — |
+| `config.gui.money.unavailable` | `admin/config/CanonicalGuidedConfigurationAdministration.java:202` | `config_gui_money_unavailable` | The active numeric Prestige has no requirement tree for guided Money discovery. | The level remains inspectable while no Money editor authority is exposed. | Inspect the preserved read-only configuration before editing Money. | — |
+| `config.gui.money_page.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:118` | `config_gui_money_page_invalid` | A requested amount page begins beyond the bounded guided range. | No out-of-range amount choices are rendered. | Reopen the Money editor and choose an available page. | — |
+| `config.gui.requirements.unavailable` | `admin/config/CanonicalGuidedConfigurationAdministration.java:763` | `config_gui_requirements_unavailable` | The active numeric Prestige has no requirement tree for guided requirement discovery. | No requirement editor authority is exposed and no requirement structure is inferred. | Return to the level overview or use the advanced canonical workflow after restoring requirements. | — |
+| `config.gui.total_skill_level.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:992` | `config_gui_total_skill_level_invalid` | Typed input is not a canonical non-negative whole COUNT value. | No draft is created or changed and no decimal, negative, or malformed threshold is accepted. | Enter zero or a higher whole number. | — |
+| `config.gui.total_skill_level.unsupported` | `admin/config/CanonicalGuidedConfigurationAdministration.java:1223` | `config_gui_total_skill_level_unsupported` | The selected requirement is absent, ambiguous, nested, scaled, filtered, non-COUNT, or not the exact mcMMO `total_level` metric. | Complex requirement trees remain read-only and are never flattened or reinterpreted. | Inspect the preserved read-only requirement or use YAML for advanced editing. | — |
+| `config.gui.reward.unavailable` | `admin/config/CanonicalGuidedConfigurationAdministration.java:367` | `config_gui_reward_unavailable` | The active Prestige selection does not resolve one available canonical Reward definition. | No Reward editor authority is exposed and no value is inferred. | Inspect the preserved read-only configuration before editing Rewards. | — |
+| `config.gui.reward.unsupported` | `admin/config/CanonicalGuidedConfigurationAdministration.java:504` | `config_gui_reward_unsupported` | The selected reward shape is not exactly one unscaled Vault currency reward. | Multiple, scaled, non-currency, or provider-specific Reward structures remain read-only and are never flattened. | Use the read-only view or advanced canonical workflow. | — |
+| `config.gui.reward_page.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:244` | `config_gui_reward_page_invalid` | A requested Reward amount page begins beyond the bounded guided range. | No out-of-range Reward amount choices are rendered. | Reopen the Rewards editor and choose an available page. | — |
+| `config.gui.scaling.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:823` | `config_gui_scaling_invalid` | A guided Linear increment is not a non-negative plain exact decimal inside the canonical scaling domain. | No draft is created or changed and no value is rounded. | Enter a non-negative plain decimal allowed by this field. | — |
+| `config.gui.scaling.override.invalid` | `admin/config/CanonicalGuidedConfigurationAdministration.java:1040` | `config_gui_scaling_override_invalid` | A guided Prestige Override is not a non-negative plain exact decimal inside the canonical scaling domain. | No draft is created or changed and no value is rounded. | Enter a non-negative plain decimal allowed by the Override field. | — |
+| `config.gui.scaling.unsupported` | `admin/config/CanonicalGuidedConfigurationAdministration.java:817` | `config_gui_scaling_unsupported` | The selected scaling shape or parameter is outside the bounded lossless editor contract. | The scaling structure stays read-only and is never flattened or reinterpreted. | Inspect it here or use YAML for advanced editing. | — |
+| `config.guided_money.invariant` | `admin/config/ConfigurationAdministrationService.java:1380` | `config_guided_money_invariant` | A guided Money draft compiles to different effective requirement and consumed-cost scaling. | Preview and activation stop while the prior active revision remains unchanged. | Reopen the guided editor and keep the Money requirement and cost paired. | — |
+| `config.guided_money.rejected` | `admin/config/ConfigurationAdministrationService.java:209` | `config_guided_money_rejected` | Lossless synchronized override/cost editing rejects the exact draft YAML shape. | Draft replacement is atomic; active configuration stays untouched. | Review the selected level and amount, then prepare a fresh guided edit. | — |
+| `config.guided_scaling.rejected` | `admin/config/ConfigurationAdministrationService.java:252` | `config_guided_scaling_rejected` | Lossless replacement cannot find or safely edit the explicitly configured scaling scalar. | Draft replacement is atomic; active configuration stays untouched. | Review the selected parameter, then prepare a fresh guided edit. | — |
 | `config.history.finalize_failed` | `admin/config/CAS.java:837` | `config_history_finalize_failed` | Active publication succeeded but durable history could not replace `ATTEMPTED` with `APPLIED`. | Configuration is active while history needs reconciliation; retrying the draft is unsafe. | Do not retry; run Doctor and reconcile the attempted outcome. | `revision` |
 | `config.list.rejected` | `admin/config/CAS.java:215` | `config_list_rejected` | Lossless list/map inspection encounters malformed or incompatible draft structure. | No unsafe structural interpretation is returned. | Correct and validate the draft before listing again. | `path` |
 | `config.path.not_editable` | `admin/config/CAS.java:139` | `config_path_not_editable` | A schema path has no lossless scalar path resolver. | The service refuses a lossy scalar edit. | Use the owning structured editor or edit the YAML draft. | `path` |
@@ -84,11 +115,26 @@ Source locations are relative to
 | `confirmation.session_ended` | `admin/OperationConfirmationService.java:262` | `confirmation_session_ended` | A confirmation no longer belongs to the player's current login session. | Cross-session execution is rejected before mutation. | Request a fresh preview in the current login session. | — |
 | `confirmation.unknown` | `admin/OperationConfirmationService.java:57` | `confirmation_unknown` | Initial lookup finds no token because it is unknown, expired/pruned or already consumed. | No absent authority can execute. | Request a new server-issued operation preview. | — |
 | `gui.action.forged` | `admin/ui/GuiSessionService.java:258` | `gui_action_forged` | The clicked action ID is absent from the server-owned session map. | Player items cannot create authority. | Close and reopen the GUI. | — |
+| `gui.action.staff_invalid` | `admin/ui/StaffGuiService.java:83` | `gui_action_staff_invalid` | A server-owned session action is routed to the Staff GUI but its kind is outside the supported Staff flow. | No unrelated action executes through Staff navigation. | Reopen the Staff GUI for current server-owned controls. | — |
+| `gui.action.replayed` | `admin/ui/GuiSessionService.java:298` | `gui_action_replayed` | A concurrent or repeated click attempts to consume an already-consumed Player GUI session. | No action executes twice. | Reopen the GUI for a fresh single-use action. | — |
 | `gui.action.stale` | `admin/ui/GuiSessionService.java:264` | `gui_action_stale` | A mutating action's expected active revision differs from current active revision. | The stale GUI mutation is not executed. | Reopen the GUI and obtain a fresh preview/action. | — |
 | `gui.mutation.context_missing` | `admin/ui/CanonicalGuiMutationExecutor.java:133` | `gui_mutation_context_missing` | A server-owned mutation lacks a required draft, path, value, token or reason field. | No incomplete mutation executes. | Reopen the GUI to build a complete action from current state. | — |
 | `gui.mutation.kind_invalid` | `admin/ui/CanonicalGuiMutationExecutor.java:60` | `gui_mutation_kind_invalid` | The selected action kind is outside canonical configuration mutations. | No unrelated action is treated as a mutation. | Reopen the control panel and choose a current configuration action. | — |
 | `gui.session.actor_mismatch` | `admin/ui/GuiSessionService.java:253` | `gui_session_actor_mismatch` | The current actor differs from the session owner. | GUI authority is not transferable. | Open a separate GUI session. | — |
 | `gui.session.expired` | `admin/ui/GuiSessionService.java:249` | `gui_session_expired` | Session is absent or past its expiry instant. | The session is removed and no action runs. | Reopen the GUI for current server-owned controls. | — |
+| `gui.staff.configuration_administration_unavailable` | `admin/ui/StaffGuiService.java:1285` | `gui_staff_configuration_administration_unavailable` | A guided editor route is invoked without the canonical configuration administration composition. | No direct YAML or runtime fallback is attempted. | Use the read-only Configuration view and check server health. | — |
+| `gui.staff.configuration_level_invalid` | `admin/ui/StaffGuiService.java:1249` | `gui_staff_configuration_level_invalid` | A server-owned configuration action contains a non-numeric Prestige level. | No malformed level is selected or edited. | Return to Prestige Levels and choose a current level. | — |
+| `gui.staff.configuration_level_missing` | `admin/ui/StaffGuiService.java:1243` | `gui_staff_configuration_level_missing` | A guided navigation/edit action lacks its server-owned Prestige level. | No level is inferred from client lore or slot position. | Return to Prestige Levels and choose a level again. | — |
+| `gui.staff.configuration_revision_missing` | `admin/ui/StaffGuiService.java:1364` | `gui_staff_configuration_revision_missing` | A typed configuration input lacks its server-owned active revision. | No unbound input can prepare a draft or review. | Return to the selected Prestige level and reopen the editor. | — |
+| `gui.staff.configuration_review_missing` | `admin/ui/StaffGuiService.java:1264` | `gui_staff_configuration_review_missing` | A Confirm action lacks its server-owned guided review ID. | No absent configuration authority is executed. | Prepare and review the Money change again. | — |
+| `gui.staff.player_unknown` | `admin/ui/StaffGuiService.java:688` | `gui_staff_player_unknown` | The selected server-known identity is no longer present when its canonical view is requested. | No missing or guessed identity is inspected. | Find the player again using a current server-known name or UUID. | — |
+| `gui.staff.player_required` | `admin/ui/StaffGuiService.java:255` | `gui_staff_player_required` | Staff GUI opening has an authorized actor without an in-game player UUID. | No inventory session is issued to a console or non-player actor. | Run the admin GUI command from an authorized player. | — |
+| `gui.staff.prestige_administration_unavailable` | `admin/ui/StaffGuiService.java:1058` | `gui_staff_prestige_administration_unavailable` | A mutation control is routed in a runtime composition without the canonical Prestige administration service. | No fallback or direct state write is attempted. | Use player inspection and check server health before attempting an adjustment. | — |
+| `gui.staff.prestige_review_missing` | `admin/ui/StaffGuiService.java:1050` | `gui_staff_prestige_review_missing` | A mutation control lacks its server-owned immutable Prestige review. | No target or expected state is inferred from client inventory data. | Return to Manage Player and prepare the adjustment again. | — |
+| `gui.staff.target_missing` | `admin/ui/StaffGuiService.java:206` | `gui_staff_target_missing` | A Staff player-navigation action lacks its server-owned target UUID. | No player identity is inferred and no read occurs. | Return to player selection and choose a player again. | — |
+| `gui.staff.unavailable` | `admin/command/PhaseSixCommandService.java:279` | `gui_staff_unavailable` | The admin GUI route is invoked in a runtime composition without the Staff GUI service. | No partial or legacy control panel is opened. | Use a read-only command or try again after restart. | — |
+| `gui.player.self_required` | `admin/ui/PlayerGuiService.java:271` | `gui_player_self_required` | A caller attempts to open the ordinary Player GUI for another player. | Staff-only cross-player controls are not exposed through the Player GUI. | Open the GUI in game for yourself or use explicit staff commands. | — |
+| `gui.player.target_missing` | `admin/ui/PlayerGuiService.java:259` | `gui_player_target_missing` | A server-owned Player GUI action lacks its player target. | No player identity is guessed and no operation executes. | Reopen the Player GUI for a complete action. | — |
 | `gui.target.missing` | `admin/ui/CanonicalGuiActionExecutor.java:71` | `gui_target_missing` | A canonical player operation action has no target UUID. | No player is guessed or mutated. | Reopen the intended player view. | — |
 | `operation.preview.blocked` | `admin/AdministrationException.java:60` | `operation_preview_blocked` | Canonical authorization returns one or more typed blockers. | No executable plan/confirmation is produced. | Resolve every typed blocker and preview again. | `operation`, typed blockers |
 | `permission.denied` | `admin/PermissionSubject.java:30` | `permission_denied` | The permission subject lacks the exact required node. | The protected action does not execute. | Grant only the documented node or use an authorized actor. | `permission` |
@@ -128,7 +174,7 @@ Source locations are relative to
 
 `PaperMessageServiceTest.administrationSingleSourceInventoryMatchesSemanticAudit` walks every production Java source,
 extracts literal constructor codes and derives the exact single-source set from occurrence counts. It parses the rows
-above and requires exact equality: 77 single-source rows, 21 multi-source codes, and a union equal to all 98 known
+above and requires exact equality: 113 single-source rows, 28 multi-source codes, and a union equal to all 141 known
 public codes. A new, removed, renamed or reclassified single-source code fails until this source-level audit is updated
 deliberately.
 

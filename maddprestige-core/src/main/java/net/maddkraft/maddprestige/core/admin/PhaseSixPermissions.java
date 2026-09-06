@@ -13,6 +13,8 @@ public final class PhaseSixPermissions {
     public static final String CONFIG_ROLLBACK = "maddprestige.admin.config.rollback";
     public static final String PLAYER_VIEW = "maddprestige.admin.players.view";
     public static final String PLAYER_PRESTIGE_EDIT = "maddprestige.admin.players.prestige";
+    public static final String PLAYER_PRESTIGE_SET = "maddprestige.admin.players.prestige.set";
+    public static final String PLAYER_PRESTIGE_RESET = "maddprestige.admin.players.prestige.reset";
     public static final String SIMULATE = "maddprestige.admin.simulate";
     public static final String DOCTOR = "maddprestige.admin.doctor";
     public static final String SETUP = "maddprestige.admin.setup";
@@ -20,7 +22,8 @@ public final class PhaseSixPermissions {
 
     public static Set<String> all() {
         return Set.of(USE, RANK_UP, PRESTIGE, ADMIN_GUI, CONFIG_VIEW, CONFIG_EDIT, CONFIG_APPLY,
-                CONFIG_ROLLBACK, PLAYER_VIEW, PLAYER_PRESTIGE_EDIT, SIMULATE, DOCTOR, SETUP, EXECUTE);
+                CONFIG_ROLLBACK, PLAYER_VIEW, PLAYER_PRESTIGE_EDIT, PLAYER_PRESTIGE_SET,
+                PLAYER_PRESTIGE_RESET, SIMULATE, DOCTOR, SETUP, EXECUTE);
     }
 
     private PhaseSixPermissions() {

@@ -150,6 +150,14 @@ public final class SemanticPresentation {
                 message(preview.executable() ? "command.player.concise.ready" : "command.player.concise.not_ready"));
     }
 
+    /** All canonical requirement leaves for structured staff inspection. */
+    public static List<MessageReference> requirementLeaves(ExplanationNode root) {
+        Objects.requireNonNull(root, "requirement root");
+        ArrayList<MessageReference> lines = new ArrayList<>();
+        appendConciseRequirementLeaves(root, lines, Integer.MAX_VALUE);
+        return List.copyOf(lines);
+    }
+
     public static List<MessageReference> administration(AdministrationException exception) {
         Objects.requireNonNull(exception, "administration exception");
         Keys keys = exception.semanticVariant().map(variant -> Objects.requireNonNull(
@@ -554,6 +562,32 @@ public final class SemanticPresentation {
         register(result, "config_draft_owner_mismatch", "config.draft.owner_mismatch");
         register(result, "config_draft_unknown", "config.draft.unknown");
         register(result, "config_edit_rejected", "config.edit.rejected");
+        register(result, "config_gui_level_invalid", "config.gui.level.invalid");
+        register(result, "config_gui_level_page_invalid", "config.gui.level_page.invalid");
+        register(result, "config_gui_money_invalid", "config.gui.money.invalid");
+        register(result, "config_gui_money_non_terminating", "config.gui.money.non_terminating");
+        register(result, "config_gui_money_pair_mismatch", "config.gui.money.pair_mismatch");
+        register(result, "config_gui_money_page_invalid", "config.gui.money_page.invalid");
+        register(result, "config_gui_money_unavailable", "config.gui.money.unavailable");
+        register(result, "config_gui_money_unsupported", "config.gui.money.unsupported");
+        register(result, "config_gui_requirements_unavailable", "config.gui.requirements.unavailable");
+        register(result, "config_gui_total_skill_level_invalid", "config.gui.total_skill_level.invalid");
+        register(result, "config_gui_total_skill_level_unsupported",
+                "config.gui.total_skill_level.unsupported");
+        register(result, "config_gui_reward_invalid", "config.gui.reward.invalid");
+        register(result, "config_gui_reward_page_invalid", "config.gui.reward_page.invalid");
+        register(result, "config_gui_reward_unavailable", "config.gui.reward.unavailable");
+        register(result, "config_gui_reward_unsupported", "config.gui.reward.unsupported");
+        register(result, "config_gui_scaling_invalid", "config.gui.scaling.invalid");
+        register(result, "config_gui_scaling_override_invalid", "config.gui.scaling.override.invalid");
+        register(result, "config_gui_scaling_unsupported", "config.gui.scaling.unsupported");
+        register(result, "config_gui_review_actor_mismatch", "config.gui.review.actor_mismatch");
+        register(result, "config_gui_review_expired", "config.gui.review.expired");
+        register(result, "config_gui_review_replayed", "config.gui.review.replayed");
+        register(result, "config_guided_money_invariant", "config.guided_money.invariant");
+        register(result, "config_guided_money_rejected", "config.guided_money.rejected");
+        register(result, "config_guided_scaling_rejected", "config.guided_scaling.rejected");
+        register(result, "config_guided_scaling_override_rejected", "config.guided_scaling_override.rejected");
         register(result, "config_history_finalize_failed", "config.history.finalize_failed");
         register(result, "config_list_rejected", "config.list.rejected");
         register(result, "config_path_not_editable", "config.path.not_editable");
@@ -589,11 +623,29 @@ public final class SemanticPresentation {
         register(result, "confirmation_session_ended", "confirmation.session_ended");
         register(result, "confirmation_unknown", "confirmation.unknown");
         register(result, "gui_action_forged", "gui.action.forged");
+        register(result, "gui_action_player_invalid", "gui.action.player_invalid");
+        register(result, "gui_action_staff_invalid", "gui.action.staff_invalid");
+        register(result, "gui_action_replayed", "gui.action.replayed");
         register(result, "gui_action_stale", "gui.action.stale");
         register(result, "gui_mutation_context_missing", "gui.mutation.context_missing");
         register(result, "gui_mutation_kind_invalid", "gui.mutation.kind_invalid");
         register(result, "gui_session_actor_mismatch", "gui.session.actor_mismatch");
         register(result, "gui_session_expired", "gui.session.expired");
+        register(result, "gui_staff_configuration_administration_unavailable",
+                "gui.staff.configuration_administration_unavailable");
+        register(result, "gui_staff_configuration_level_invalid", "gui.staff.configuration_level_invalid");
+        register(result, "gui_staff_configuration_level_missing", "gui.staff.configuration_level_missing");
+        register(result, "gui_staff_configuration_revision_missing", "gui.staff.configuration_revision_missing");
+        register(result, "gui_staff_configuration_review_missing", "gui.staff.configuration_review_missing");
+        register(result, "gui_staff_player_unknown", "gui.staff.player_unknown");
+        register(result, "gui_staff_player_required", "gui.staff.player_required");
+        register(result, "gui_staff_prestige_administration_unavailable",
+                "gui.staff.prestige_administration_unavailable");
+        register(result, "gui_staff_prestige_review_missing", "gui.staff.prestige_review_missing");
+        register(result, "gui_staff_target_missing", "gui.staff.target_missing");
+        register(result, "gui_staff_unavailable", "gui.staff.unavailable");
+        register(result, "gui_player_self_required", "gui.player.self_required");
+        register(result, "gui_player_target_missing", "gui.player.target_missing");
         register(result, "gui_target_missing", "gui.target.missing");
         register(result, "operation_preview_blocked", "operation.preview.blocked");
         register(result, "permission_denied", "permission.denied");

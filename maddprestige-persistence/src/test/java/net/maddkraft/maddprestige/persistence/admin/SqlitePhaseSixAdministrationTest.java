@@ -20,6 +20,7 @@ import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.validation.ValidationReport;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustment;
+import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentKind;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationApplicationStatus;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
 import net.maddkraft.maddprestige.core.config.CompiledConfiguration;
@@ -143,10 +144,39 @@ class SqlitePhaseSixAdministrationTest {
                 scalar(sqlite, "SELECT new_value FROM mp_audit_log"));
         assertEquals(NOW.toString(), scalar(sqlite, "SELECT occurred_at FROM mp_audit_log"));
         assertEquals("staff-gui", scalar(sqlite, "SELECT source_surface FROM mp_audit_log"));
+        assertEquals("ADMIN_PRESTIGE_SET:COMPLETED",
+                scalar(sqlite, "SELECT operation_type || ':' || state FROM mp_operations"));
+        assertEquals("ADMIN_SET:1:3:5:3:COMPLETED::",
+                scalar(sqlite, "SELECT event_type || ':' || current_before || ':' || current_after || ':' "
+                        + "|| lifetime_before || ':' || lifetime_after || ':' || result || ':' "
+                        + "|| costs_snapshot || ':' || rewards_snapshot FROM mp_prestige_history"));
+        assertEquals(adjustment.adjustmentId().toString(),
+                scalar(sqlite, "SELECT operation_id FROM mp_audit_log"));
+        assertEquals("player.prestige.admin_set",
+                scalar(sqlite, "SELECT provider_action FROM mp_audit_log"));
+        assertEquals(Optional.of(actorId), store.adjustmentActor(adjustment.adjustmentId()).flatMap(Actor::uuid));
 
         assertThrows(StalePlayerStageStateException.class, () -> store.adjust(adjustment));
         assertEquals("1", scalar(sqlite, "SELECT COUNT(*) FROM mp_audit_log"));
         assertEquals("8", scalar(sqlite, "SELECT state_revision FROM mp_player_prestige_state"));
+
+        UUID resetId = UUID.fromString("33333333-3333-4333-8333-333333333333");
+        ManualPrestigeAdjustment reset = new ManualPrestigeAdjustment(resetId,
+                ManualPrestigeAdjustmentKind.RESET, playerId, 8, 0, 0, revision,
+                new Actor("staff", Optional.of(actorId), "Moderator"), "staff-gui", "Owner-approved reset");
+        var resetState = store.adjust(reset);
+        assertEquals(0, resetState.currentPrestige());
+        assertEquals(0, resetState.lifetimePrestige());
+        assertEquals("ADMIN_PRESTIGE_RESET:COMPLETED", scalar(sqlite,
+                "SELECT operation_type || ':' || state FROM mp_operations WHERE operation_id = '" + resetId + "'"));
+        assertEquals("ADMIN_RESET:3:0", scalar(sqlite,
+                "SELECT event_type || ':' || current_before || ':' || current_after "
+                        + "FROM mp_prestige_history WHERE operation_id = '" + resetId + "'"));
+        assertEquals("player.prestige.admin_reset", scalar(sqlite,
+                "SELECT provider_action FROM mp_audit_log WHERE operation_id = '" + resetId + "'"));
+        assertEquals("2:2:2", scalar(sqlite, "SELECT (SELECT COUNT(*) FROM mp_operations) || ':' || "
+                + "(SELECT COUNT(*) FROM mp_prestige_history) || ':' || "
+                + "(SELECT COUNT(*) FROM mp_audit_log)"));
     }
 
     private SqliteFoundation migrated(String fileName) {

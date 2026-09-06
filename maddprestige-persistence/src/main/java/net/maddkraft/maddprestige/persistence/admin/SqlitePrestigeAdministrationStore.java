@@ -9,6 +9,7 @@ import java.time.Clock;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
+import net.maddkraft.maddprestige.api.operation.Actor;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.ScopeId;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustment;
@@ -43,10 +44,15 @@ public final class SqlitePrestigeAdministrationStore implements PrestigeAdminist
                 }
                 Instant now = Instant.now(clock);
                 long prestige = adjustment.currentPrestige();
+                if (current.currentPrestige() == prestige) {
+                    throw new PersistenceException("Administrative Prestige adjustment cannot be a no-op");
+                }
                 PlayerPrestigeState replacement = new PlayerPrestigeState(current.playerId(), prestige, prestige,
                         Math.addExact(current.stateRevision(), 1), adjustment.configRevision(),
                         current.prestigeScope(), current.lastPrestigedAt(), current.createdAt(), now);
                 update(connection, replacement, current.stateRevision());
+                appendOperation(connection, adjustment, current, replacement, now);
+                appendHistory(connection, adjustment, current, replacement, now);
                 appendAudit(connection, adjustment, current, replacement, now);
                 connection.commit();
                 connection.setAutoCommit(originalAutoCommit);
@@ -64,6 +70,38 @@ public final class SqlitePrestigeAdministrationStore implements PrestigeAdminist
         }
     }
 
+    @Override
+    public Optional<PlayerPrestigeState> find(UUID playerId) {
+        try (Connection connection = connections.open()) {
+            return find(connection, playerId);
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load player Prestige administration state", exception);
+        }
+    }
+
+    /** Resolves actor identity only for a linked administrative Prestige adjustment. */
+    public Optional<Actor> adjustmentActor(UUID adjustmentId) {
+        String sql = "SELECT actor_type, actor_uuid, actor_name FROM mp_audit_log "
+                + "WHERE operation_id = ? AND provider_action IN "
+                + "('player.prestige.admin_set','player.prestige.admin_reset') "
+                + "ORDER BY occurred_at, audit_id LIMIT 1";
+        try (Connection connection = connections.open();
+                PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, adjustmentId.toString());
+            try (ResultSet row = statement.executeQuery()) {
+                if (!row.next()) {
+                    return Optional.empty();
+                }
+                String actorId = row.getString(2);
+                return Optional.of(new Actor(row.getString(1),
+                        actorId == null ? Optional.empty() : Optional.of(UUID.fromString(actorId)),
+                        row.getString(3)));
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load administrative Prestige actor", exception);
+        }
+    }
+
     private static Optional<PlayerPrestigeState> find(Connection connection, UUID playerId) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(FIND)) {
             statement.setString(1, playerId.toString());
@@ -76,6 +114,57 @@ public final class SqlitePrestigeAdministrationStore implements PrestigeAdminist
                         optionalInstant(row.getString(6)), Instant.parse(row.getString(7)),
                         Instant.parse(row.getString(8))));
             }
+        }
+    }
+
+    private static void appendOperation(
+            Connection connection,
+            ManualPrestigeAdjustment adjustment,
+            PlayerPrestigeState oldState,
+            PlayerPrestigeState newState,
+            Instant now) throws SQLException {
+        String sql = "INSERT INTO mp_operations (operation_id, operation_type, target_uuid, idempotency_key, "
+                + "state, expected_state_revision, config_revision_id, provider_generations, redacted_preview, "
+                + "created_at, updated_at) VALUES (?, ?, ?, ?, 'COMPLETED', ?, ?, '', ?, ?, ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, adjustment.adjustmentId().toString());
+            statement.setString(2, adjustment.kind().operationType());
+            statement.setString(3, adjustment.playerId().toString());
+            statement.setString(4, adjustment.adjustmentId().toString());
+            statement.setLong(5, adjustment.expectedStateRevision());
+            statement.setString(6, adjustment.configRevision().value());
+            statement.setString(7, "administrative Prestige " + oldState.currentPrestige()
+                    + "->" + newState.currentPrestige());
+            statement.setString(8, now.toString());
+            statement.setString(9, now.toString());
+            statement.executeUpdate();
+        }
+    }
+
+    private static void appendHistory(
+            Connection connection,
+            ManualPrestigeAdjustment adjustment,
+            PlayerPrestigeState oldState,
+            PlayerPrestigeState newState,
+            Instant now) throws SQLException {
+        String sql = "INSERT INTO mp_prestige_history (history_id, player_uuid, operation_id, event_type, "
+                + "source_stage_id, reset_stage_id, current_before, current_after, lifetime_before, lifetime_after, "
+                + "result, costs_snapshot, rewards_snapshot, config_revision_id, occurred_at) "
+                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'COMPLETED', '', '', ?, ?)";
+        try (PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, UUID.randomUUID().toString());
+            statement.setString(2, adjustment.playerId().toString());
+            statement.setString(3, adjustment.adjustmentId().toString());
+            statement.setString(4, adjustment.kind().historyEvent());
+            statement.setString(5, "numeric-p" + oldState.currentPrestige());
+            statement.setString(6, "numeric-p" + newState.currentPrestige());
+            statement.setLong(7, oldState.currentPrestige());
+            statement.setLong(8, newState.currentPrestige());
+            statement.setLong(9, oldState.lifetimePrestige());
+            statement.setLong(10, newState.lifetimePrestige());
+            statement.setString(11, adjustment.configRevision().value());
+            statement.setString(12, now.toString());
+            statement.executeUpdate();
         }
     }
 
@@ -116,9 +205,9 @@ public final class SqlitePrestigeAdministrationStore implements PrestigeAdminist
             setOptional(statement, 3, adjustment.actor().uuid().map(UUID::toString));
             statement.setString(4, adjustment.actor().displayName());
             statement.setString(5, adjustment.playerId().toString());
-            statement.setNull(6, Types.VARCHAR);
+            statement.setString(6, adjustment.adjustmentId().toString());
             statement.setString(7, adjustment.configRevision().value());
-            statement.setString(8, "player.prestige.manual_set");
+            statement.setString(8, adjustment.kind().providerAction());
             statement.setString(9, values(oldState));
             statement.setString(10, values(newState));
             statement.setInt(11, 0);

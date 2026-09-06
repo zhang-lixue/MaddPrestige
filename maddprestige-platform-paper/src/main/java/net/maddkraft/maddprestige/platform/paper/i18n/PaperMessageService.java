@@ -34,22 +34,27 @@ public final class PaperMessageService {
     private static final Pattern KEY = Pattern.compile("[a-z0-9][a-z0-9_.-]{0,127}");
     private static final MiniMessage STRICT_MINI_MESSAGE = MiniMessage.builder().strict(true).build();
     private static final Set<String> TEMPLATE_ARGUMENTS = Set.of(
-            "acknowledgement", "active", "after", "allowed", "amount", "base", "before", "blockers", "canonical",
+            "acknowledgement", "active", "after", "allowed", "amount", "base", "before", "blocked", "blockers",
+            "canonical",
             "code",
             "completion", "component", "confirmation", "configured_cost", "configured_reward", "count", "counter",
             "cooldown_remaining", "currency", "current", "current_lifetime",
-            "current_prestige", "current_stage", "delta", "detail", "disposition", "document", "draft", "expires",
+            "current_prestige", "current_stage", "deferred", "delta", "detail", "disposition", "document", "draft",
+            "expires",
             "eligible_at", "errors", "findings", "formula", "group", "hash", "healthy", "id", "intended_target",
             "kind",
-            "indicator", "label", "lifetime",
-            "locale", "metric", "metrics", "mode",
-            "operation", "operator", "path", "permission", "player", "prestige_status", "provider", "purpose", "rank",
+            "indicator", "label", "level", "lifetime", "missing",
+            "locale", "metric", "metrics", "mode", "next",
+            "operation", "operator", "path", "permission", "player", "prestige_status", "progress", "projected",
+            "provider",
+            "purpose", "rank",
             "rankup_status",
-            "prestige_maximum", "reason", "remediation", "repeatability", "requirement", "revision", "rewards", "risk",
+            "prestige_maximum", "previous", "reason", "remediation", "repeatability", "requirement", "revision",
+            "rewards", "risk",
             "scaling", "scope", "stage",
-            "source", "status", "target",
-            "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "value", "variant",
-            "version");
+            "source", "status", "target", "threshold", "total",
+            "target_lifetime", "target_prestige", "target_stage", "topic", "type", "usage", "uuid", "value", "variant",
+            "version", "warnings");
     private static final TagResolver VALIDATION_ARGUMENTS = TagResolver.resolver(TEMPLATE_ARGUMENTS.stream()
             .map(name -> Placeholder.unparsed(name, "value"))
             .toList());

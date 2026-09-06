@@ -15,7 +15,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import net.maddkraft.maddprestige.api.cost.CostDefinition;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
+import net.maddkraft.maddprestige.api.id.CostId;
+import net.maddkraft.maddprestige.api.id.RequirementId;
 import net.maddkraft.maddprestige.api.validation.ValidationFinding;
 import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
@@ -86,6 +89,26 @@ public final class ConfigurationAdministrationService {
                 "Use the setup wizard to create the first validated configuration."));
         return createDraft(subject, Optional.of(current.revisionId()), current.compiled().documents(),
                 sourceSurface, Optional.empty(), ConfigurationApplyKind.NORMAL);
+    }
+
+    /** Returns only current, usable draft identifiers owned by the exact requesting actor. */
+    public List<UUID> ownedDraftIds(PermissionSubject subject) {
+        Objects.requireNonNull(subject, "subject");
+        if (!subject.has(PhaseSixPermissions.CONFIG_VIEW)
+                && !subject.has(PhaseSixPermissions.CONFIG_EDIT)
+                && !subject.has(PhaseSixPermissions.CONFIG_APPLY)
+                && !subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)
+                && !subject.has(PhaseSixPermissions.SETUP)) {
+            return List.of();
+        }
+        pruneExpiredAuthorities();
+        return drafts.values().stream()
+                .filter(state -> !state.applying())
+                .map(DraftState::draft)
+                .filter(draft -> draft.actor().equals(subject.actor()))
+                .map(ConfigDraft::draftId)
+                .sorted(Comparator.comparing(UUID::toString))
+                .toList();
     }
 
     public UUID beginInitialDraft(
@@ -159,12 +182,229 @@ public final class ConfigurationAdministrationService {
         return updated;
     }
 
+    /**
+     * Applies the schema-owned requirement override, paired cost base, and paired cost override to one private draft.
+     * The active configuration is never touched here; the caller must still preview and apply this draft through
+     * the normal canonical workflow.
+     */
+    public ConfigDraft editGuidedMoney(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingOverrideEdit requirementOverride,
+            GuidedMoneyScalingPair pair) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(requirementOverride, "requirement override");
+        Objects.requireNonNull(pair, "guided Money pair");
+        requireMatchingScalingPath(requirementOverride.scalingPath(), pair);
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String overridePath = requirementOverride.scalingPath() + ".segments."
+                + requirementOverride.segmentIndex() + ".overrides." + requirementOverride.prestigeLevel();
+        SchemaNode overrideNode = schema.resolve(overridePath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + overridePath,
+                "Use only a schema-owned scaling override path.", "path", overridePath));
+        subject.require(overrideNode.editPermission());
+        validateAllowed(overrideNode, requirementOverride.multiplier());
+
+        SchemaNode costNode = schema.resolve(pair.costAmountPath()).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + pair.costAmountPath(),
+                "Use only a schema-owned cost amount path.", "path", pair.costAmountPath()));
+        subject.require(costNode.editPermission());
+        validateAllowed(costNode, pair.costBaseAmount());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(requirementOverride.scalingPath())
+                .orElseThrow(() -> notEditable(requirementOverride.scalingPath()));
+        ConfigurationPathResolver.ResolvedPath cost = paths.resolve(pair.costAmountPath())
+                .orElseThrow(() -> notEditable(pair.costAmountPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument requirementDocument = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath yamlOverride = appendScalingOverride(scaling.yamlPath(), requirementOverride);
+            documents.put(scaling.documentName(), requirementDocument
+                    .setDecimal(yamlOverride, requirementOverride.multiplier()).render());
+
+            LosslessYamlDocument costDocument = LosslessYamlDocument.parse(
+                    requireDocument(documents, cost.documentName()));
+            documents.put(cost.documentName(), costDocument
+                    .setString(cost.yamlPath(), pair.costBaseAmount()).render());
+
+            LosslessYamlDocument lifecycle = guidedCostScalingDocument(subject, documents, pair);
+            YamlPath costOverride = costScalingPath(pair).key("segments")
+                    .index(requirementOverride.segmentIndex()).key("overrides")
+                    .key(Long.toString(requirementOverride.prestigeLevel()));
+            documents.put("lifecycle.yml", lifecycle
+                    .setDecimal(costOverride, requirementOverride.multiplier()).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_money.rejected", safeMessage(exception),
+                    "Review the selected level and amount, then prepare a fresh guided edit.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withGuidedMoneyDraft(updated, pair))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Money edit was being prepared.",
+                    "Review current configuration and prepare the edit again.");
+        }
+        return updated;
+    }
+
+    /**
+     * Replaces one explicitly present, schema-owned scalar in a scaling segment without rewriting the profile.
+     * Compiler defaults are deliberately not materialized by this bounded guided path.
+     */
+    public ConfigDraft editGuidedScalingParameter(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingParameterEdit edit,
+            GuidedMoneyScalingPair pair) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(edit, "scaling parameter edit");
+        Objects.requireNonNull(pair, "guided Money pair");
+        requireMatchingScalingPath(edit.scalingPath(), pair);
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String parameterPath = edit.scalingPath() + ".segments." + edit.segmentIndex()
+                + "." + edit.parameter().yamlField();
+        SchemaNode parameterNode = schema.resolve(parameterPath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + parameterPath,
+                "Use only a schema-owned scaling parameter path.", "path", parameterPath));
+        subject.require(parameterNode.editPermission());
+        validateAllowed(parameterNode, edit.value());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(edit.scalingPath())
+                .orElseThrow(() -> notEditable(edit.scalingPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument document = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath parameter = scaling.yamlPath().key("segments").index(edit.segmentIndex())
+                    .key(edit.parameter().yamlField());
+            documents.put(scaling.documentName(), document.replaceDecimal(parameter, edit.value()).render());
+
+            setGuidedCostBase(subject, documents, pair);
+            LosslessYamlDocument lifecycle = guidedCostScalingDocument(subject, documents, pair);
+            YamlPath costParameter = costScalingPath(pair).key("segments").index(edit.segmentIndex())
+                    .key(edit.parameter().yamlField());
+            documents.put("lifecycle.yml", lifecycle.replaceDecimal(costParameter, edit.value()).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_scaling.rejected", safeMessage(exception),
+                    "Review the selected scaling parameter, then prepare a fresh guided edit.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withGuidedMoneyDraft(updated, pair))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Scaling edit was being prepared.",
+                    "Review current configuration and prepare the edit again.");
+        }
+        return updated;
+    }
+
+    /** Adds or replaces one per-Prestige override without materializing or flattening its profile. */
+    public ConfigDraft editGuidedScalingOverride(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingOverrideEdit edit,
+            GuidedMoneyScalingPair pair) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(edit, "scaling override edit");
+        Objects.requireNonNull(pair, "guided Money pair");
+        requireMatchingScalingPath(edit.scalingPath(), pair);
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String overridePath = edit.scalingPath() + ".segments." + edit.segmentIndex()
+                + ".overrides." + edit.prestigeLevel();
+        SchemaNode overrideNode = schema.resolve(overridePath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + overridePath,
+                "Use only a schema-owned scaling override path.", "path", overridePath));
+        subject.require(overrideNode.editPermission());
+        validateAllowed(overrideNode, edit.multiplier());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(edit.scalingPath())
+                .orElseThrow(() -> notEditable(edit.scalingPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument document = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath override = appendScalingOverride(scaling.yamlPath(), edit);
+            documents.put(scaling.documentName(), document.setDecimal(override, edit.multiplier()).render());
+
+            setGuidedCostBase(subject, documents, pair);
+            LosslessYamlDocument lifecycle = guidedCostScalingDocument(subject, documents, pair);
+            YamlPath costOverride = costScalingPath(pair).key("segments").index(edit.segmentIndex())
+                    .key("overrides").key(Long.toString(edit.prestigeLevel()));
+            documents.put("lifecycle.yml", lifecycle.setDecimal(costOverride, edit.multiplier()).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_scaling_override.rejected", safeMessage(exception),
+                    "Review the selected override, then prepare a fresh guided edit.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withGuidedMoneyDraft(updated, pair))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Override edit was being prepared.",
+                    "Review current configuration and prepare the edit again.");
+        }
+        return updated;
+    }
+
+    /** Removes only one explicitly present per-Prestige override mapping entry. */
+    public ConfigDraft removeGuidedScalingOverride(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingOverrideRemoval removal,
+            GuidedMoneyScalingPair pair) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(removal, "scaling override removal");
+        Objects.requireNonNull(pair, "guided Money pair");
+        requireMatchingScalingPath(removal.scalingPath(), pair);
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String overridePath = removal.scalingPath() + ".segments." + removal.segmentIndex()
+                + ".overrides." + removal.prestigeLevel();
+        SchemaNode overrideNode = schema.resolve(overridePath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + overridePath,
+                "Use only a schema-owned scaling override path.", "path", overridePath));
+        subject.require(overrideNode.editPermission());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(removal.scalingPath())
+                .orElseThrow(() -> notEditable(removal.scalingPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument document = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath overrides = scaling.yamlPath().key("segments").index(removal.segmentIndex()).key("overrides");
+            documents.put(scaling.documentName(), document
+                    .removeMappingEntry(overrides, Long.toString(removal.prestigeLevel())).render());
+
+            setGuidedCostBase(subject, documents, pair);
+            LosslessYamlDocument lifecycle = guidedCostScalingDocument(subject, documents, pair);
+            YamlPath costOverrides = costScalingPath(pair).key("segments").index(removal.segmentIndex())
+                    .key("overrides");
+            documents.put("lifecycle.yml", lifecycle
+                    .removeMappingEntry(costOverrides, Long.toString(removal.prestigeLevel())).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_scaling_override.rejected", safeMessage(exception),
+                    "Review the selected override, then prepare a fresh guided removal.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withGuidedMoneyDraft(updated, pair))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Override removal was being prepared.",
+                    "Review current configuration and prepare the removal again.");
+        }
+        return updated;
+    }
+
     public CompletionStage<ConfigurationPreview> preview(
             PermissionSubject subject,
             UUID draftId) {
         requirePreviewPermission(subject, draftId);
         DraftState state = requireOwnedDraft(subject, draftId);
         return workflow.prepare(state.draft(), state.remapPlan()).thenApply(candidate -> {
+            requireGuidedMoneyInvariant(candidate, state.guidedMoneyPair());
             boolean stale = !activeRevision().equals(state.draft().baseRevision());
             ConfigurationPreview preview = new ConfigurationPreview(draftId, state.version(),
                     state.draft().baseRevision(),
@@ -795,6 +1035,7 @@ public final class ConfigurationAdministrationService {
         Optional<StageRemapSnapshot> previewedRemap = previewedCandidate.stageRemap();
         Optional<StageRemapPlan> remapPlan = previewedRemap.map(StageRemapSnapshot::plan);
         return workflow.prepare(state.draft(), remapPlan).thenApply(candidate -> {
+            requireGuidedMoneyInvariant(candidate, state.guidedMoneyPair());
             Optional<StageRemapSnapshot> currentRemap = candidate.stageRemap();
             if (!currentRemap.map(StageRemapSnapshot::seal).equals(previewedRemap.map(StageRemapSnapshot::seal))) {
                 throw new AdministrationException("stage.change.remap_snapshot_stale",
@@ -1028,7 +1269,7 @@ public final class ConfigurationAdministrationService {
         }
         ConfigDraft draft = new ConfigDraft(UUID.randomUUID(), base, documents, subject.actor(), Instant.now(clock));
         drafts.put(draft.draftId(), new DraftState(draft, 1, sourceSurface, rollbackSource, requiredKind,
-                Optional.empty(), Optional.empty(), Optional.empty(), false));
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), false));
         return draft.draftId();
     }
 
@@ -1061,6 +1302,110 @@ public final class ConfigurationAdministrationService {
                     "document", resolved.documentName());
         }
         return LosslessYamlDocument.parse(source);
+    }
+
+    private static String requireDocument(Map<String, String> documents, String documentName) {
+        String source = documents.get(documentName);
+        if (source == null) {
+            throw new IllegalArgumentException("Draft is missing canonical document " + documentName);
+        }
+        return source;
+    }
+
+    private void setGuidedCostBase(
+            PermissionSubject subject,
+            Map<String, String> documents,
+            GuidedMoneyScalingPair pair) {
+        SchemaNode costNode = schema.resolve(pair.costAmountPath()).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + pair.costAmountPath(),
+                "Use only a schema-owned cost amount path.", "path", pair.costAmountPath()));
+        subject.require(costNode.editPermission());
+        validateAllowed(costNode, pair.costBaseAmount());
+        ConfigurationPathResolver.ResolvedPath cost = paths.resolve(pair.costAmountPath())
+                .orElseThrow(() -> notEditable(pair.costAmountPath()));
+        LosslessYamlDocument costDocument = LosslessYamlDocument.parse(
+                requireDocument(documents, cost.documentName()));
+        documents.put(cost.documentName(), costDocument
+                .setString(cost.yamlPath(), pair.costBaseAmount()).render());
+    }
+
+    private LosslessYamlDocument guidedCostScalingDocument(
+            PermissionSubject subject,
+            Map<String, String> documents,
+            GuidedMoneyScalingPair pair) {
+        SchemaNode scalingNode = schema.resolve(pair.costScalingPath()).orElseThrow(() ->
+                new AdministrationException("config.path.unknown",
+                        "Unknown canonical configuration path: " + pair.costScalingPath(),
+                        "Use only a schema-owned cost scaling path.", "path", pair.costScalingPath()));
+        subject.require(scalingNode.editPermission());
+        if (scalingNode.type() != SchemaValueType.MAP) {
+            throw notEditable(pair.costScalingPath());
+        }
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(pair.costScalingPath())
+                .orElseThrow(() -> notEditable(pair.costScalingPath()));
+        LosslessYamlDocument lifecycle = LosslessYamlDocument.parse(
+                requireDocument(documents, scaling.documentName()));
+        if (!lifecycle.contains(scaling.yamlPath())) {
+            ConfigurationPathResolver.ResolvedPath parent = paths.resolve("prestige.cost-scaling")
+                    .orElseThrow(() -> notEditable("prestige.cost-scaling"));
+            return lifecycle.appendMappingStructure(
+                    parent.yamlPath(), pair.costId(), pair.costScalingProfile().fields());
+        }
+        if (!lifecycle.contains(scaling.yamlPath().key("segments"))) {
+            throw new AdministrationException("config.gui.money.unsupported",
+                    "The guided Money cost uses an advanced scaling representation.",
+                    "Keep this configuration YAML-first or convert it explicitly to a paired segment profile.");
+        }
+        return lifecycle;
+    }
+
+    private static YamlPath costScalingPath(GuidedMoneyScalingPair pair) {
+        return YamlPath.document(0).key("prestige").key("cost-scaling").key(pair.costId());
+    }
+
+    private static void requireMatchingScalingPath(
+            String scalingPath,
+            GuidedMoneyScalingPair pair) {
+        if (!pair.requirementScalingPath().equals(scalingPath)) {
+            throw new AdministrationException("config.gui.money.pair_mismatch",
+                    "The guided Money edit does not match its authoritative requirement.",
+                    "Reopen the current guided editor and prepare a fresh revision-bound change.");
+        }
+    }
+
+    private static void requireGuidedMoneyInvariant(
+            PhaseSixConfigurationCandidate candidate,
+            Optional<GuidedMoneyScalingPair> pair) {
+        if (pair.isEmpty()) {
+            return;
+        }
+        GuidedMoneyScalingPair binding = pair.orElseThrow();
+        RequirementId requirementId = new RequirementId(binding.requirementId());
+        CostId costId = new CostId(binding.costId());
+        var requirement = candidate.phaseThree().requirements().get(requirementId);
+        CostDefinition cost = candidate.phaseThree().costs().get(costId);
+        var costScaling = candidate.phaseFour().valueScaling().costs().get(costId);
+        boolean paired = requirement != null
+                && cost != null
+                && costScaling != null
+                && candidate.phaseFour().prestige().costIds().contains(costId)
+                && requirement.target().upper().isEmpty()
+                && requirement.target().lower().type().isNumeric()
+                && cost.amount().type().isNumeric()
+                && !requirement.catchUp().enabled()
+                && !requirement.scaling().segments().isEmpty()
+                && requirement.target().lower().asNumber().compareTo(cost.amount().asNumber()) == 0
+                && requirement.scaling().segments().equals(costScaling.segments());
+        if (!paired) {
+            throw new AdministrationException("config.guided_money.invariant",
+                    "Guided Money requirement and consumed cost would diverge after scaling.",
+                    "Reopen the guided editor and keep its Money requirement and cost paired.");
+        }
+    }
+
+    private static YamlPath appendScalingOverride(YamlPath profile, ScalingOverrideEdit edit) {
+        return profile.key("segments").index(edit.segmentIndex()).key("overrides")
+                .key(Long.toString(edit.prestigeLevel()));
     }
 
     private SchemaNode requireStructuralNode(
@@ -1416,6 +1761,7 @@ public final class ConfigurationAdministrationService {
             Optional<ConfigurationPreview> preview,
             Optional<PhaseSixConfigurationCandidate> candidate,
             Optional<StageRemapPlan> remapPlan,
+            Optional<GuidedMoneyScalingPair> guidedMoneyPair,
             boolean applying) {
         private DraftState {
             draft = Objects.requireNonNull(draft, "draft");
@@ -1428,6 +1774,7 @@ public final class ConfigurationAdministrationService {
             preview = Objects.requireNonNull(preview, "preview");
             candidate = Objects.requireNonNull(candidate, "candidate");
             remapPlan = Objects.requireNonNull(remapPlan, "remap plan");
+            guidedMoneyPair = Objects.requireNonNull(guidedMoneyPair, "guided Money pair");
         }
 
         private DraftState withDraft(ConfigDraft replacement) {
@@ -1436,12 +1783,26 @@ public final class ConfigurationAdministrationService {
 
         private DraftState withDraft(ConfigDraft replacement, Optional<StageRemapPlan> replacementRemap) {
             return new DraftState(replacement, Math.addExact(version, 1), sourceSurface, rollbackSource, requiredKind,
-                    Optional.empty(), Optional.empty(), replacementRemap, false);
+                    Optional.empty(), Optional.empty(), replacementRemap, guidedMoneyPair, false);
+        }
+
+        private DraftState withGuidedMoneyDraft(
+                ConfigDraft replacement,
+                GuidedMoneyScalingPair replacementPair) {
+            if (guidedMoneyPair.isPresent()
+                    && (!guidedMoneyPair.orElseThrow().requirementId().equals(replacementPair.requirementId())
+                    || !guidedMoneyPair.orElseThrow().costId().equals(replacementPair.costId()))) {
+                throw new AdministrationException("config.gui.money.pair_mismatch",
+                        "A guided draft cannot change its authoritative Money pair.",
+                        "Discard this draft and prepare a fresh guided edit.");
+            }
+            return new DraftState(replacement, Math.addExact(version, 1), sourceSurface, rollbackSource, requiredKind,
+                    Optional.empty(), Optional.empty(), remapPlan, Optional.of(replacementPair), false);
         }
 
         private DraftState withRemap(Optional<StageRemapPlan> replacementRemap) {
             return new DraftState(draft, Math.addExact(version, 1), sourceSurface, rollbackSource, requiredKind,
-                    Optional.empty(), Optional.empty(), replacementRemap, false);
+                    Optional.empty(), Optional.empty(), replacementRemap, guidedMoneyPair, false);
         }
 
         private DraftState withPreview(
@@ -1449,7 +1810,7 @@ public final class ConfigurationAdministrationService {
                 PhaseSixConfigurationCandidate replacementCandidate) {
             return new DraftState(draft, version, sourceSurface, rollbackSource, requiredKind,
                     Optional.of(replacement),
-                    Optional.of(replacementCandidate), remapPlan, false);
+                    Optional.of(replacementCandidate), remapPlan, guidedMoneyPair, false);
         }
 
         private DraftState claimForApply() {
@@ -1459,7 +1820,7 @@ public final class ConfigurationAdministrationService {
                         "Wait for its current apply outcome; do not submit it concurrently.");
             }
             return new DraftState(draft, version, sourceSurface, rollbackSource, requiredKind, preview, candidate,
-                    remapPlan, true);
+                    remapPlan, guidedMoneyPair, true);
         }
     }
 

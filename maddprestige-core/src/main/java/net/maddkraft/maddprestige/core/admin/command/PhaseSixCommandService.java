@@ -48,6 +48,8 @@ import net.maddkraft.maddprestige.core.admin.setup.SetupReward;
 import net.maddkraft.maddprestige.core.admin.setup.SetupStage;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
+import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiService;
+import net.maddkraft.maddprestige.core.admin.ui.StaffGuiService;
 import net.maddkraft.maddprestige.core.scaling.SegmentScalingMode;
 import net.maddkraft.maddprestige.core.scaling.SegmentTransition;
 
@@ -67,6 +69,9 @@ public final class PhaseSixCommandService {
     private final SetupWizardService setup;
     private final ManualPrestigeAdministrationService prestigeAdministration;
     private final GuiSessionService gui;
+    private final Optional<PlayerGuiService> playerGui;
+    private final Optional<StaffGuiService> staffGui;
+    private final Optional<StaffHistoryCommandService> staffHistory;
     private final Supplier<Optional<ConfigRevisionId>> activeRevision;
     private final Executor worker;
 
@@ -84,6 +89,66 @@ public final class PhaseSixCommandService {
             GuiSessionService gui,
             Supplier<Optional<ConfigRevisionId>> activeRevision,
             Executor worker) {
+        this(help, introspection, configuration, doctor, why, previews, confirmations, playerViews, setup,
+                prestigeAdministration, gui, null, null, activeRevision, worker);
+    }
+
+    public PhaseSixCommandService(
+            ContextualHelpService help,
+            ConfigurationIntrospectionService introspection,
+            ConfigurationAdministrationService configuration,
+            DoctorService doctor,
+            WhyService why,
+            OperationPreviewService previews,
+            OperationConfirmationService confirmations,
+            PlayerProgressViewService playerViews,
+            SetupWizardService setup,
+            ManualPrestigeAdministrationService prestigeAdministration,
+            GuiSessionService gui,
+            PlayerGuiService playerGui,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            Executor worker) {
+        this(help, introspection, configuration, doctor, why, previews, confirmations, playerViews, setup,
+                prestigeAdministration, gui, playerGui, null, activeRevision, worker);
+    }
+
+    public PhaseSixCommandService(
+            ContextualHelpService help,
+            ConfigurationIntrospectionService introspection,
+            ConfigurationAdministrationService configuration,
+            DoctorService doctor,
+            WhyService why,
+            OperationPreviewService previews,
+            OperationConfirmationService confirmations,
+            PlayerProgressViewService playerViews,
+            SetupWizardService setup,
+            ManualPrestigeAdministrationService prestigeAdministration,
+            GuiSessionService gui,
+            PlayerGuiService playerGui,
+            StaffGuiService staffGui,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            Executor worker) {
+        this(help, introspection, configuration, doctor, why, previews, confirmations, playerViews, setup,
+                prestigeAdministration, gui, playerGui, staffGui, null, activeRevision, worker);
+    }
+
+    public PhaseSixCommandService(
+            ContextualHelpService help,
+            ConfigurationIntrospectionService introspection,
+            ConfigurationAdministrationService configuration,
+            DoctorService doctor,
+            WhyService why,
+            OperationPreviewService previews,
+            OperationConfirmationService confirmations,
+            PlayerProgressViewService playerViews,
+            SetupWizardService setup,
+            ManualPrestigeAdministrationService prestigeAdministration,
+            GuiSessionService gui,
+            PlayerGuiService playerGui,
+            StaffGuiService staffGui,
+            StaffHistoryCommandService staffHistory,
+            Supplier<Optional<ConfigRevisionId>> activeRevision,
+            Executor worker) {
         this.help = Objects.requireNonNull(help, "help");
         this.introspection = Objects.requireNonNull(introspection, "introspection");
         this.configuration = Objects.requireNonNull(configuration, "configuration");
@@ -95,6 +160,9 @@ public final class PhaseSixCommandService {
         this.setup = Objects.requireNonNull(setup, "setup");
         this.prestigeAdministration = Objects.requireNonNull(prestigeAdministration, "Prestige administration");
         this.gui = Objects.requireNonNull(gui, "GUI");
+        this.playerGui = Optional.ofNullable(playerGui);
+        this.staffGui = Optional.ofNullable(staffGui);
+        this.staffHistory = Optional.ofNullable(staffHistory);
         this.activeRevision = Objects.requireNonNull(activeRevision, "active revision");
         this.worker = Objects.requireNonNull(worker, "worker");
     }
@@ -109,7 +177,7 @@ public final class PhaseSixCommandService {
     private CompletionStage<CommandResponse> dispatch(CommandInvocation invocation) {
         List<String> arguments = invocation.arguments();
         if (arguments.isEmpty()) {
-            return completed(CommandResponse.failure("command.usage", m("command.usage.root")));
+            return gui(invocation.subject());
         }
         PermissionSubject subject = invocation.subject();
         return switch (arguments.getFirst().toLowerCase(java.util.Locale.ROOT)) {
@@ -122,6 +190,8 @@ public final class PhaseSixCommandService {
             case "why" -> why(subject, arguments);
             case "player" -> player(subject, arguments);
             case "gui" -> gui(subject);
+            case "admin" -> admin(subject, arguments);
+            case "history" -> history(subject, arguments);
             case "config" -> config(subject, arguments);
             case "setup" -> setup(subject, arguments);
             case "doctor" -> doctor(subject, arguments);
@@ -218,11 +288,35 @@ public final class PhaseSixCommandService {
     }
 
     private CompletionStage<CommandResponse> gui(PermissionSubject subject) {
-        self(subject);
-        var view = subject.has(PhaseSixPermissions.ADMIN_GUI) ? gui.openStaff(subject)
-                : gui.openPlayer(subject, self(subject));
-        return completed(CommandResponse.gui("gui.open", List.of(m("command.gui.opened", "id", view.sessionId(),
-                "count", view.actions().size())), view));
+        UUID playerId = self(subject);
+        CompletionStage<net.maddkraft.maddprestige.core.admin.ui.GuiSessionView> view = playerGui.isPresent()
+                ? playerGui.orElseThrow().open(subject, playerId)
+                : CompletableFuture.completedFuture(gui.openPlayer(subject, playerId));
+        return view.thenApply(opened -> CommandResponse.gui("gui.open", List.of(), opened));
+    }
+
+    private CompletionStage<CommandResponse> admin(PermissionSubject subject, List<String> arguments) {
+        net.maddkraft.maddprestige.core.admin.ui.StaffGuiService service = staffGui
+                .orElseThrow(() -> new AdministrationException("gui.staff.unavailable",
+                        "The Staff GUI is unavailable in this runtime.",
+                        "Use the read-only command surfaces or try again after restart."));
+        net.maddkraft.maddprestige.core.admin.ui.GuiSessionView view;
+        if (arguments.size() == 1) {
+            view = service.open(subject);
+        } else if (arguments.size() == 3 && arguments.get(1).equalsIgnoreCase("find")) {
+            view = service.findPlayers(subject, arguments.get(2));
+        } else {
+            throw usage("admin [find <player>]");
+        }
+        return completed(CommandResponse.gui("gui.open", List.of(), view));
+    }
+
+    private CompletionStage<CommandResponse> history(PermissionSubject subject, List<String> arguments) {
+        return staffHistory.map(service -> service.execute(subject, arguments)).orElseGet(() -> completed(
+                CommandResponse.failure("gui.staff.unavailable", List.of(
+                        m("command.error.administration.gui_staff_unavailable.summary",
+                                "code", "gui.staff.unavailable"),
+                        m("command.error.administration.gui_staff_unavailable.remediation")))));
     }
 
     private CompletionStage<CommandResponse> config(PermissionSubject subject, List<String> arguments) {
@@ -306,7 +400,9 @@ public final class PhaseSixCommandService {
         requireSize(arguments, 2, "config draft");
         UUID draft = configuration.beginDraft(subject, "command");
         return completed(CommandResponse.success("config.draft.created", List.of(
-                m("command.config.draft_created", "draft", draft), m("command.config.production_unchanged"))));
+                m("command.config.draft_created", "draft", draft),
+                m("command.config.draft_controls", "draft", draft),
+                m("command.config.production_unchanged"))));
     }
 
     private CompletionStage<CommandResponse> configSet(PermissionSubject subject, List<String> arguments) {
@@ -764,7 +860,7 @@ public final class PhaseSixCommandService {
     private static List<MessageReference> renderPreview(ConfigurationPreview preview, boolean details) {
         ArrayList<MessageReference> lines = new ArrayList<>();
         lines.add(m("command.config.preview_summary", "draft", preview.draftId(), "status",
-                preview.validation().hasErrors() ? "BLOCKED" : "VALID", "documents",
+                preview.validation().hasErrors() ? "BLOCKED" : "VALID", "count",
                 preview.changedDocuments().size(), "findings", preview.validation().findings().size()));
         if (details) {
             lines.add(m("command.config.preview_header", "draft", preview.draftId(), "base",
@@ -888,8 +984,9 @@ public final class PhaseSixCommandService {
     }
 
     private static String scalingSegmentsPath(String scalingPath) {
-        if (!scalingPath.matches("requirements\\.requirements\\.[a-z][a-z0-9_-]{0,63}\\.scaling")) {
-            throw new IllegalArgumentException("Invalid requirement scaling path: " + scalingPath);
+        if (!scalingPath.matches("(?:requirements\\.requirements\\.[a-z][a-z0-9_-]{0,63}\\.scaling"
+                + "|prestige\\.(?:cost|reward)-scaling\\.[a-z][a-z0-9_-]{0,63})")) {
+            throw new IllegalArgumentException("Invalid scaling path: " + scalingPath);
         }
         return scalingPath + ".segments";
     }

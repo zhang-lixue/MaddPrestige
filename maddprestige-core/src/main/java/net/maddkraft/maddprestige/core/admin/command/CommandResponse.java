@@ -15,8 +15,8 @@ public record CommandResponse(
         code = Objects.requireNonNull(code, "code");
         messages = List.copyOf(Objects.requireNonNull(messages, "messages"));
         guiView = Objects.requireNonNull(guiView, "GUI view");
-        if (code.isBlank() || messages.isEmpty()) {
-            throw new IllegalArgumentException("Command response requires a code and at least one line");
+        if (code.isBlank() || messages.isEmpty() && guiView.isEmpty()) {
+            throw new IllegalArgumentException("Command response requires a code and visible output or a GUI view");
         }
     }
 

@@ -1,5 +1,6 @@
 package net.maddkraft.maddprestige.core.admin;
 
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,12 +17,14 @@ public final class ManualPrestigeAdministrationService {
     private final Supplier<ConfigRevisionId> activeRevision;
     private final Executor worker;
     private final Function<UUID, Optional<String>> playerInitializer;
+    private final Supplier<ManualPrestigeAdjustmentPolicy> policy;
 
     public ManualPrestigeAdministrationService(
             PrestigeAdministrationStore store,
             Supplier<ConfigRevisionId> activeRevision,
             Executor worker) {
-        this(store, activeRevision, worker, ignored -> Optional.empty());
+        this(store, activeRevision, worker, ignored -> Optional.empty(),
+                ManualPrestigeAdjustmentPolicy::unlimited);
     }
 
     public ManualPrestigeAdministrationService(
@@ -29,10 +32,20 @@ public final class ManualPrestigeAdministrationService {
             Supplier<ConfigRevisionId> activeRevision,
             Executor worker,
             Function<UUID, Optional<String>> playerInitializer) {
+        this(store, activeRevision, worker, playerInitializer, ManualPrestigeAdjustmentPolicy::unlimited);
+    }
+
+    public ManualPrestigeAdministrationService(
+            PrestigeAdministrationStore store,
+            Supplier<ConfigRevisionId> activeRevision,
+            Executor worker,
+            Function<UUID, Optional<String>> playerInitializer,
+            Supplier<ManualPrestigeAdjustmentPolicy> policy) {
         this.store = Objects.requireNonNull(store, "store");
         this.activeRevision = Objects.requireNonNull(activeRevision, "active revision");
         this.worker = Objects.requireNonNull(worker, "worker executor");
         this.playerInitializer = Objects.requireNonNull(playerInitializer, "player initializer");
+        this.policy = Objects.requireNonNull(policy, "adjustment policy");
     }
 
     public CompletionStage<PlayerPrestigeState> set(
@@ -55,16 +68,226 @@ public final class ManualPrestigeAdministrationService {
             String sourceSurface,
             String reason) {
         subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT);
-        ManualPrestigeAdjustment adjustment = new ManualPrestigeAdjustment(playerId, expectedStateRevision,
+        validateSetTarget(currentPrestige);
+        ManualPrestigeAdjustment adjustment = new ManualPrestigeAdjustment(UUID.randomUUID(),
+                ManualPrestigeAdjustmentKind.SET, playerId, expectedStateRevision,
                 currentPrestige, lifetimePrestige, activeRevision.get(), subject.actor(), sourceSurface, reason);
         return CompletableFuture.supplyAsync(() -> {
-            Optional<String> initializationFailure = Objects.requireNonNull(
-                    playerInitializer.apply(playerId), "player initialization result");
-            initializationFailure.ifPresent(failure -> {
-                throw new IllegalStateException("Player lifecycle establishment failed before Prestige edit: "
-                        + failure);
-            });
+            initialize(playerId);
             return store.adjust(adjustment);
         }, worker);
+    }
+
+    public CompletionStage<PlayerPrestigeState> inspect(PermissionSubject subject, UUID playerId) {
+        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        return CompletableFuture.supplyAsync(() -> state(playerId), worker);
+    }
+
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewSet(
+            PermissionSubject subject,
+            UUID playerId,
+            long targetPrestige) {
+        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        validateSetTarget(targetPrestige);
+        return review(subject, playerId, targetPrestige, ManualPrestigeAdjustmentKind.SET);
+    }
+
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewSetInput(
+            PermissionSubject subject,
+            UUID playerId,
+            String input) {
+        ConfigRevisionId expectedRevision = activeRevision.get();
+        long target = validateSetInput(subject, input, expectedRevision);
+        return review(subject, playerId, target, ManualPrestigeAdjustmentKind.SET,
+                Optional.of(expectedRevision), Optional.empty());
+    }
+
+    /** Validates an actor/revision-bound Staff GUI target without creating mutation authority. */
+    public long validateSetInput(
+            PermissionSubject subject,
+            String input,
+            ConfigRevisionId expectedRevision) {
+        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        String candidate = Objects.requireNonNull(input, "Prestige input");
+        ConfigRevisionId expected = Objects.requireNonNull(expectedRevision, "expected revision");
+        if (!activeRevision.get().equals(expected)) {
+            throw new IllegalStateException("Active configuration changed while Set Prestige input was open");
+        }
+        if (candidate.isEmpty() || candidate.codePoints().anyMatch(character ->
+                character < '0' || character > '9')) {
+            throw new IllegalArgumentException("Prestige must be a whole number without signs or exponents");
+        }
+        final long target;
+        try {
+            target = Long.parseLong(candidate);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Prestige target is outside the supported numeric range", exception);
+        }
+        validateSetTarget(target);
+        return target;
+    }
+
+    /** Prepares a Set review only when the input session's configuration revision remains current. */
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewSetInput(
+            PermissionSubject subject,
+            UUID playerId,
+            String input,
+            ConfigRevisionId expectedRevision) {
+        long target = validateSetInput(subject, input, expectedRevision);
+        return review(subject, playerId, target, ManualPrestigeAdjustmentKind.SET,
+                Optional.of(expectedRevision), Optional.empty());
+    }
+
+    /** Prepares a Set review only when both the input's config and player-state revisions remain current. */
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewSetInput(
+            PermissionSubject subject,
+            UUID playerId,
+            String input,
+            ConfigRevisionId expectedRevision,
+            long expectedStateRevision) {
+        long target = validateSetInput(subject, input, expectedRevision);
+        return review(subject, playerId, target, ManualPrestigeAdjustmentKind.SET,
+                Optional.of(expectedRevision), Optional.of(expectedStateRevision));
+    }
+
+    public CompletionStage<ManualPrestigeAdjustmentReview> reviewReset(
+            PermissionSubject subject,
+            UUID playerId) {
+        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        return review(subject, playerId, currentPolicy().resetTarget(), ManualPrestigeAdjustmentKind.RESET);
+    }
+
+    public CompletionStage<ManualPrestigeTargetPage> targets(
+            PermissionSubject subject,
+            UUID playerId,
+            int page,
+            int pageSize) {
+        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        if (page < 0 || pageSize < 1 || pageSize > 7) {
+            throw new IllegalArgumentException("Prestige target page is outside supported bounds");
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            PlayerPrestigeState current = state(playerId);
+            ManualPrestigeAdjustmentPolicy currentPolicy = currentPolicy();
+            long first;
+            try {
+                first = Math.addExact(Math.multiplyExact((long) page, pageSize), 1L);
+            } catch (ArithmeticException exception) {
+                throw new IllegalArgumentException("Prestige target page is outside supported bounds", exception);
+            }
+            if (!currentPolicy.allows(first)) {
+                throw new IllegalArgumentException("Prestige target page is outside the active supported range");
+            }
+            ArrayList<ManualPrestigeAdjustmentReview> targets = new ArrayList<>();
+            long last = first;
+            for (int index = 0; index < pageSize; index++) {
+                long target;
+                try {
+                    target = Math.addExact(first, index);
+                } catch (ArithmeticException exception) {
+                    break;
+                }
+                if (!currentPolicy.allows(target)) {
+                    break;
+                }
+                last = target;
+                if (target != current.currentPrestige()) {
+                    targets.add(new ManualPrestigeAdjustmentReview(UUID.randomUUID(),
+                            ManualPrestigeAdjustmentKind.SET, playerId, current.currentPrestige(), target,
+                            current.stateRevision(), activeRevision.get()));
+                }
+            }
+            boolean hasNext = last < Long.MAX_VALUE && currentPolicy.allows(last + 1);
+            return new ManualPrestigeTargetPage(current.currentPrestige(), page, targets, page > 0, hasNext);
+        }, worker);
+    }
+
+    public CompletionStage<PlayerPrestigeState> confirm(
+            PermissionSubject subject,
+            ManualPrestigeAdjustmentReview review,
+            String sourceSurface,
+            String reason) {
+        ManualPrestigeAdjustmentReview authority = Objects.requireNonNull(review, "adjustment review");
+        subject.require(authority.kind().permission());
+        ConfigRevisionId revision = activeRevision.get();
+        if (!revision.equals(authority.configRevision())) {
+            throw new IllegalStateException("Active configuration changed after the adjustment review");
+        }
+        if (authority.kind() == ManualPrestigeAdjustmentKind.SET) {
+            validateSetTarget(authority.targetPrestige());
+        } else {
+            validateTarget(authority.targetPrestige());
+        }
+        ManualPrestigeAdjustment adjustment = new ManualPrestigeAdjustment(authority.reviewId(), authority.kind(),
+                authority.playerId(), authority.expectedStateRevision(), authority.targetPrestige(),
+                authority.targetPrestige(), revision, subject.actor(), sourceSurface, reason);
+        return CompletableFuture.supplyAsync(() -> store.adjust(adjustment), worker);
+    }
+
+    private CompletionStage<ManualPrestigeAdjustmentReview> review(
+            PermissionSubject subject,
+            UUID playerId,
+            long targetPrestige,
+            ManualPrestigeAdjustmentKind kind) {
+        return review(subject, playerId, targetPrestige, kind, Optional.empty(), Optional.empty());
+    }
+
+    private CompletionStage<ManualPrestigeAdjustmentReview> review(
+            PermissionSubject subject,
+            UUID playerId,
+            long targetPrestige,
+            ManualPrestigeAdjustmentKind kind,
+            Optional<ConfigRevisionId> expectedRevision,
+            Optional<Long> expectedStateRevision) {
+        Objects.requireNonNull(subject, "subject");
+        Objects.requireNonNull(playerId, "player ID");
+        return CompletableFuture.supplyAsync(() -> {
+            ConfigRevisionId revision = activeRevision.get();
+            if (expectedRevision.isPresent() && !expectedRevision.orElseThrow().equals(revision)) {
+                throw new IllegalStateException("Active configuration changed while Set Prestige review was prepared");
+            }
+            PlayerPrestigeState current = state(playerId);
+            if (expectedStateRevision.isPresent()
+                    && expectedStateRevision.orElseThrow() != current.stateRevision()) {
+                throw new IllegalStateException("Player Prestige changed while Set Prestige input was open");
+            }
+            if (current.currentPrestige() == targetPrestige) {
+                throw new IllegalArgumentException("Administrative Prestige target already equals current Prestige");
+            }
+            return new ManualPrestigeAdjustmentReview(UUID.randomUUID(), kind, playerId,
+                    current.currentPrestige(), targetPrestige, current.stateRevision(), revision);
+        }, worker);
+    }
+
+    private PlayerPrestigeState state(UUID playerId) {
+        initialize(playerId);
+        return store.find(playerId).orElseThrow(() ->
+                new IllegalStateException("Player has no authoritative Prestige state"));
+    }
+
+    private void initialize(UUID playerId) {
+        Optional<String> initializationFailure = Objects.requireNonNull(
+                playerInitializer.apply(playerId), "player initialization result");
+        initializationFailure.ifPresent(failure -> {
+            throw new IllegalStateException("Player lifecycle establishment failed before Prestige edit: "
+                    + failure);
+        });
+    }
+
+    private void validateTarget(long targetPrestige) {
+        if (!currentPolicy().allows(targetPrestige)) {
+            throw new IllegalArgumentException("Prestige target is outside the active supported range");
+        }
+    }
+
+    private void validateSetTarget(long targetPrestige) {
+        validateTarget(targetPrestige);
+        if (targetPrestige < 1) {
+            throw new IllegalArgumentException("Set Prestige target must be positive; use Reset Prestige for zero");
+        }
+    }
+
+    private ManualPrestigeAdjustmentPolicy currentPolicy() {
+        return Objects.requireNonNull(policy.get(), "adjustment policy");
     }
 }

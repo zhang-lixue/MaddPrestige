@@ -35,8 +35,21 @@ public final class OperationPreviewService {
 
     public CompletionStage<OperationPreview> simulatePrestige(PermissionSubject subject, UUID playerId) {
         requireSimulation(subject, playerId, PhaseSixPermissions.PRESTIGE);
+        return prestigePreview(subject, playerId, "simulate-prestige-");
+    }
+
+    /** Read-only staff inspection through the same authorization and projection pipeline as simulation. */
+    public CompletionStage<OperationPreview> inspectPrestige(PermissionSubject subject, UUID playerId) {
+        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        return prestigePreview(subject, playerId, "inspect-prestige-");
+    }
+
+    private CompletionStage<OperationPreview> prestigePreview(
+            PermissionSubject subject,
+            UUID playerId,
+            String correlationPrefix) {
         return prestige.apply(new PrestigeIntent(subject.actor(), playerId,
-                "simulate-prestige-" + UUID.randomUUID())).thenApply(result -> result.plan()
+                correlationPrefix + UUID.randomUUID())).thenApply(result -> result.plan()
                         .map(OperationPreviewService::prestigePreview)
                         .orElseThrow(() -> rejected("Prestige", result.authorizationBlockers())));
     }
@@ -102,6 +115,12 @@ public final class OperationPreviewService {
                 reward.definition().id().value(), "provider", reward.definition().providerId().value(),
                 "type", reward.definition().type(), "amount", reward.definition().value(), "canonical",
                 reward.definition().value().canonical(), "value", reward.definition().displayName())));
+        PrestigeBalanceProjection.from(plan).ifPresent(balance -> details.add(balance.missing().isPresent()
+                ? m("command.preview.balance_projection", "current", balance.current().canonical(),
+                        "projected", balance.projected().canonical(),
+                        "missing", balance.missing().orElseThrow().canonical())
+                : m("command.preview.balance_projection", "current", balance.current().canonical(),
+                        "projected", balance.projected().canonical())));
         simulation.componentConsequences().forEach(consequence -> details.add(m(
                 "command.preview.component_consequence", "component", consequence.component(),
                 "disposition", consequence.disposition())));

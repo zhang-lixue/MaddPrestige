@@ -176,6 +176,26 @@ class VaultEconomyProviderTest {
         assertEquals(3.75, economy.lastDeposit.get());
     }
 
+    @Test
+    @DisplayName("[Phase 9F-C2] Frozen Vault cost and reward contracts reject zero without provider calls")
+    void zeroCostAndRewardAreInvalidForVaultContracts() {
+        EconomyHarness economy = new EconomyHarness();
+        VaultEconomyBinding binding = binding(economy);
+        VaultEconomyCostProvider costProvider = new VaultEconomyCostProvider(binding, "2.20.2");
+        VaultEconomyRewardProvider rewardProvider = new VaultEconomyRewardProvider(binding, "2.20.2");
+
+        var costValidation = costProvider.validate(cost("0").definition());
+        var rewardValidation = rewardProvider.validate(reward("0").definition());
+
+        assertTrue(costValidation.hasErrors());
+        assertTrue(costValidation.findings().getFirst().explanation().contains("must be positive"));
+        assertTrue(rewardValidation.hasErrors());
+        assertTrue(rewardValidation.findings().getFirst().explanation().contains("must be positive"));
+        assertEquals(0, economy.providerCalls.get());
+        assertEquals(0, economy.withdrawals.get());
+        assertEquals(0, economy.deposits.get());
+    }
+
     private static PlannedCost cost(String amount) {
         return cost(amount, BatchIdentity.create());
     }

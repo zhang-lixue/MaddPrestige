@@ -89,8 +89,9 @@ and `setup confirm`; otherwise use the normal setup apply path. Then run `/maddp
 
 ## Operate and inspect
 
-Players use `/maddprestige prestige`, click `[Confirm]`, or run `/maddprestige confirm` when exactly one owned
-confirmation is valid. `[Copy ID]` and the explicit UUID form remain available. Confirmations belong to the current
+Players open the Player GUI with `/prestige`. Authorized staff open the Staff Dashboard with `/maddprestige admin`; player lookup, history, Set/Reset, and guided configuration controls remain permission-scoped. The advanced `/maddprestige prestige` and `/maddprestige confirm`
+forms remain available; the no-ID confirmation form requires exactly one owned confirmation. `[Copy ID]` and the
+explicit UUID form remain available. Confirmations belong to the current
 login session, expire on logout/restart/replacement/revision change, and revalidate state before execution; the
 configurable maximum lifetime is only a secondary cap. Normal preview includes the Prestige transition,
 effective requirements, costs, rewards, and blockers without provider internals. Add `details` to Doctor, Why, setup

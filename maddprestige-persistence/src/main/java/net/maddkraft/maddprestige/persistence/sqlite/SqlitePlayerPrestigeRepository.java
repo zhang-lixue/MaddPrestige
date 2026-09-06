@@ -6,6 +6,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Types;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
@@ -38,6 +40,22 @@ public final class SqlitePlayerPrestigeRepository implements PlayerPrestigeRepos
             }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load player Prestige state", exception);
+        }
+    }
+
+    @Override
+    public List<UUID> knownPlayerIds() {
+        String sql = "SELECT player_uuid FROM mp_player_prestige_state ORDER BY player_uuid";
+        ArrayList<UUID> playerIds = new ArrayList<>();
+        try (Connection connection = connections.open();
+                PreparedStatement statement = connection.prepareStatement(sql);
+                ResultSet rows = statement.executeQuery()) {
+            while (rows.next()) {
+                playerIds.add(UUID.fromString(rows.getString(1)));
+            }
+            return List.copyOf(playerIds);
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not list known player Prestige identities", exception);
         }
     }
 

@@ -17,4 +17,10 @@ public final class PlayerProgressViewService {
         return previews.simulatePrestige(subject, playerId)
                 .thenApply(prestige -> new PlayerProgressView(playerId, prestige));
     }
+
+    /** Least-privilege staff read using the canonical Prestige preview projection. */
+    public CompletionStage<PlayerProgressView> inspect(PermissionSubject subject, UUID playerId) {
+        return previews.inspectPrestige(subject, playerId)
+                .thenApply(prestige -> new PlayerProgressView(playerId, prestige));
+    }
 }

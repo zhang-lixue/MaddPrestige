@@ -1,9 +1,9 @@
 # MaddPrestige V2 acceptance traceability
 
 **Imported matrix:** master specification A01–A76
-**Current classification:** Phase 8, Phase 9A, and Phase 9B are owner-accepted and merged. Phase 9C is an uncommitted configuration/admin-usability owner-review candidate that preserves numeric Prestige and stable compatibility surfaces. Real clone qualification and production readiness are not claimed.
+**Current classification:** Phase 9F-D is owner-accepted and checkpointed. Phase 9G is the final acceptance/release-qualification pass; its current launch-gate dispositions and explicit external-only exceptions are recorded in `../STATUS.md` and the owner-acceptance report. The historical A01-A76 evidence rows below remain intact rather than being silently rewritten.
 **Legend:** `Satisfied` means the acceptance criterion itself is demonstrably satisfied at its authorized engine/provider boundary; `Partial` means a required contract or focused implementation exists but a named later lifecycle/integration/qualification surface remains; `Later` means the criterion belongs wholly to a later phase or explicitly deferred post-release scope.
-**Current totals:** 63 Satisfied, 12 Partial, 1 Later.
+**Historical Phase 8F totals:** 63 Satisfied, 12 Partial, 1 Later. Phase 9G separately reconciles the launch-gate result, including A63 PASS, A74 PARTIAL, A75 N/A, and A64's dated post-2.0 deferral.
 
 Phase 9B does not silently rewrite the historical A01-A76 rows below. The exact proposed reinterpretations for A02,
 A28, A36/A37, A46-A48, A58-A63, A70-A72, and A76 are in

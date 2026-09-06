@@ -5,6 +5,7 @@ import java.util.Optional;
 import java.util.UUID;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.StageId;
+import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentReview;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
 public record GuiAction(
@@ -15,9 +16,12 @@ public record GuiAction(
         boolean mutating,
         Optional<ConfigRevisionId> expectedConfigRevision,
         Optional<UUID> targetPlayer,
+        Optional<UUID> confirmationId,
         Optional<StageId> targetStage,
         Optional<StageId> replacementStage,
-        Optional<GuiMutationContext> mutationContext) {
+        Optional<GuiMutationContext> mutationContext,
+        Optional<Integer> page,
+        Optional<ManualPrestigeAdjustmentReview> prestigeAdjustment) {
     public GuiAction {
         actionId = Objects.requireNonNull(actionId, "action ID");
         kind = Objects.requireNonNull(kind, "kind");
@@ -25,12 +29,51 @@ public record GuiAction(
         requiredPermission = Objects.requireNonNull(requiredPermission, "required permission");
         expectedConfigRevision = Objects.requireNonNull(expectedConfigRevision, "expected revision");
         targetPlayer = Objects.requireNonNull(targetPlayer, "target player");
+        confirmationId = Objects.requireNonNull(confirmationId, "confirmation ID");
         targetStage = Objects.requireNonNull(targetStage, "target stage");
         replacementStage = Objects.requireNonNull(replacementStage, "replacement stage");
         mutationContext = Objects.requireNonNull(mutationContext, "mutation context");
+        page = Objects.requireNonNull(page, "page");
+        prestigeAdjustment = Objects.requireNonNull(prestigeAdjustment, "Prestige adjustment");
         if (mutating && expectedConfigRevision.isEmpty()) {
             throw new IllegalArgumentException("Mutating GUI action requires an expected configuration revision");
         }
+        if (page.filter(value -> value < 0).isPresent()) {
+            throw new IllegalArgumentException("GUI action page cannot be negative");
+        }
+    }
+
+    public GuiAction(
+            UUID actionId,
+            GuiActionKind kind,
+            MessageReference label,
+            String requiredPermission,
+            boolean mutating,
+            Optional<ConfigRevisionId> expectedConfigRevision,
+            Optional<UUID> targetPlayer,
+            Optional<UUID> confirmationId,
+            Optional<StageId> targetStage,
+            Optional<StageId> replacementStage,
+            Optional<GuiMutationContext> mutationContext) {
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                confirmationId, targetStage, replacementStage, mutationContext, Optional.empty(), Optional.empty());
+    }
+
+    public GuiAction(
+            UUID actionId,
+            GuiActionKind kind,
+            MessageReference label,
+            String requiredPermission,
+            boolean mutating,
+            Optional<ConfigRevisionId> expectedConfigRevision,
+            Optional<UUID> targetPlayer,
+            Optional<UUID> confirmationId,
+            Optional<StageId> targetStage,
+            Optional<StageId> replacementStage,
+            Optional<GuiMutationContext> mutationContext,
+            Optional<Integer> page) {
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                confirmationId, targetStage, replacementStage, mutationContext, page, Optional.empty());
     }
 
     public GuiAction(
@@ -43,7 +86,36 @@ public record GuiAction(
             Optional<UUID> targetPlayer,
             Optional<StageId> targetStage,
             Optional<StageId> replacementStage) {
-        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer, targetStage,
-                replacementStage, Optional.empty());
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                Optional.empty(), targetStage, replacementStage, Optional.empty(), Optional.empty(), Optional.empty());
+    }
+
+    public GuiAction(
+            UUID actionId,
+            GuiActionKind kind,
+            MessageReference label,
+            String requiredPermission,
+            boolean mutating,
+            Optional<ConfigRevisionId> expectedConfigRevision,
+            Optional<UUID> targetPlayer,
+            Optional<StageId> targetStage,
+            Optional<StageId> replacementStage,
+            Optional<GuiMutationContext> mutationContext) {
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                Optional.empty(), targetStage, replacementStage, mutationContext, Optional.empty(), Optional.empty());
+    }
+
+    public GuiAction(
+            UUID actionId,
+            GuiActionKind kind,
+            MessageReference label,
+            String requiredPermission,
+            boolean mutating,
+            Optional<ConfigRevisionId> expectedConfigRevision,
+            Optional<UUID> targetPlayer,
+            Optional<ManualPrestigeAdjustmentReview> prestigeAdjustment) {
+        this(actionId, kind, label, requiredPermission, mutating, expectedConfigRevision, targetPlayer,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
+                prestigeAdjustment);
     }
 }

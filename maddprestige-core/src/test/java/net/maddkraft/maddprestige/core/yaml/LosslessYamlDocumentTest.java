@@ -185,6 +185,29 @@ class LosslessYamlDocumentTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-C2] Missing mapping scalars materialize below an existing sequence item")
+    void materializesMappingScalarBelowExistingSequenceItem() {
+        String source = """
+                scaling:
+                  segments:
+                    - start-prestige: 1
+                      overrides: # preserve owner note
+                        3: 3
+                sibling: keep
+                """;
+
+        LosslessYamlDocument edited = LosslessYamlDocument.parse(source).setDecimal(
+                YamlPath.document(0).key("scaling").key("segments").index(0).key("overrides").key("6"),
+                "4");
+
+        assertEquals("4", edited.scalar(
+                YamlPath.document(0).key("scaling").key("segments").index(0).key("overrides").key("6")));
+        assertTrue(edited.render().contains("overrides: # preserve owner note"));
+        assertTrue(edited.render().contains("\"6\": 4"));
+        assertTrue(edited.render().endsWith("sibling: keep\n"));
+    }
+
+    @Test
     @DisplayName("[Phase 9C correction] Structured map and sequence edits preserve surrounding YAML")
     void createsEditsAndRemovesStructuredValuesLosslessly() {
         String source = "# owner\r\nschema-version: 4\r\nprestige:\r\n  enabled: true\r\ntail: keep\r\n";

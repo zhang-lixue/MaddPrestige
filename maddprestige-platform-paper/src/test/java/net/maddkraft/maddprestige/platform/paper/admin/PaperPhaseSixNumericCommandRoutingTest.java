@@ -11,8 +11,10 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import java.io.IOException;
@@ -40,6 +42,9 @@ import net.maddkraft.maddprestige.api.id.OperationId;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.api.operation.Actor;
+import net.maddkraft.maddprestige.api.validation.ValidationFinding;
+import net.maddkraft.maddprestige.api.validation.ValidationReport;
+import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdministrationService;
 import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
@@ -56,6 +61,7 @@ import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.CommandResponse;
 import net.maddkraft.maddprestige.core.admin.command.ContextualHelpService;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.config.ConfigurationPreview;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
@@ -65,8 +71,11 @@ import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
+import net.maddkraft.maddprestige.core.config.ContentHash;
+import net.maddkraft.maddprestige.core.config.SemanticDiff;
 import net.maddkraft.maddprestige.core.plan.RankUpIntent;
 import net.maddkraft.maddprestige.core.prestige.PrestigeIntent;
+import net.maddkraft.maddprestige.core.stage.StageChangeImpact;
 import net.maddkraft.maddprestige.platform.paper.ExecutionThread;
 import net.maddkraft.maddprestige.platform.paper.PaperTaskScheduler;
 import net.maddkraft.maddprestige.platform.paper.i18n.PaperMessageService;
@@ -276,6 +285,88 @@ final class PaperPhaseSixNumericCommandRoutingTest {
         assertTrue(fixture.text().contains("[command.failed]"));
     }
 
+    @Test
+    @DisplayName("[Phase 9F-D] Successful config validate and diff render through the production dispatcher")
+    void successfulConfigValidateAndDiffRenderThroughProductionDispatcher() throws IOException {
+        Fixture fixture = fixture(PhaseSixPermissions.all(), numericPreview());
+        UUID draftId = UUID.fromString("44444444-4444-4444-8444-444444444444");
+        when(fixture.configuration.preview(any(PermissionSubject.class), eq(draftId)))
+                .thenReturn(CompletableFuture.completedFuture(configurationPreview(draftId, ValidationReport.VALID)));
+
+        fixture.dispatch("config", "validate", draftId.toString());
+
+        assertTrue(fixture.text().contains("Draft " + draftId + ": VALID; changed documents=2; findings=0"));
+        assertFalse(fixture.text().contains("[command.failed]"));
+
+        fixture.messages.clear();
+        fixture.dispatch("config", "diff", draftId.toString());
+
+        assertTrue(fixture.text().contains("Draft " + draftId + ": VALID; changed documents=2; findings=0"));
+        assertTrue(fixture.text().contains("Changed documents: lifecycle.yml, requirements.yml"));
+        assertFalse(fixture.text().contains("[command.failed]"));
+        verify(fixture.configuration, times(2)).preview(any(PermissionSubject.class), eq(draftId));
+        verifyNoMoreInteractions(fixture.configuration);
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] Genuine config validation errors remain visible and fail closed")
+    void genuineConfigValidationErrorsRemainVisibleAndFailClosed() throws IOException {
+        Fixture fixture = fixture(PhaseSixPermissions.all(), numericPreview());
+        UUID draftId = UUID.fromString("55555555-5555-4555-8555-555555555555");
+        ValidationReport blocked = ValidationReport.of(List.of(new ValidationFinding(
+                "prestige.test.invalid", ValidationSeverity.ERROR, "prestige.levels.6",
+                "The test value is invalid.", "The draft cannot be applied.", "Choose a valid test value.")));
+        when(fixture.configuration.preview(any(PermissionSubject.class), eq(draftId)))
+                .thenReturn(CompletableFuture.completedFuture(configurationPreview(draftId, blocked)));
+
+        fixture.dispatch("config", "validate", draftId.toString());
+
+        assertTrue(fixture.text().contains("Draft " + draftId + ": BLOCKED; changed documents=2; findings=1"));
+        assertTrue(fixture.text().contains("prestige.test.invalid"));
+        assertTrue(fixture.text().contains("Next:"));
+        assertFalse(fixture.text().contains("[command.failed]"));
+        verify(fixture.configuration).preview(any(PermissionSubject.class), eq(draftId));
+        verifyNoMoreInteractions(fixture.configuration);
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-D] Draft creation renders exact actionable controls and owned completion")
+    void configDraftCreationEliminatesManualIdentifierTranscription() throws IOException {
+        Fixture fixture = fixture(PhaseSixPermissions.all(), numericPreview());
+        UUID draftId = UUID.fromString("66666666-6666-4666-8666-666666666666");
+        when(fixture.configuration.beginDraft(any(PermissionSubject.class), eq("command"))).thenReturn(draftId);
+        when(fixture.configuration.ownedDraftIds(any(PermissionSubject.class))).thenReturn(List.of(draftId));
+
+        fixture.dispatch("config", "draft");
+
+        assertTrue(fixture.text().contains("Draft created: " + draftId + " [Copy Draft ID]"));
+        assertTrue(fixture.text().contains("[Validate] [Diff] [Cancel]"));
+        assertTrue(fixture.text().contains("Production remains unchanged"));
+        assertTrue(fixture.clicks().stream().anyMatch(click ->
+                click.action() == ClickEvent.Action.COPY_TO_CLIPBOARD
+                        && click.value().equals(draftId.toString())));
+        assertTrue(fixture.clicks().stream().anyMatch(click ->
+                click.action() == ClickEvent.Action.RUN_COMMAND
+                        && click.value().equals("/maddprestige config validate " + draftId)));
+        assertTrue(fixture.clicks().stream().anyMatch(click ->
+                click.action() == ClickEvent.Action.RUN_COMMAND
+                        && click.value().equals("/maddprestige config diff " + draftId)));
+        assertTrue(fixture.clicks().stream().anyMatch(click ->
+                click.action() == ClickEvent.Action.RUN_COMMAND
+                        && click.value().equals("/maddprestige config cancel " + draftId)));
+        assertEquals("Copy draft ID to clipboard", fixture.hover(
+                ClickEvent.Action.COPY_TO_CLIPBOARD, draftId.toString()));
+        assertEquals("Validate this draft", fixture.hover(
+                ClickEvent.Action.RUN_COMMAND, "/maddprestige config validate " + draftId));
+        assertEquals("Preview changes in this draft", fixture.hover(
+                ClickEvent.Action.RUN_COMMAND, "/maddprestige config diff " + draftId));
+        assertEquals("Discard this draft", fixture.hover(
+                ClickEvent.Action.RUN_COMMAND, "/maddprestige config cancel " + draftId));
+        assertEquals(List.of(draftId.toString()), fixture.completions("config", "validate", ""));
+        assertEquals(List.of(draftId.toString()), fixture.completions("config", "diff", ""));
+        assertEquals(List.of(draftId.toString()), fixture.completions("config", "cancel", ""));
+    }
+
     private Fixture fixture(Set<String> permissions, OperationPreview preview) throws IOException {
         return new Fixture(permissions, preview, temporaryDirectory.resolve(UUID.randomUUID().toString()));
     }
@@ -308,6 +399,15 @@ final class PaperPhaseSixNumericCommandRoutingTest {
         return new WhyReport(true, List.of(), Optional.of(requirements()), Optional.of(REVISION), List.of());
     }
 
+    private static ConfigurationPreview configurationPreview(UUID draftId, ValidationReport validation) {
+        StageChangeImpact impact = new StageChangeImpact(
+                List.of(), List.of(), Set.of(), Set.of(), Set.of(), Set.of(), List.of(), Map.of(), false,
+                new SemanticDiff(List.of()), validation);
+        return new ConfigurationPreview(
+                draftId, 1, Optional.of(REVISION), Optional.empty(), new ContentHash("a".repeat(64)),
+                Optional.empty(), List.of("lifecycle.yml", "requirements.yml"), validation, impact, false);
+    }
+
     private static ExplanationNode requirements() {
         ExplanationNode leaf = new ExplanationNode("requirement.balance", ExplanationStatus.SATISFIED, "Ready",
                 Map.of("requirement", "qualification-balance", "provider", "vault_balance", "metric", "balance",
@@ -321,6 +421,7 @@ final class PaperPhaseSixNumericCommandRoutingTest {
         private static final UUID CONFIRMATION = UUID.fromString("33333333-3333-3333-3333-333333333333");
         private final OperationPreviewService previews = mock(OperationPreviewService.class);
         private final WhyService why = mock(WhyService.class);
+        private final ConfigurationAdministrationService configuration = mock(ConfigurationAdministrationService.class);
         private final RankUpPlanExecutor rankUpExecutor = mock(RankUpPlanExecutor.class);
         private final OperationConfirmationService confirmations = mock(OperationConfirmationService.class);
         private final List<Component> messages = new ArrayList<>();
@@ -349,13 +450,14 @@ final class PaperPhaseSixNumericCommandRoutingTest {
                     new OperationExecutionResult(OperationId.random(), "COMPLETED", "done")));
             PhaseSixCommandService dispatcher = new PhaseSixCommandService(
                     mock(ContextualHelpService.class), mock(ConfigurationIntrospectionService.class),
-                    mock(ConfigurationAdministrationService.class), mock(DoctorService.class), why, previews,
+                    configuration, mock(DoctorService.class), why, previews,
                     confirmations, new PlayerProgressViewService(previews), mock(SetupWizardService.class),
                     mock(ManualPrestigeAdministrationService.class), mock(GuiSessionService.class),
                     () -> Optional.of(REVISION), Runnable::run);
             paperMessages = PaperMessageService.open(localeDirectory,
                     PaperMessageService.class.getClassLoader(), ignored -> { });
-            adapter = new PaperPhaseSixCommandAdapter(dispatcher, new CommandCompletionService(confirmations),
+            adapter = new PaperPhaseSixCommandAdapter(
+                    dispatcher, new CommandCompletionService(confirmations, configuration),
                     immediateScheduler(), paperMessages);
 
             when(player.getUniqueId()).thenReturn(PLAYER_ID);
@@ -386,6 +488,27 @@ final class PaperPhaseSixNumericCommandRoutingTest {
             ArrayList<ClickEvent> result = new ArrayList<>();
             messages.forEach(component -> collectClicks(component, result));
             return List.copyOf(result);
+        }
+
+        private String hover(ClickEvent.Action action, String value) {
+            Component actionComponent = messages.stream()
+                    .map(component -> findAction(component, action, value))
+                    .flatMap(Optional::stream)
+                    .findFirst()
+                    .orElseThrow();
+            Component hoverText = assertInstanceOf(Component.class, actionComponent.hoverEvent().value());
+            return PlainTextComponentSerializer.plainText().serialize(hoverText);
+        }
+
+        private Optional<Component> findAction(Component component, ClickEvent.Action action, String value) {
+            ClickEvent click = component.clickEvent();
+            if (click != null && click.action() == action && click.value().equals(value)) {
+                return Optional.of(component);
+            }
+            return component.children().stream()
+                    .map(child -> findAction(child, action, value))
+                    .flatMap(Optional::stream)
+                    .findFirst();
         }
 
         private void collectClicks(Component component, List<ClickEvent> result) {
