@@ -501,9 +501,11 @@ public final class LosslessYamlDocument {
         Node current = documents.get(path.documentIndex());
         for (int index = 0; index < path.segments().size(); index++) {
             YamlPath.Segment segment = path.segments().get(index);
-            if (!(segment instanceof YamlPath.Key key)) {
-                throw new IllegalArgumentException("Missing sequence-index paths cannot be materialized");
+            if (segment instanceof YamlPath.Index sequenceIndex) {
+                current = sequenceValue(current, sequenceIndex.value());
+                continue;
             }
+            YamlPath.Key key = (YamlPath.Key) segment;
             if (!(current instanceof MappingNode mapping)) {
                 throw new IllegalArgumentException("YAML path expected a mapping before key: " + key.value());
             }
@@ -523,11 +525,13 @@ public final class LosslessYamlDocument {
                     : mapping.getValue().getLast().getKeyNode().getStartMark().orElseThrow().getColumn();
             StringBuilder block = new StringBuilder();
             for (int nested = 0; nested < remaining.size() - 1; nested++) {
-                block.append(" ".repeat(indent + nested * 2)).append(remaining.get(nested).value())
+                block.append(" ".repeat(indent + nested * 2))
+                        .append(encodeString(ScalarStyle.PLAIN, remaining.get(nested).value()))
                         .append(':').append(lineEnding());
             }
             int leafIndent = indent + Math.max(0, remaining.size() - 1) * 2;
-            block.append(leaf.render(leafIndent, remaining.getLast().value()));
+            block.append(leaf.render(leafIndent,
+                    encodeString(ScalarStyle.PLAIN, remaining.getLast().value())));
             return appendToMapping(mapping, block.toString());
         }
         throw new IllegalArgumentException("YAML path already exists: " + path);

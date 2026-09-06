@@ -159,6 +159,187 @@ public final class ConfigurationAdministrationService {
         return updated;
     }
 
+    /**
+     * Applies the two schema-owned scalar edits used by the guided Money editor to one private draft revision.
+     * The active configuration is never touched here; the caller must still preview and apply this draft through
+     * the normal canonical workflow.
+     */
+    public ConfigDraft editGuidedMoney(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingOverrideEdit requirementOverride,
+            String costAmountPath,
+            String amount) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(requirementOverride, "requirement override");
+        Objects.requireNonNull(costAmountPath, "cost amount path");
+        Objects.requireNonNull(amount, "amount");
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String overridePath = requirementOverride.scalingPath() + ".segments."
+                + requirementOverride.segmentIndex() + ".overrides." + requirementOverride.prestigeLevel();
+        SchemaNode overrideNode = schema.resolve(overridePath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + overridePath,
+                "Use only a schema-owned scaling override path.", "path", overridePath));
+        subject.require(overrideNode.editPermission());
+        validateAllowed(overrideNode, requirementOverride.multiplier());
+
+        SchemaNode costNode = schema.resolve(costAmountPath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + costAmountPath,
+                "Use only a schema-owned cost amount path.", "path", costAmountPath));
+        subject.require(costNode.editPermission());
+        validateAllowed(costNode, amount);
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(requirementOverride.scalingPath())
+                .orElseThrow(() -> notEditable(requirementOverride.scalingPath()));
+        ConfigurationPathResolver.ResolvedPath cost = paths.resolve(costAmountPath)
+                .orElseThrow(() -> notEditable(costAmountPath));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument requirementDocument = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath yamlOverride = appendScalingOverride(scaling.yamlPath(), requirementOverride);
+            documents.put(scaling.documentName(), requirementDocument
+                    .setDecimal(yamlOverride, requirementOverride.multiplier()).render());
+
+            LosslessYamlDocument costDocument = LosslessYamlDocument.parse(
+                    requireDocument(documents, cost.documentName()));
+            documents.put(cost.documentName(), costDocument.setString(cost.yamlPath(), amount).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_money.rejected", safeMessage(exception),
+                    "Review the selected level and amount, then prepare a fresh guided edit.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withDraft(updated))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Money edit was being prepared.",
+                    "Review current configuration and prepare the edit again.");
+        }
+        return updated;
+    }
+
+    /**
+     * Replaces one explicitly present, schema-owned scalar in a scaling segment without rewriting the profile.
+     * Compiler defaults are deliberately not materialized by this bounded guided path.
+     */
+    public ConfigDraft editGuidedScalingParameter(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingParameterEdit edit) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(edit, "scaling parameter edit");
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String parameterPath = edit.scalingPath() + ".segments." + edit.segmentIndex()
+                + "." + edit.parameter().yamlField();
+        SchemaNode parameterNode = schema.resolve(parameterPath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + parameterPath,
+                "Use only a schema-owned scaling parameter path.", "path", parameterPath));
+        subject.require(parameterNode.editPermission());
+        validateAllowed(parameterNode, edit.value());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(edit.scalingPath())
+                .orElseThrow(() -> notEditable(edit.scalingPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument document = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath parameter = scaling.yamlPath().key("segments").index(edit.segmentIndex())
+                    .key(edit.parameter().yamlField());
+            documents.put(scaling.documentName(), document.replaceDecimal(parameter, edit.value()).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_scaling.rejected", safeMessage(exception),
+                    "Review the selected scaling parameter, then prepare a fresh guided edit.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withDraft(updated))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Scaling edit was being prepared.",
+                    "Review current configuration and prepare the edit again.");
+        }
+        return updated;
+    }
+
+    /** Adds or replaces one per-Prestige override without materializing or flattening its profile. */
+    public ConfigDraft editGuidedScalingOverride(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingOverrideEdit edit) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(edit, "scaling override edit");
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String overridePath = edit.scalingPath() + ".segments." + edit.segmentIndex()
+                + ".overrides." + edit.prestigeLevel();
+        SchemaNode overrideNode = schema.resolve(overridePath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + overridePath,
+                "Use only a schema-owned scaling override path.", "path", overridePath));
+        subject.require(overrideNode.editPermission());
+        validateAllowed(overrideNode, edit.multiplier());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(edit.scalingPath())
+                .orElseThrow(() -> notEditable(edit.scalingPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument document = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath override = appendScalingOverride(scaling.yamlPath(), edit);
+            documents.put(scaling.documentName(), document.setDecimal(override, edit.multiplier()).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_scaling_override.rejected", safeMessage(exception),
+                    "Review the selected override, then prepare a fresh guided edit.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withDraft(updated))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Override edit was being prepared.",
+                    "Review current configuration and prepare the edit again.");
+        }
+        return updated;
+    }
+
+    /** Removes only one explicitly present per-Prestige override mapping entry. */
+    public ConfigDraft removeGuidedScalingOverride(
+            PermissionSubject subject,
+            UUID draftId,
+            ScalingOverrideRemoval removal) {
+        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        Objects.requireNonNull(removal, "scaling override removal");
+        DraftState state = requireOwnedDraft(subject, draftId);
+
+        String overridePath = removal.scalingPath() + ".segments." + removal.segmentIndex()
+                + ".overrides." + removal.prestigeLevel();
+        SchemaNode overrideNode = schema.resolve(overridePath).orElseThrow(() -> new AdministrationException(
+                "config.path.unknown", "Unknown canonical configuration path: " + overridePath,
+                "Use only a schema-owned scaling override path.", "path", overridePath));
+        subject.require(overrideNode.editPermission());
+
+        ConfigurationPathResolver.ResolvedPath scaling = paths.resolve(removal.scalingPath())
+                .orElseThrow(() -> notEditable(removal.scalingPath()));
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(state.draft().documents());
+        try {
+            LosslessYamlDocument document = LosslessYamlDocument.parse(
+                    requireDocument(documents, scaling.documentName()));
+            YamlPath overrides = scaling.yamlPath().key("segments").index(removal.segmentIndex()).key("overrides");
+            documents.put(scaling.documentName(), document
+                    .removeMappingEntry(overrides, Long.toString(removal.prestigeLevel())).render());
+        } catch (IllegalArgumentException exception) {
+            throw new AdministrationException("config.guided_scaling_override.rejected", safeMessage(exception),
+                    "Review the selected override, then prepare a fresh guided removal.");
+        }
+        ConfigDraft updated = new ConfigDraft(state.draft().draftId(), state.draft().baseRevision(), documents,
+                state.draft().actor(), state.draft().createdAt());
+        if (!drafts.replace(draftId, state, state.withDraft(updated))) {
+            throw new AdministrationException("config.draft.concurrent_edit",
+                    "The draft changed while this guided Override removal was being prepared.",
+                    "Review current configuration and prepare the removal again.");
+        }
+        return updated;
+    }
+
     public CompletionStage<ConfigurationPreview> preview(
             PermissionSubject subject,
             UUID draftId) {
@@ -1061,6 +1242,19 @@ public final class ConfigurationAdministrationService {
                     "document", resolved.documentName());
         }
         return LosslessYamlDocument.parse(source);
+    }
+
+    private static String requireDocument(Map<String, String> documents, String documentName) {
+        String source = documents.get(documentName);
+        if (source == null) {
+            throw new IllegalArgumentException("Draft is missing canonical document " + documentName);
+        }
+        return source;
+    }
+
+    private static YamlPath appendScalingOverride(YamlPath profile, ScalingOverrideEdit edit) {
+        return profile.key("segments").index(edit.segmentIndex()).key("overrides")
+                .key(Long.toString(edit.prestigeLevel()));
     }
 
     private SchemaNode requireStructuralNode(

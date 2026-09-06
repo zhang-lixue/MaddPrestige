@@ -562,6 +562,30 @@ public final class SemanticPresentation {
         register(result, "config_draft_owner_mismatch", "config.draft.owner_mismatch");
         register(result, "config_draft_unknown", "config.draft.unknown");
         register(result, "config_edit_rejected", "config.edit.rejected");
+        register(result, "config_gui_level_invalid", "config.gui.level.invalid");
+        register(result, "config_gui_level_page_invalid", "config.gui.level_page.invalid");
+        register(result, "config_gui_money_invalid", "config.gui.money.invalid");
+        register(result, "config_gui_money_non_terminating", "config.gui.money.non_terminating");
+        register(result, "config_gui_money_page_invalid", "config.gui.money_page.invalid");
+        register(result, "config_gui_money_unavailable", "config.gui.money.unavailable");
+        register(result, "config_gui_money_unsupported", "config.gui.money.unsupported");
+        register(result, "config_gui_requirements_unavailable", "config.gui.requirements.unavailable");
+        register(result, "config_gui_total_skill_level_invalid", "config.gui.total_skill_level.invalid");
+        register(result, "config_gui_total_skill_level_unsupported",
+                "config.gui.total_skill_level.unsupported");
+        register(result, "config_gui_reward_invalid", "config.gui.reward.invalid");
+        register(result, "config_gui_reward_page_invalid", "config.gui.reward_page.invalid");
+        register(result, "config_gui_reward_unavailable", "config.gui.reward.unavailable");
+        register(result, "config_gui_reward_unsupported", "config.gui.reward.unsupported");
+        register(result, "config_gui_scaling_invalid", "config.gui.scaling.invalid");
+        register(result, "config_gui_scaling_override_invalid", "config.gui.scaling.override.invalid");
+        register(result, "config_gui_scaling_unsupported", "config.gui.scaling.unsupported");
+        register(result, "config_gui_review_actor_mismatch", "config.gui.review.actor_mismatch");
+        register(result, "config_gui_review_expired", "config.gui.review.expired");
+        register(result, "config_gui_review_replayed", "config.gui.review.replayed");
+        register(result, "config_guided_money_rejected", "config.guided_money.rejected");
+        register(result, "config_guided_scaling_rejected", "config.guided_scaling.rejected");
+        register(result, "config_guided_scaling_override_rejected", "config.guided_scaling_override.rejected");
         register(result, "config_history_finalize_failed", "config.history.finalize_failed");
         register(result, "config_list_rejected", "config.list.rejected");
         register(result, "config_path_not_editable", "config.path.not_editable");
@@ -605,6 +629,12 @@ public final class SemanticPresentation {
         register(result, "gui_mutation_kind_invalid", "gui.mutation.kind_invalid");
         register(result, "gui_session_actor_mismatch", "gui.session.actor_mismatch");
         register(result, "gui_session_expired", "gui.session.expired");
+        register(result, "gui_staff_configuration_administration_unavailable",
+                "gui.staff.configuration_administration_unavailable");
+        register(result, "gui_staff_configuration_level_invalid", "gui.staff.configuration_level_invalid");
+        register(result, "gui_staff_configuration_level_missing", "gui.staff.configuration_level_missing");
+        register(result, "gui_staff_configuration_revision_missing", "gui.staff.configuration_revision_missing");
+        register(result, "gui_staff_configuration_review_missing", "gui.staff.configuration_review_missing");
         register(result, "gui_staff_player_unknown", "gui.staff.player_unknown");
         register(result, "gui_staff_player_required", "gui.staff.player_required");
         register(result, "gui_staff_prestige_administration_unavailable",

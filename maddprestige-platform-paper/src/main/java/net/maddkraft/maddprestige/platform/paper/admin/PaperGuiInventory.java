@@ -19,7 +19,7 @@ import org.bukkit.inventory.meta.SkullMeta;
 import org.jetbrains.annotations.NotNull;
 
 /** Server-owned slot/action map. Item names and metadata never carry authority. */
-public final class PaperGuiInventory implements InventoryHolder {
+public final class PaperGuiInventory implements PaperGuiViewHolder {
     private final UUID sessionId;
     private final GuiAudience audience;
     private final Map<Integer, UUID> actionIds;
@@ -37,23 +37,29 @@ public final class PaperGuiInventory implements InventoryHolder {
             renderLegacy(view, messages, size, slots);
         } else {
             for (var display : view.items()) {
-                ItemStack item = new ItemStack(material(display.icon()));
-                item.editMeta(meta -> {
-                    applyPlayerProfile(meta, display.profilePlayerId());
-                    meta.displayName(nonItalic(messages.render(display.title())));
-                    if (!display.lore().isEmpty()) {
-                        meta.lore(display.lore().stream().map(messages::render)
-                                .map(PaperGuiInventory::nonItalic).toList());
-                    }
-                    if (display.highlighted()) {
-                        meta.setEnchantmentGlintOverride(true);
-                    }
-                });
-                inventory.setItem(display.slot(), item);
+                inventory.setItem(display.slot(), renderDisplayItem(display, messages));
                 display.actionId().ifPresent(action -> slots.put(display.slot(), action));
             }
         }
         actionIds = Map.copyOf(slots);
+    }
+
+    static ItemStack renderDisplayItem(
+            net.maddkraft.maddprestige.core.admin.ui.GuiDisplayItem display,
+            PaperMessageService messages) {
+        ItemStack item = new ItemStack(material(display.icon()));
+        item.editMeta(meta -> {
+            applyPlayerProfile(meta, display.profilePlayerId());
+            meta.displayName(nonItalic(messages.render(display.title())));
+            if (!display.lore().isEmpty()) {
+                meta.lore(display.lore().stream().map(messages::render)
+                        .map(PaperGuiInventory::nonItalic).toList());
+            }
+            if (display.highlighted()) {
+                meta.setEnchantmentGlintOverride(true);
+            }
+        });
+        return item;
     }
 
     private static void applyPlayerProfile(ItemMeta meta, java.util.Optional<UUID> playerId) {

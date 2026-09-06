@@ -235,6 +235,14 @@ public final class GuiSessionService implements AutoCloseable {
         return authorize(subject, sessionId, actionId, true, GuiAudience.STAFF);
     }
 
+    /** Validates an actor-bound staff input action without consuming it so invalid text can be corrected. */
+    GuiAction authorizeStaffInput(
+            PermissionSubject subject,
+            UUID sessionId,
+            UUID actionId) {
+        return authorize(subject, sessionId, actionId, false, GuiAudience.STAFF);
+    }
+
     GuiSessionView storePlayerScreen(
             PermissionSubject subject,
             UUID playerId,
@@ -256,6 +264,18 @@ public final class GuiSessionService implements AutoCloseable {
             List<GuiDisplayItem> items) {
         subject.require(PhaseSixPermissions.ADMIN_GUI);
         return store(subject, GuiAudience.STAFF, title, actions, screen, inventorySize, items);
+    }
+
+    GuiSessionView storeStaffTextInput(
+            PermissionSubject subject,
+            MessageReference title,
+            List<GuiAction> actions,
+            GuiScreenKind screen,
+            List<GuiDisplayItem> items,
+            GuiTextInput textInput) {
+        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        return store(subject, GuiAudience.STAFF, title, actions, screen, 9, items,
+                Optional.of(Objects.requireNonNull(textInput, "text input")));
     }
 
     public void invalidate(UUID sessionId) {
@@ -370,6 +390,18 @@ public final class GuiSessionService implements AutoCloseable {
             GuiScreenKind screen,
             int inventorySize,
             List<GuiDisplayItem> items) {
+        return store(subject, audience, title, actions, screen, inventorySize, items, Optional.empty());
+    }
+
+    private GuiSessionView store(
+            PermissionSubject subject,
+            GuiAudience audience,
+            MessageReference title,
+            List<GuiAction> actions,
+            GuiScreenKind screen,
+            int inventorySize,
+            List<GuiDisplayItem> items,
+            Optional<GuiTextInput> textInput) {
         pruneExpired();
         subject.actor().uuid().ifPresent(actor -> {
             if (audience == GuiAudience.PLAYER) {
@@ -383,7 +415,7 @@ public final class GuiSessionService implements AutoCloseable {
         LinkedHashMap<UUID, GuiAction> byId = new LinkedHashMap<>();
         actions.forEach(action -> byId.put(action.actionId(), action));
         sessions.put(id, new Session(subject.actor(), audience, Map.copyOf(byId), expiresAt));
-        return new GuiSessionView(id, audience, title, actions, expiresAt, screen, inventorySize, items);
+        return new GuiSessionView(id, audience, title, actions, expiresAt, screen, inventorySize, items, textInput);
     }
 
     private static void requirePlayerAccess(PermissionSubject subject, UUID playerId) {

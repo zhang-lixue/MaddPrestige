@@ -35,4 +35,9 @@ public record PlayerGuiInteractionResult(
     public static PlayerGuiInteractionResult closed(MessageReference message) {
         return new PlayerGuiInteractionResult(Optional.empty(), true, List.of(message));
     }
+
+    /** Keeps the current authoritative view open while presenting one concise recoverable input finding. */
+    public static PlayerGuiInteractionResult stay(MessageReference message) {
+        return new PlayerGuiInteractionResult(Optional.empty(), false, List.of(message));
+    }
 }

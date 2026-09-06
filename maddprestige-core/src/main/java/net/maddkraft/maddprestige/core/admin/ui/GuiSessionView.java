@@ -14,7 +14,8 @@ public record GuiSessionView(
         Instant expiresAt,
         GuiScreenKind screen,
         int inventorySize,
-        List<GuiDisplayItem> items) {
+        List<GuiDisplayItem> items,
+        java.util.Optional<GuiTextInput> textInput) {
     public GuiSessionView {
         sessionId = Objects.requireNonNull(sessionId, "session ID");
         audience = Objects.requireNonNull(audience, "audience");
@@ -27,6 +28,10 @@ public record GuiSessionView(
                     "GUI inventory size must be a multiple of nine from nine to fifty-four");
         }
         items = List.copyOf(Objects.requireNonNull(items, "items"));
+        textInput = Objects.requireNonNull(textInput, "text input");
+        if (textInput.isPresent() && inventorySize != 9) {
+            throw new IllegalArgumentException("GUI text input uses the three-slot platform view backed by size nine");
+        }
         java.util.Set<Integer> slots = new java.util.HashSet<>();
         java.util.Set<UUID> actionIds = actions.stream().map(GuiAction::actionId)
                 .collect(java.util.stream.Collectors.toUnmodifiableSet());
@@ -45,8 +50,22 @@ public record GuiSessionView(
             GuiAudience audience,
             MessageReference title,
             List<GuiAction> actions,
+            Instant expiresAt,
+            GuiScreenKind screen,
+            int inventorySize,
+            List<GuiDisplayItem> items) {
+        this(sessionId, audience, title, actions, expiresAt, screen, inventorySize, items,
+                java.util.Optional.empty());
+    }
+
+    public GuiSessionView(
+            UUID sessionId,
+            GuiAudience audience,
+            MessageReference title,
+            List<GuiAction> actions,
             Instant expiresAt) {
         this(sessionId, audience, title, actions, expiresAt, GuiScreenKind.LEGACY,
-                Math.max(9, Math.min(54, ((actions.size() + 8) / 9) * 9)), List.of());
+                Math.max(9, Math.min(54, ((actions.size() + 8) / 9) * 9)), List.of(),
+                java.util.Optional.empty());
     }
 }

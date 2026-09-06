@@ -41,7 +41,7 @@ public final class PaperMessageService {
             "current_prestige", "current_stage", "delta", "detail", "disposition", "document", "draft", "expires",
             "eligible_at", "errors", "findings", "formula", "group", "hash", "healthy", "id", "intended_target",
             "kind",
-            "indicator", "label", "lifetime", "missing",
+            "indicator", "label", "level", "lifetime", "missing",
             "locale", "metric", "metrics", "mode", "next",
             "operation", "operator", "path", "permission", "player", "prestige_status", "progress", "projected",
             "provider",

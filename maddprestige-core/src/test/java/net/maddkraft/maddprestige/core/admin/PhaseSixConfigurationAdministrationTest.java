@@ -28,6 +28,7 @@ import java.util.concurrent.CompletionException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.CostId;
@@ -51,8 +52,12 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationS
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationApplyKind;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationHistoryStore;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationSnapshotStore;
+import net.maddkraft.maddprestige.core.admin.config.CanonicalGuidedConfigurationAdministration;
+import net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationEntry;
+import net.maddkraft.maddprestige.core.admin.config.GuidedScalingParameter;
 import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationWorkflow;
 import net.maddkraft.maddprestige.core.admin.config.PreparedConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.admin.config.ScalingOverrideEdit;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
 import net.maddkraft.maddprestige.core.admin.config.StructuredConfigurationValue;
 import net.maddkraft.maddprestige.core.admin.setup.SetupStage;
@@ -67,6 +72,7 @@ import net.maddkraft.maddprestige.core.config.ConfigurationService;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.schema.PhaseSixSchema;
+import net.maddkraft.maddprestige.core.scaling.SegmentScalingMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -787,6 +793,749 @@ class PhaseSixConfigurationAdministrationTest {
     }
 
     @Test
+    @DisplayName("[Phase 9F-C2] Guided Money edits one level override and cost atomically without YAML loss")
+    void guidedMoneyDraftSynchronizesSchemaOwnedValuesLosslessly() {
+        Fixture fixture = new Fixture();
+        fixture.applyInitial(defaultDocuments());
+        UUID draft = fixture.service.beginDraft(OWNER, "staff-gui:configuration:money");
+        fixture.service.addStructuredObject(OWNER, draft, "requirements.requirements", Optional.of("money"),
+                new StructuredConfigurationValue(Map.of(
+                        "provider", "vault_balance",
+                        "metric", "balance",
+                        "value-type", "CURRENCY_AMOUNT",
+                        "target", "2",
+                        "scaling", Map.of("segments", List.of(Map.of(
+                                "start-prestige", 1L,
+                                "end-prestige", "unlimited",
+                                "mode", "LINEAR",
+                                "base", BigDecimal.ONE,
+                                "rate", new BigDecimal("0.5"),
+                                "overrides", Map.of("3", new BigDecimal("3"))))))));
+        fixture.service.addStructuredObject(OWNER, draft, "requirements.requirements", Optional.of("skill"),
+                new StructuredConfigurationValue(Map.of(
+                        "provider", "mcmmo",
+                        "metric", "total_level",
+                        "value-type", "INTEGER_COUNT",
+                        "target", "1")));
+        fixture.service.addStructuredObject(OWNER, draft, "requirements.costs", Optional.of("money_cost"),
+                new StructuredConfigurationValue(Map.of(
+                        "provider", "vault_economy_cost",
+                        "type", "vault_economy",
+                        "value-type", "CURRENCY_AMOUNT",
+                        "amount", "7")));
+
+        var edited = fixture.service.editGuidedMoney(OWNER, draft,
+                new ScalingOverrideEdit("requirements.requirements.money.scaling", 0, 6, "4"),
+                "requirements.costs.money_cost.amount", "8");
+        String requirements = edited.documents().get("requirements.yml");
+
+        assertTrue(requirements.contains("# Add requirement trees and independent costs"));
+        assertTrue(requirements.contains("\"3\": 3"));
+        assertTrue(requirements.contains("\"6\": 4"));
+        assertTrue(requirements.contains("amount: \"8\""));
+        assertTrue(requirements.contains("metric: total_level"));
+        assertFalse(fixture.canonical.active().orElseThrow().compiled().documents().get("requirements.yml")
+                .contains("money_cost"));
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Money review is draft-only and applies one audited revision exactly once")
+    void guidedMoneyReviewAppliesOneRevisionWithoutProviderOrPlayerMutation() {
+        ProviderRegistry providers = new ProviderRegistry();
+        ConfigurationMetricProvider metric = new ConfigurationMetricProvider();
+        ConfigurationCostProvider cost = new ConfigurationCostProvider();
+        providers.activate(providers.register("test", metric));
+        providers.activate(providers.register("test", cost));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedMoneyDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        assertEquals(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L),
+                guided.prestigeLevels(OWNER, 0, 7).levels());
+        assertEquals("7", guided.prestigeLevel(OWNER, 6).moneyRequirement());
+        var input = guided.moneyInput(OWNER, 6);
+        assertEquals(original.id(), input.revision());
+        assertEquals("7", input.currentValue());
+        assertEquals("8.5", guided.validateMoneyInput(OWNER, 6, "8.500", original.id()));
+        var review = guided.reviewMoney(OWNER, 6, "8").toCompletableFuture().join();
+
+        assertEquals(original.id(), review.baseRevision());
+        assertEquals("7", review.currentAmount());
+        assertEquals("8", review.newAmount());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+
+        var result = guided.confirmMoney(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals("8", guided.prestigeLevel(OWNER, 6).moneyRequirement());
+        assertEquals("8", guided.prestigeLevel(OWNER, 6).moneyCost());
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:money", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Money for Prestige 6: 7 -> 8"));
+        assertTrue(active.compiled().documents().get("requirements.yml").contains("# owner Money note"));
+        assertTrue(active.compiled().documents().get("requirements.yml").contains("custom-owner-key: keep"));
+        assertTrue(active.compiled().documents().get("requirements.yml").contains("\"6\": 4"));
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmMoney(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Money authority rejects stale revision and requires edit plus apply")
+    void guidedMoneyRejectsStaleRevisionAndNarrowPermissionFailures() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new ConfigurationMetricProvider()));
+        providers.activate(providers.register("test", new ConfigurationCostProvider()));
+        Fixture fixture = new Fixture(providers);
+        fixture.applyInitial(guidedMoneyDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+        PermissionSubject viewer = new PermissionSubject(OWNER.actor(), Set.of(PhaseSixPermissions.CONFIG_VIEW));
+        PermissionSubject editor = new PermissionSubject(OWNER.actor(), Set.of(
+                PhaseSixPermissions.CONFIG_VIEW, PhaseSixPermissions.CONFIG_EDIT));
+
+        assertEquals(7, guided.prestigeLevels(viewer, 0, 7).levels().size());
+        assertEquals("permission.denied", assertThrows(AdministrationException.class,
+                () -> guided.moneyAmounts(viewer, 6, 0, 7)).code());
+        assertEquals("permission.denied", assertThrows(AdministrationException.class,
+                () -> guided.moneyAmounts(editor, 6, 0, 7)).code());
+        ConfigRevisionId currentRevision = fixture.canonical.active().orElseThrow().revisionId();
+        for (String invalid : List.of("", "money", "-1", "0", "10001", "NaN", "Infinity", "1e2", "1.2.3")) {
+            assertEquals("config.gui.money.invalid", assertThrows(AdministrationException.class,
+                    () -> guided.validateMoneyInput(OWNER, 6, invalid, currentRevision)).code());
+        }
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.validateMoneyInput(
+                        OWNER, 6, "8", new ConfigRevisionId("not-active"))).code());
+
+        var staleReview = guided.reviewMoney(OWNER, 6, "8").toCompletableFuture().join();
+        ConfigRevisionId beforeCompetingEdit = fixture.canonical.active().orElseThrow().revisionId();
+        UUID competingDraft = fixture.service.beginDraft(OWNER, "competing-editor");
+        fixture.service.editScalar(OWNER, competingDraft, "prestige.cooldown", "PT2S");
+        var competingPreview = fixture.service.preview(OWNER, competingDraft).toCompletableFuture().join();
+        fixture.service.applyDraft(OWNER, competingDraft, Optional.of(beforeCompetingEdit),
+                acknowledgements(competingPreview), "Competing safe edit").toCompletableFuture().join();
+
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.confirmMoney(OWNER, staleReview.reviewId())).code());
+        assertEquals("7", guided.prestigeLevel(OWNER, 6).moneyRequirement());
+        assertEquals("7", guided.prestigeLevel(OWNER, 6).moneyCost());
+        assertEquals(2, fixture.history.recent(10).size());
+
+        Fixture complex = new Fixture();
+        complex.applyInitial(defaultDocuments());
+        var complexGuided = new CanonicalGuidedConfigurationAdministration(
+                complex.service, complex.workflow::active, CLOCK);
+        assertFalse(complexGuided.prestigeLevel(OWNER, 1).moneyAvailable(),
+                "unsupported structures remain inspectable instead of being simplified or crashing the hub");
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Total Skill Level is count-bound, lossless, audited, and exactly once")
+    void guidedTotalSkillLevelReviewPreservesRequirementTreeAndOtherConfiguration() {
+        ProviderRegistry providers = new ProviderRegistry();
+        ConfigurationMetricProvider metric = new ConfigurationMetricProvider();
+        ConfigurationCostProvider cost = new ConfigurationCostProvider();
+        ConfigurationRewardProvider reward = new ConfigurationRewardProvider();
+        SetupProvider skill = new SetupProvider("mcmmo", "total_level",
+                net.maddkraft.maddprestige.api.metric.MetricValueType.INTEGER);
+        providers.activate(providers.register("test", metric));
+        providers.activate(providers.register("test", cost));
+        providers.activate(providers.register("test", reward));
+        providers.activate(providers.register("test", skill));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedTotalSkillLevelDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        var requirements = guided.requirements(OWNER, 6);
+        var totalSkillLevel = requirements.requirements().stream()
+                .filter(entry -> entry.kind() == GuidedRequirementConfigurationEntry.Kind.TOTAL_SKILL_LEVEL)
+                .findFirst().orElseThrow();
+        assertFalse(requirements.complex());
+        assertEquals("1", totalSkillLevel.currentTarget());
+        assertTrue(totalSkillLevel.editable());
+        var money = requirements.requirements().stream()
+                .filter(entry -> entry.kind() == GuidedRequirementConfigurationEntry.Kind.MONEY)
+                .findFirst().orElseThrow();
+        assertEquals("6", money.currentTarget());
+        assertTrue(money.editable());
+        assertEquals("6", guided.moneyInput(OWNER, 6).currentValue(),
+                "the Money editor prefills the configured amount even when scaling changes the effective requirement");
+        assertEquals("1", guided.totalSkillLevelInput(OWNER, 6).currentValue());
+        assertEquals("0", guided.validateTotalSkillLevelInput(OWNER, 6, "000", original.id()));
+        assertEquals("2", guided.validateTotalSkillLevelInput(OWNER, 6, "0002", original.id()));
+        for (String invalid : List.of("", "-1", "1.2", "+1", "1e2", "level")) {
+            assertEquals("config.gui.total_skill_level.invalid", assertThrows(AdministrationException.class,
+                    () -> guided.validateTotalSkillLevelInput(OWNER, 6, invalid, original.id())).code());
+        }
+
+        var review = guided.reviewTotalSkillLevel(OWNER, 6, "2", original.id())
+                .toCompletableFuture().join();
+        assertEquals(original.id(), review.baseRevision());
+        assertEquals("1", review.currentTarget());
+        assertEquals("2", review.newTarget());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+
+        var result = guided.confirmTotalSkillLevel(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals("2", guided.requirements(OWNER, 6).requirements().stream()
+                .filter(entry -> entry.kind() == GuidedRequirementConfigurationEntry.Kind.TOTAL_SKILL_LEVEL)
+                .findFirst().orElseThrow().currentTarget());
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:total-skill-level", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Total Skill Level for Prestige 6: 1 -> 2"));
+        String requirementYaml = active.compiled().documents().get("requirements.yml");
+        assertTrue(requirementYaml.contains("# owner Total Skill Level note"));
+        assertTrue(requirementYaml.contains("custom-skill-key: keep"));
+        assertTrue(requirementYaml.contains("target: \"2\""));
+        assertTrue(requirementYaml.contains("mode: ALL"));
+        assertTrue(requirementYaml.contains("requirement: money"));
+        assertTrue(requirementYaml.contains("requirement: skill"));
+        assertTrue(requirementYaml.contains("base: 2"));
+        assertTrue(requirementYaml.contains("rate: 1.25"));
+        assertTrue(requirementYaml.contains("\"6\": 4"));
+        assertTrue(requirementYaml.contains("amount: \"6\""));
+        assertTrue(active.compiled().documents().get("rewards.yml").contains("value: \"2\""));
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals(0, reward.executions.get());
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmTotalSkillLevel(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Nested Total Skill Level structures remain read-only and revisions fail closed")
+    void guidedTotalSkillLevelRejectsComplexTreesAndStaleRevision() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new ConfigurationMetricProvider()));
+        providers.activate(providers.register("test", new ConfigurationCostProvider()));
+        providers.activate(providers.register("test", new ConfigurationRewardProvider()));
+        providers.activate(providers.register("test", new SetupProvider("mcmmo", "total_level",
+                net.maddkraft.maddprestige.api.metric.MetricValueType.INTEGER)));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedTotalSkillLevelDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.validateTotalSkillLevelInput(
+                        OWNER, 6, "2", new ConfigRevisionId("not-active"))).code());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+
+        Fixture nestedFixture = new Fixture(providers);
+        nestedFixture.applyInitial(complexTotalSkillLevelDocuments());
+        var nested = new CanonicalGuidedConfigurationAdministration(
+                nestedFixture.service, nestedFixture.workflow::active, CLOCK);
+        var requirements = nested.requirements(OWNER, 6);
+        assertTrue(requirements.complex());
+        assertFalse(requirements.requirements().stream()
+                .filter(entry -> entry.kind() == GuidedRequirementConfigurationEntry.Kind.TOTAL_SKILL_LEVEL)
+                .findFirst().orElseThrow().editable());
+        assertEquals("config.gui.total_skill_level.unsupported", assertThrows(AdministrationException.class,
+                () -> nested.totalSkillLevelInput(OWNER, 6)).code());
+        assertEquals(1, nestedFixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Linear increment uses canonical scaling and applies once without provider action")
+    void guidedScalingReviewIsLosslessAuditedAndExactlyOnce() {
+        ProviderRegistry providers = new ProviderRegistry();
+        ConfigurationMetricProvider metric = new ConfigurationMetricProvider();
+        ConfigurationCostProvider cost = new ConfigurationCostProvider();
+        providers.activate(providers.register("test", metric));
+        providers.activate(providers.register("test", cost));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedMoneyDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        var scaling = guided.scaling(OWNER, 6);
+        assertEquals(SegmentScalingMode.LINEAR, scaling.mode());
+        assertEquals("1", scaling.base());
+        assertEquals("0.5", scaling.rate());
+        assertEquals("7", scaling.effectiveValue());
+        assertEquals(Optional.empty(), scaling.overrideValue());
+        assertEquals(Set.of(GuidedScalingParameter.LINEAR_BASE, GuidedScalingParameter.LINEAR_INCREMENT),
+                scaling.editableParameters());
+        assertFalse(scaling.complex());
+        assertEquals("0.5", guided.scalingInput(
+                OWNER, 6, GuidedScalingParameter.LINEAR_INCREMENT).currentValue());
+        assertEquals("0", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "0.000", original.id()));
+        assertEquals("1", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "1", original.id()));
+        assertEquals("1.2", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "1.2", original.id()));
+        assertEquals("1.25", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "1.25", original.id()));
+        assertEquals("0.5", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "0.5", original.id()));
+        assertEquals("0.55", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "0.55", original.id()));
+        assertEquals("1.2", guided.validateScalingInput(OWNER, 6,
+                GuidedScalingParameter.LINEAR_INCREMENT, "1.20", original.id()));
+
+        var review = guided.reviewScaling(OWNER, 6, GuidedScalingParameter.LINEAR_INCREMENT,
+                "1", original.id()).toCompletableFuture().join();
+        assertEquals(original.id(), review.baseRevision());
+        assertEquals("0.5", review.currentValue());
+        assertEquals("1", review.newValue());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+
+        var result = guided.confirmScaling(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals("1", guided.scaling(OWNER, 6).rate());
+        assertEquals("12", guided.scaling(OWNER, 6).effectiveValue());
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:scaling", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Linear increment for Prestige 6: 0.5 -> 1"));
+        String requirements = active.compiled().documents().get("requirements.yml");
+        assertTrue(requirements.contains("# owner Money note"));
+        assertTrue(requirements.contains("custom-owner-key: keep"));
+        assertTrue(requirements.contains("rate: 1"));
+        assertTrue(requirements.contains("\"3\": 3"));
+        assertTrue(requirements.contains("amount: \"7\""));
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmScaling(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Linear base is exact, lossless, override-aware, and exactly once")
+    void guidedLinearBaseReviewPreservesIncrementOverrideAndCanonicalEffectiveValue() {
+        ProviderRegistry providers = new ProviderRegistry();
+        ConfigurationMetricProvider metric = new ConfigurationMetricProvider();
+        ConfigurationCostProvider cost = new ConfigurationCostProvider();
+        providers.activate(providers.register("test", metric));
+        providers.activate(providers.register("test", cost));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedBaseOverrideDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        var before = guided.scaling(OWNER, 6);
+        assertEquals(SegmentScalingMode.LINEAR, before.mode());
+        assertEquals("1", before.base());
+        assertEquals("1.25", before.rate());
+        assertEquals(Optional.of("3"), before.overrideValue());
+        assertEquals("6", before.effectiveValue());
+        assertEquals(Set.of(GuidedScalingParameter.LINEAR_BASE, GuidedScalingParameter.LINEAR_INCREMENT),
+                before.editableParameters());
+        assertEquals("1", guided.scalingInput(OWNER, 6, GuidedScalingParameter.LINEAR_BASE).currentValue());
+        assertEquals("0", guided.validateScalingInput(
+                OWNER, 6, GuidedScalingParameter.LINEAR_BASE, "0.000", original.id()));
+        assertEquals("2", guided.validateScalingInput(
+                OWNER, 6, GuidedScalingParameter.LINEAR_BASE, "2", original.id()));
+        assertEquals("1.25", guided.validateScalingInput(
+                OWNER, 6, GuidedScalingParameter.LINEAR_BASE, "1.250", original.id()));
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.validateScalingInput(OWNER, 6, GuidedScalingParameter.LINEAR_BASE,
+                        "2", new ConfigRevisionId("not-active"))).code());
+
+        var review = guided.reviewScaling(OWNER, 6, GuidedScalingParameter.LINEAR_BASE,
+                "2", original.id()).toCompletableFuture().join();
+        assertEquals(GuidedScalingParameter.LINEAR_BASE, review.parameter());
+        assertEquals("1", review.currentValue());
+        assertEquals("2", review.newValue());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+
+        var result = guided.confirmScaling(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+        var after = guided.scaling(OWNER, 6);
+        assertEquals(GuidedScalingParameter.LINEAR_BASE, result.parameter());
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals("2", after.base());
+        assertEquals("1.25", after.rate());
+        assertEquals(Optional.of("3"), after.overrideValue());
+        assertEquals("6", after.effectiveValue(), "the explicit P6 override remains authoritative");
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:scaling", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Linear base for Prestige 6: 1 -> 2"));
+        String requirements = active.compiled().documents().get("requirements.yml");
+        assertTrue(requirements.contains("# owner Money note"));
+        assertTrue(requirements.contains("custom-owner-key: keep"));
+        assertTrue(requirements.contains("base: 2"));
+        assertTrue(requirements.contains("rate: 1.25"));
+        assertTrue(requirements.contains("\"6\": 3"));
+        assertTrue(requirements.contains("amount: \"7\""));
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmScaling(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+    }
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Prestige Override edit is exact, lossless, audited, and exactly once")
+    void guidedScalingOverrideEditUsesCanonicalEffectiveValueAndPreservesConfiguration() {
+        ProviderRegistry providers = new ProviderRegistry();
+        ConfigurationMetricProvider metric = new ConfigurationMetricProvider();
+        ConfigurationCostProvider cost = new ConfigurationCostProvider();
+        providers.activate(providers.register("test", metric));
+        providers.activate(providers.register("test", cost));
+        providers.activate(providers.register("test", new ConfigurationRewardProvider()));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedOverrideDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        var before = guided.scaling(OWNER, 6);
+        assertEquals(SegmentScalingMode.LINEAR, before.mode());
+        assertEquals("2", before.base());
+        assertEquals("1.25", before.rate());
+        assertEquals(Optional.of("3"), before.overrideValue());
+        assertEquals("6", before.effectiveValue());
+        assertTrue(before.overrideManageable());
+        assertEquals("3", guided.scalingOverrideInput(OWNER, 6).currentValue());
+        assertEquals("0", guided.validateScalingOverrideInput(OWNER, 6, "0.000", original.id()));
+        assertEquals("1", guided.validateScalingOverrideInput(OWNER, 6, "1", original.id()));
+        assertEquals("1.2", guided.validateScalingOverrideInput(OWNER, 6, "1.2", original.id()));
+        assertEquals("1.25", guided.validateScalingOverrideInput(OWNER, 6, "1.25", original.id()));
+        assertEquals("0.5", guided.validateScalingOverrideInput(OWNER, 6, "0.5", original.id()));
+        assertEquals("0.55", guided.validateScalingOverrideInput(OWNER, 6, "0.55", original.id()));
+        assertEquals("1.2", guided.validateScalingOverrideInput(OWNER, 6, "1.20", original.id()));
+        for (String invalid : List.of("", "-1", "NaN", "Infinity", "1e2", "1.2.3",
+                "1" + "0".repeat(102), "0." + "1".repeat(257))) {
+            assertEquals("config.gui.scaling.override.invalid", assertThrows(AdministrationException.class,
+                    () -> guided.validateScalingOverrideInput(OWNER, 6, invalid, original.id())).code());
+        }
+
+        var review = guided.reviewScalingOverride(OWNER, 6, "4", original.id())
+                .toCompletableFuture().join();
+        assertEquals(original.id(), review.baseRevision());
+        assertEquals(Optional.of("3"), review.currentOverride());
+        assertEquals(Optional.of("4"), review.newOverride());
+        assertEquals(Optional.of("6"), review.currentEffectiveValue());
+        assertEquals(Optional.of("8"), review.newEffectiveValue());
+        assertFalse(review.removal());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        PermissionSubject otherStaff = new PermissionSubject(
+                new Actor("player", Optional.of(UUID.fromString("99999999-9999-4999-8999-999999999999")),
+                        "Other Staff"),
+                PhaseSixPermissions.all());
+        assertEquals("config.gui.review.actor_mismatch", assertThrows(AdministrationException.class,
+                () -> guided.confirmScalingOverride(otherStaff, review.reviewId())).code());
+        assertEquals(1, fixture.history.recent(10).size());
+
+        var result = guided.confirmScalingOverride(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+        var after = guided.scaling(OWNER, 6);
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals(Optional.of("3"), result.previousOverride());
+        assertEquals(Optional.of("4"), result.newOverride());
+        assertEquals("2", after.base());
+        assertEquals("1.25", after.rate());
+        assertEquals(Optional.of("4"), after.overrideValue());
+        assertEquals("8", after.effectiveValue());
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:scaling-override-edit", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Scaling Override edit for Prestige 6: 3 -> 4"));
+        String requirements = active.compiled().documents().get("requirements.yml");
+        String rewards = active.compiled().documents().get("rewards.yml");
+        assertTrue(requirements.contains("# owner Money note"));
+        assertTrue(requirements.contains("custom-owner-key: keep"));
+        assertTrue(requirements.contains("base: 2"));
+        assertTrue(requirements.contains("rate: 1.25"));
+        assertTrue(requirements.contains("\"3\": 3"));
+        assertTrue(requirements.contains("\"6\": 4"));
+        assertTrue(requirements.contains("amount: \"6\""));
+        assertTrue(rewards.contains("# owner Reward note"));
+        assertTrue(rewards.contains("value: \"2\""));
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmScalingOverride(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Prestige Override removal reveals inherited value without YAML loss")
+    void guidedScalingOverrideRemovalIsStructuralAuditedAndExactlyOnce() {
+        ProviderRegistry providers = guidedMoneyProviders();
+        providers.activate(providers.register("test", new ConfigurationRewardProvider()));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedOverrideDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        var review = guided.reviewScalingOverrideRemoval(OWNER, 6, original.id())
+                .toCompletableFuture().join();
+        assertTrue(review.removal());
+        assertEquals(Optional.of("3"), review.currentOverride());
+        assertEquals(Optional.empty(), review.newOverride());
+        assertEquals(Optional.of("6"), review.currentEffectiveValue());
+        assertEquals(Optional.of("16.5"), review.newEffectiveValue());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+
+        var result = guided.confirmScalingOverride(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+        var after = guided.scaling(OWNER, 6);
+        assertTrue(result.removal());
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals("2", after.base());
+        assertEquals("1.25", after.rate());
+        assertEquals(Optional.empty(), after.overrideValue());
+        assertEquals("16.5", after.effectiveValue());
+        assertTrue(after.overrideManageable());
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:scaling-override-removal", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Scaling Override removal for Prestige 6: 3 -> inherited"));
+        String requirements = active.compiled().documents().get("requirements.yml");
+        String rewards = active.compiled().documents().get("rewards.yml");
+        assertTrue(requirements.contains("# owner Money note"));
+        assertTrue(requirements.contains("custom-owner-key: keep"));
+        assertTrue(requirements.contains("base: 2"));
+        assertTrue(requirements.contains("rate: 1.25"));
+        assertTrue(requirements.contains("\"3\": 3"));
+        assertFalse(requirements.contains("\"6\":"));
+        assertTrue(requirements.contains("amount: \"6\""));
+        assertTrue(rewards.contains("# owner Reward note"));
+        assertTrue(rewards.contains("value: \"2\""));
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmScalingOverride(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+
+        var inherited = guided.scaling(OWNER, 6);
+        assertTrue(inherited.overrideManageable());
+        assertEquals(Optional.empty(), inherited.overrideValue());
+        assertEquals("16.5", guided.scalingOverrideInput(OWNER, 6).currentValue());
+
+        var addReview = guided.reviewScalingOverride(OWNER, 6, "4", active.revisionId())
+                .toCompletableFuture().join();
+        assertTrue(addReview.addition());
+        assertFalse(addReview.removal());
+        assertEquals(Optional.empty(), addReview.currentOverride());
+        assertEquals(Optional.of("4"), addReview.newOverride());
+        assertEquals(Optional.of("16.5"), addReview.currentEffectiveValue());
+        assertEquals(Optional.of("8"), addReview.newEffectiveValue());
+        assertEquals(active.revisionId(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(2, fixture.history.recent(10).size());
+
+        var addResult = guided.confirmScalingOverride(OWNER, addReview.reviewId()).toCompletableFuture().join();
+        var addedActive = fixture.canonical.active().orElseThrow();
+        var readded = guided.scaling(OWNER, 6);
+        assertTrue(addResult.addition());
+        assertEquals(Optional.empty(), addResult.previousOverride());
+        assertEquals(Optional.of("4"), addResult.newOverride());
+        assertEquals(Optional.of("4"), readded.overrideValue());
+        assertEquals("8", readded.effectiveValue());
+        assertTrue(readded.overrideManageable());
+        assertEquals(3, fixture.history.recent(10).size());
+        StoredConfigurationRevision addAudit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), addAudit.actor());
+        assertEquals("staff-gui:configuration:scaling-override-add", addAudit.sourceSurface());
+        assertTrue(addAudit.reason().contains(
+                "Guided Scaling Override addition for Prestige 6: inherited -> 4"));
+        String addedRequirements = addedActive.compiled().documents().get("requirements.yml");
+        assertTrue(addedRequirements.contains("# owner Money note"));
+        assertTrue(addedRequirements.contains("custom-owner-key: keep"));
+        assertTrue(addedRequirements.contains("base: 2"));
+        assertTrue(addedRequirements.contains("rate: 1.25"));
+        assertTrue(addedRequirements.contains("\"3\": 3"));
+        assertTrue(addedRequirements.contains("\"6\": 4"));
+        assertTrue(addedRequirements.contains("amount: \"6\""));
+        assertTrue(addedActive.compiled().documents().get("rewards.yml").contains("value: \"2\""));
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmScalingOverride(OWNER, addReview.reviewId())).code());
+        assertEquals(3, fixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Scaling validation is field-specific and complex/manual structures stay read-only")
+    void guidedScalingRejectsInvalidStaleAndComplexEditsWithoutYamlLoss() {
+        ProviderRegistry providers = guidedMoneyProviders();
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedMoneyDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+        for (String invalid : List.of("", "-1", "NaN", "Infinity", "1e2", "1.2.3",
+                "1" + "0".repeat(102), "0." + "1".repeat(257))) {
+            assertEquals("config.gui.scaling.invalid", assertThrows(AdministrationException.class,
+                    () -> guided.validateScalingInput(OWNER, 6, GuidedScalingParameter.LINEAR_INCREMENT,
+                            invalid, original.id())).code());
+        }
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.validateScalingInput(OWNER, 6, GuidedScalingParameter.LINEAR_INCREMENT,
+                        "1", new ConfigRevisionId("not-active"))).code());
+
+        for (Map<String, String> documents : List.of(segmentedContinueDocuments(), manualScalingDocuments())) {
+            Fixture readOnly = new Fixture(guidedMoneyProviders());
+            StoredConfigurationRevision active = readOnly.applyInitial(documents);
+            String before = active.compiled().documents().get("requirements.yml");
+            var complex = new CanonicalGuidedConfigurationAdministration(
+                    readOnly.service, readOnly.workflow::active, CLOCK);
+            var view = complex.scaling(OWNER, 6);
+            assertTrue(view.complex());
+            assertTrue(view.editableParameters().isEmpty());
+            assertFalse(view.overrideManageable());
+            assertEquals("config.gui.scaling.unsupported", assertThrows(AdministrationException.class,
+                    () -> complex.scalingInput(OWNER, 6, GuidedScalingParameter.LINEAR_INCREMENT)).code());
+            assertEquals("config.gui.scaling.unsupported", assertThrows(AdministrationException.class,
+                    () -> complex.scalingOverrideInput(OWNER, 6)).code());
+            assertEquals("config.gui.scaling.unsupported", assertThrows(AdministrationException.class,
+                    () -> complex.reviewScalingOverrideRemoval(OWNER, 6, active.id())).code());
+            assertEquals(active.id(), readOnly.canonical.active().orElseThrow().revisionId());
+            assertEquals(before, readOnly.canonical.active().orElseThrow().compiled()
+                    .documents().get("requirements.yml"));
+        }
+    }
+
+    private static ProviderRegistry guidedMoneyProviders() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new ConfigurationMetricProvider()));
+        providers.activate(providers.register("test", new ConfigurationCostProvider()));
+        return providers;
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Reward review applies one lossless audited revision without provider action")
+    void guidedRewardReviewAppliesOneRevisionWithoutProviderOrPlayerMutation() {
+        ProviderRegistry providers = new ProviderRegistry();
+        ConfigurationMetricProvider metric = new ConfigurationMetricProvider();
+        ConfigurationCostProvider cost = new ConfigurationCostProvider();
+        ConfigurationRewardProvider reward = new ConfigurationRewardProvider();
+        providers.activate(providers.register("test", metric));
+        providers.activate(providers.register("test", cost));
+        providers.activate(providers.register("test", reward));
+        Fixture fixture = new Fixture(providers);
+        StoredConfigurationRevision original = fixture.applyInitial(guidedRewardDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+
+        var level = guided.prestigeLevel(OWNER, 6);
+        assertTrue(level.rewardAvailable());
+        assertTrue(level.rewardEditable());
+        assertEquals("1", level.rewardAmount());
+        var input = guided.rewardInput(OWNER, 6);
+        assertEquals(original.id(), input.revision());
+        assertEquals("1", input.currentValue());
+        assertEquals("2.5", guided.validateRewardInput(OWNER, 6, "2.500", original.id()));
+        var review = guided.reviewReward(OWNER, 6, "2").toCompletableFuture().join();
+
+        assertEquals(original.id(), review.baseRevision());
+        assertEquals("1", review.currentAmount());
+        assertEquals("2", review.newAmount());
+        assertEquals(original.id(), fixture.canonical.active().orElseThrow().revisionId());
+        assertEquals(1, fixture.history.recent(10).size());
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals(0, reward.executions.get());
+
+        var result = guided.confirmReward(OWNER, review.reviewId()).toCompletableFuture().join();
+        var active = fixture.canonical.active().orElseThrow();
+
+        assertEquals(original.id(), result.previousRevision());
+        assertEquals(active.revisionId(), result.newRevision());
+        assertEquals("2", guided.prestigeLevel(OWNER, 6).rewardAmount());
+        assertEquals(2, fixture.history.recent(10).size());
+        StoredConfigurationRevision audit = fixture.history.recent(10).getFirst();
+        assertEquals(OWNER.actor(), audit.actor());
+        assertEquals("staff-gui:configuration:reward", audit.sourceSurface());
+        assertTrue(audit.reason().contains("Guided Reward for Prestige 6: 1 -> 2"));
+        String rewards = active.compiled().documents().get("rewards.yml");
+        assertTrue(rewards.contains("# owner Reward note"));
+        assertTrue(rewards.contains("custom-owner-key: keep"));
+        assertTrue(rewards.contains("value: \"2\""));
+        assertEquals(0, metric.reads.get());
+        assertEquals(0, cost.executions.get());
+        assertEquals(0, reward.executions.get());
+        assertEquals("config.gui.review.expired", assertThrows(AdministrationException.class,
+                () -> guided.confirmReward(OWNER, review.reviewId())).code());
+        assertEquals(2, fixture.history.recent(10).size());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Guided Reward rejects invalid, stale, unauthorized, and complex edits fail closed")
+    void guidedRewardRejectsInvalidStaleUnauthorizedAndComplexChanges() {
+        ProviderRegistry providers = new ProviderRegistry();
+        providers.activate(providers.register("test", new ConfigurationMetricProvider()));
+        providers.activate(providers.register("test", new ConfigurationCostProvider()));
+        providers.activate(providers.register("test", new ConfigurationRewardProvider()));
+        Fixture fixture = new Fixture(providers);
+        fixture.applyInitial(guidedRewardDocuments());
+        var guided = new CanonicalGuidedConfigurationAdministration(
+                fixture.service, fixture.workflow::active, CLOCK);
+        PermissionSubject viewer = new PermissionSubject(OWNER.actor(), Set.of(PhaseSixPermissions.CONFIG_VIEW));
+
+        assertEquals("permission.denied", assertThrows(AdministrationException.class,
+                () -> guided.rewardAmounts(viewer, 6, 0, 7)).code());
+        ConfigRevisionId currentRevision = fixture.canonical.active().orElseThrow().revisionId();
+        for (String invalid : List.of("", "reward", "-1", "0", "10001", "NaN", "Infinity", "1e2", "1.2.3")) {
+            assertEquals("config.gui.reward.invalid", assertThrows(AdministrationException.class,
+                    () -> guided.validateRewardInput(OWNER, 6, invalid, currentRevision)).code());
+        }
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.validateRewardInput(
+                        OWNER, 6, "2", new ConfigRevisionId("not-active"))).code());
+        var staleReview = guided.reviewReward(OWNER, 6, "2").toCompletableFuture().join();
+        ConfigRevisionId beforeCompetingEdit = fixture.canonical.active().orElseThrow().revisionId();
+        UUID competingDraft = fixture.service.beginDraft(OWNER, "competing-editor");
+        fixture.service.editScalar(OWNER, competingDraft, "prestige.cooldown", "PT2S");
+        var competingPreview = fixture.service.preview(OWNER, competingDraft).toCompletableFuture().join();
+        fixture.service.applyDraft(OWNER, competingDraft, Optional.of(beforeCompetingEdit),
+                acknowledgements(competingPreview), "Competing safe edit").toCompletableFuture().join();
+
+        assertEquals("config.revision.stale", assertThrows(AdministrationException.class,
+                () -> guided.confirmReward(OWNER, staleReview.reviewId())).code());
+        assertEquals("1", guided.prestigeLevel(OWNER, 6).rewardAmount());
+
+        Fixture complex = new Fixture(providers);
+        complex.applyInitial(complexRewardDocuments());
+        var complexGuided = new CanonicalGuidedConfigurationAdministration(
+                complex.service, complex.workflow::active, CLOCK);
+        var complexLevel = complexGuided.prestigeLevel(OWNER, 6);
+        assertTrue(complexLevel.rewardAvailable());
+        assertFalse(complexLevel.rewardEditable());
+        assertEquals("config.gui.reward.unsupported", assertThrows(AdministrationException.class,
+                () -> complexGuided.rewardAmounts(OWNER, 6, 0, 7)).code());
+        assertEquals("config.gui.reward.unsupported", assertThrows(AdministrationException.class,
+                () -> complexGuided.rewardInput(OWNER, 6)).code());
+    }
+
+    @Test
     @DisplayName("[Phase 9C] Omitted reset defaults remain editable through the canonical draft surface")
     void materializesOmittedResetDispositionOnExplicitEdit() {
         Fixture fixture = new Fixture();
@@ -1360,6 +2109,232 @@ class PhaseSixConfigurationAdministrationTest {
         return Map.copyOf(result);
     }
 
+    private static Map<String, String> guidedMoneyDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(defaultDocuments());
+        documents.put("requirements.yml", """
+                # owner Money note
+                schema-version: 3
+                maximum-depth: 8
+                requirements:
+                  money:
+                    provider: vault_balance
+                    metric: balance
+                    value-type: CURRENCY_AMOUNT
+                    operator: GREATER_OR_EQUAL
+                    target: "2"
+                    scope: ABSOLUTE
+                    completion: LIVE
+                    scaling:
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: unlimited
+                          mode: LINEAR
+                          base: 1
+                          rate: 0.5
+                          overrides:
+                            "3": 3
+                    custom-owner-key: keep
+                trees:
+                  prestige_gate:
+                    id: prestige_gate
+                    mode: ALL
+                    children:
+                      - requirement: money
+                costs:
+                  money_cost:
+                    provider: vault_economy_cost
+                    type: vault_economy
+                    value-type: CURRENCY_AMOUNT
+                    amount: "7"
+                """);
+        documents.put("lifecycle.yml", """
+                schema-version: 4
+                prestige:
+                  enabled: true
+                  current-count-increment: 1
+                  lifetime-count-increment: 1
+                  maximum: 10
+                  cooldown: PT0S
+                  requirement-tree: prestige_gate
+                  costs: [money_cost]
+                  rewards: []
+                  reset-policy:
+                    progression-stage: PRESERVE
+                """);
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> guidedBaseOverrideDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedMoneyDocuments());
+        documents.put("requirements.yml", documents.get("requirements.yml")
+                .replace("rate: 0.5", "rate: 1.25")
+                .replace("\"3\": 3", "\"3\": 3\n            \"6\": 3"));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> guidedOverrideDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedRewardDocuments());
+        documents.put("requirements.yml", documents.get("requirements.yml")
+                .replace("base: 1", "base: 2")
+                .replace("rate: 0.5", "rate: 1.25")
+                .replace("\"3\": 3", "\"3\": 3\n            \"6\": 3")
+                .replace("amount: \"7\"", "amount: \"6\""));
+        documents.put("rewards.yml", documents.get("rewards.yml")
+                .replace("value: \"1\"", "value: \"2\""));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> guidedRewardDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedMoneyDocuments());
+        documents.put("rewards.yml", """
+                # owner Reward note
+                schema-version: 3
+                rewards:
+                  phase9d_vault_bonus:
+                    display-name: Phase 9D Vault bonus
+                    failure-policy: REQUIRED
+                    provider: vault_economy_reward
+                    repeatability: ONCE_PER_OPERATION
+                    type: vault_economy
+                    value: "1"
+                    value-type: CURRENCY_AMOUNT
+                    custom-owner-key: keep
+                """);
+        documents.put("lifecycle.yml", documents.get("lifecycle.yml")
+                .replace("rewards: []", "rewards: [phase9d_vault_bonus]"));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> guidedTotalSkillLevelDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedOverrideDocuments());
+        documents.put("requirements.yml", documents.get("requirements.yml")
+                .replace("\"6\": 3", "\"6\": 4")
+                .replace("    custom-owner-key: keep\ntrees:", """
+                            custom-owner-key: keep
+                        # owner Total Skill Level note
+                        skill:
+                          provider: mcmmo
+                          metric: total_level
+                          value-type: INTEGER_COUNT
+                          operator: GREATER_OR_EQUAL
+                          target: "1"
+                          scope: ABSOLUTE
+                          completion: LIVE
+                          custom-skill-key: keep
+                      trees:""")
+                .replace("      - requirement: money\ncosts:", """
+                            - requirement: money
+                            - requirement: skill
+                      costs:"""));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> complexTotalSkillLevelDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedTotalSkillLevelDocuments());
+        documents.put("requirements.yml", documents.get("requirements.yml").replace("""
+                          - requirement: money
+                          - requirement: skill
+                    costs:""", """
+                          - requirement: money
+                          - node:
+                              id: skill_branch
+                              mode: ALL
+                              children:
+                                - requirement: skill
+                    costs:"""));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> segmentedContinueDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedMoneyDocuments());
+        documents.put("requirements.yml", documents.get("requirements.yml").replace("""
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: unlimited
+                          mode: LINEAR
+                          base: 1
+                          rate: 0.5
+                          overrides:
+                            "3": 3
+                """, """
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: 3
+                          mode: FLAT
+                          transition: EXPLICIT_BASE
+                          base: 1
+                          rate: 0
+                          overrides:
+                            "3": 3
+                        - start-prestige: 4
+                          end-prestige: unlimited
+                          mode: LINEAR
+                          transition: CONTINUE
+                          base: 1
+                          rate: 0.5
+                          overrides:
+                            "6": 4
+                """));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> manualScalingDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedMoneyDocuments());
+        documents.put("requirements.yml", documents.get("requirements.yml").replace("""
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: unlimited
+                          mode: LINEAR
+                          base: 1
+                          rate: 0.5
+                          overrides:
+                            "3": 3
+                """, """
+                      segments:
+                        - start-prestige: 1
+                          end-prestige: 10
+                          mode: MANUAL
+                          transition: EXPLICIT_BASE
+                          base: 1
+                          rate: 0
+                          overrides:
+                            "1": 1
+                            "2": 2
+                            "3": 3
+                            "4": 4
+                            "5": 5
+                            "6": 6
+                            "7": 7
+                            "8": 8
+                            "9": 9
+                            "10": 10
+                """));
+        return Map.copyOf(documents);
+    }
+
+    private static Map<String, String> complexRewardDocuments() {
+        LinkedHashMap<String, String> documents = new LinkedHashMap<>(guidedRewardDocuments());
+        documents.put("lifecycle.yml", """
+                schema-version: 4
+                prestige:
+                  enabled: true
+                  current-count-increment: 1
+                  lifetime-count-increment: 1
+                  maximum: 10
+                  cooldown: PT0S
+                  requirement-tree: prestige_gate
+                  costs: [money_cost]
+                  rewards: [phase9d_vault_bonus]
+                  reward-scaling:
+                    phase9d_vault_bonus:
+                      mode: FLAT
+                      base: 1
+                  reset-policy:
+                    progression-stage: PRESERVE
+                """);
+        return Map.copyOf(documents);
+    }
+
     private static Map<String, String> externalDocuments() {
         LinkedHashMap<String, String> documents = new LinkedHashMap<>(defaultDocuments());
         documents.put("progression.yml", """
@@ -1460,6 +2435,7 @@ class PhaseSixConfigurationAdministrationTest {
         private final ConfigurationService canonical = new ConfigurationService();
         private final ConfigurationHistoryStore history;
         private final ConfigurationSnapshotStore snapshots;
+        private final PhaseSixConfigurationWorkflow workflow;
         private final ConfigurationAdministrationService service;
 
         private Fixture() {
@@ -1483,9 +2459,8 @@ class PhaseSixConfigurationAdministrationTest {
                 InMemoryStageReferenceMigrationStore stageReferences) {
             this.history = history;
             this.snapshots = snapshots;
-            service = new ConfigurationAdministrationService(canonical,
-                    new PhaseSixConfigurationWorkflow(canonical, providers,
-                            stageReferences, List.of()),
+            workflow = new PhaseSixConfigurationWorkflow(canonical, providers, stageReferences, List.of());
+            service = new ConfigurationAdministrationService(canonical, workflow,
                     compatibilitySchema(), history, snapshots, clock);
         }
 
@@ -1500,6 +2475,125 @@ class PhaseSixConfigurationAdministrationTest {
             var acknowledgement = service.prepareAcknowledgement(OWNER, draft);
             return service.confirmAcknowledgement(OWNER, acknowledgement.acknowledgementId(),
                     "Initial test revision").toCompletableFuture().join();
+        }
+    }
+
+    private static final class ConfigurationMetricProvider
+            implements net.maddkraft.maddprestige.api.metric.MetricProvider {
+        private final AtomicInteger reads = new AtomicInteger();
+
+        @Override
+        public ProviderDescriptor descriptor() {
+            return setupDescriptor("vault_balance", "metric");
+        }
+
+        @Override
+        public ProviderHealth health() {
+            return setupHealth();
+        }
+
+        @Override
+        public Set<net.maddkraft.maddprestige.api.metric.MetricDescriptor> metrics() {
+            return Set.of(new net.maddkraft.maddprestige.api.metric.MetricDescriptor(
+                    new ProviderId("vault_balance"), new MetricId("balance"),
+                    net.maddkraft.maddprestige.api.metric.MetricValueType.CURRENCY_AMOUNT,
+                    Set.of(net.maddkraft.maddprestige.api.metric.MetricOperator.GREATER_OR_EQUAL),
+                    Set.of(net.maddkraft.maddprestige.api.metric.MetricReadMode.CURRENT), true,
+                    net.maddkraft.maddprestige.api.metric.MetricMonotonicity.NON_MONOTONIC,
+                    net.maddkraft.maddprestige.api.metric.MetricResetPolicy.NOT_APPLICABLE,
+                    Map.of(), "Money", "Money", "currency", "authoritative"));
+        }
+
+        @Override
+        public CompletionStage<Map<net.maddkraft.maddprestige.api.metric.MetricQuery,
+                net.maddkraft.maddprestige.api.metric.MetricSample>> read(
+                UUID playerId,
+                List<net.maddkraft.maddprestige.api.metric.MetricQuery> queries,
+                long providerGeneration) {
+            reads.incrementAndGet();
+            return CompletableFuture.completedFuture(Map.of());
+        }
+    }
+
+    private static final class ConfigurationCostProvider
+            implements net.maddkraft.maddprestige.api.cost.CostProvider {
+        private final AtomicInteger executions = new AtomicInteger();
+
+        @Override
+        public ProviderDescriptor descriptor() {
+            return setupDescriptor("vault_economy_cost", "cost");
+        }
+
+        @Override
+        public ProviderHealth health() {
+            return setupHealth();
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.action.ActionCharacteristics characteristics(
+                net.maddkraft.maddprestige.api.cost.CostDefinition definition) {
+            return new net.maddkraft.maddprestige.api.action.ActionCharacteristics(true, true, true, true);
+        }
+
+        @Override
+        public ValidationReport validate(net.maddkraft.maddprestige.api.cost.CostDefinition definition) {
+            return ValidationReport.VALID;
+        }
+
+        @Override
+        public CompletionStage<net.maddkraft.maddprestige.api.cost.CostPreflight> preflight(
+                net.maddkraft.maddprestige.api.cost.PlannedCost proposed) {
+            return CompletableFuture.completedFuture(
+                    net.maddkraft.maddprestige.api.cost.CostPreflight.ready(proposed));
+        }
+
+        @Override
+        public CompletionStage<net.maddkraft.maddprestige.api.action.ActionExecutionResult> execute(
+                net.maddkraft.maddprestige.api.cost.PlannedCost plannedCost) {
+            executions.incrementAndGet();
+            return CompletableFuture.completedFuture(
+                    net.maddkraft.maddprestige.api.action.ActionExecutionResult.applied());
+        }
+    }
+
+    private static final class ConfigurationRewardProvider
+            implements net.maddkraft.maddprestige.api.reward.RewardProvider {
+        private final AtomicInteger executions = new AtomicInteger();
+
+        @Override
+        public ProviderDescriptor descriptor() {
+            return setupDescriptor("vault_economy_reward", "reward");
+        }
+
+        @Override
+        public ProviderHealth health() {
+            return setupHealth();
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.api.action.ActionCharacteristics characteristics(
+                net.maddkraft.maddprestige.api.reward.RewardDefinition definition) {
+            return new net.maddkraft.maddprestige.api.action.ActionCharacteristics(true, true, true, true);
+        }
+
+        @Override
+        public ValidationReport validate(net.maddkraft.maddprestige.api.reward.RewardDefinition definition) {
+            return ValidationReport.VALID;
+        }
+
+        @Override
+        public CompletionStage<net.maddkraft.maddprestige.api.reward.RewardPreflight> preflight(
+                net.maddkraft.maddprestige.api.reward.PlannedReward proposed) {
+            return CompletableFuture.completedFuture(
+                    net.maddkraft.maddprestige.api.reward.RewardPreflight.ready(proposed));
+        }
+
+        @Override
+        public CompletionStage<net.maddkraft.maddprestige.api.action.ActionExecutionResult> execute(
+                net.maddkraft.maddprestige.api.reward.PlannedReward plannedReward) {
+            executions.incrementAndGet();
+            return CompletableFuture.completedFuture(
+                    net.maddkraft.maddprestige.api.action.ActionExecutionResult.applied());
         }
     }
 
@@ -1542,14 +2636,23 @@ class PhaseSixConfigurationAdministrationTest {
     private static final class SetupProvider implements net.maddkraft.maddprestige.api.metric.MetricProvider {
         private final ProviderId providerId;
         private final MetricId metricId;
+        private final net.maddkraft.maddprestige.api.metric.MetricValueType valueType;
 
         private SetupProvider() {
             this("setup_metric", "play_time");
         }
 
         private SetupProvider(String providerId, String metricId) {
+            this(providerId, metricId, net.maddkraft.maddprestige.api.metric.MetricValueType.COUNT);
+        }
+
+        private SetupProvider(
+                String providerId,
+                String metricId,
+                net.maddkraft.maddprestige.api.metric.MetricValueType valueType) {
             this.providerId = new ProviderId(providerId);
             this.metricId = new MetricId(metricId);
+            this.valueType = valueType;
         }
 
         @Override
@@ -1566,8 +2669,8 @@ class PhaseSixConfigurationAdministrationTest {
         @Override
         public Set<net.maddkraft.maddprestige.api.metric.MetricDescriptor> metrics() {
             return Set.of(new net.maddkraft.maddprestige.api.metric.MetricDescriptor(providerId,
-                    metricId, net.maddkraft.maddprestige.api.metric.MetricValueType.COUNT,
-                    Set.of(net.maddkraft.maddprestige.api.metric.MetricOperator.GREATER_OR_EQUAL),
+                    metricId, valueType,
+                    net.maddkraft.maddprestige.api.metric.MetricOperator.compatibleWith(valueType),
                     Set.of(net.maddkraft.maddprestige.api.metric.MetricReadMode.CURRENT), true,
                     net.maddkraft.maddprestige.api.metric.MetricMonotonicity.MONOTONIC,
                     net.maddkraft.maddprestige.api.metric.MetricResetPolicy.NOT_APPLICABLE, Map.of(), "Play time",

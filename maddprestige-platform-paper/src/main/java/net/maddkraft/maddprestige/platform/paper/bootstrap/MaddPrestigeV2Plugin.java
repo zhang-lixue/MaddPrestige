@@ -89,6 +89,7 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     private PaperProviderBridge providerBridge;
     private PaperMessageService messages;
     private ProductionRuntime runtime;
+    private PaperPhaseSixGuiController guiController;
     private AutoCloseable healthEvents;
     private boolean ready;
 
@@ -268,9 +269,10 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     private void bindCommand() {
         PluginCommand command = java.util.Objects.requireNonNull(getCommand("maddprestige"),
                 "maddprestige command is absent from plugin.yml");
-        PaperPhaseSixGuiController guiController = new PaperPhaseSixGuiController(runtime.playerGui(),
+        guiController = new PaperPhaseSixGuiController(runtime.playerGui(),
                 runtime.staffGui(),
-                new PaperGuiInventoryGuard(), scheduler, messages);
+                new PaperGuiInventoryGuard(), scheduler, messages,
+                failure -> getLogger().log(Level.SEVERE, "Staff/player GUI action failed safely", failure));
         getServer().getPluginManager().registerEvents(guiController, this);
         PaperPhaseSixCommandAdapter adapter = new PaperPhaseSixCommandAdapter(runtime.commands(),
                 runtime.completion(), scheduler, guiController, messages);
@@ -288,6 +290,10 @@ public final class MaddPrestigeV2Plugin extends JavaPlugin {
     }
 
     private void shutdownOwnedState() {
+        if (guiController != null) {
+            guiController.shutdown();
+            guiController = null;
+        }
         ready = false;
         messages = null;
         if (runtime != null) {

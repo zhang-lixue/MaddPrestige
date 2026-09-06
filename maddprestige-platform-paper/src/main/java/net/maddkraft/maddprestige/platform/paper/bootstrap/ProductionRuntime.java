@@ -62,6 +62,7 @@ import net.maddkraft.maddprestige.core.admin.command.ContextualHelpService;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
 import net.maddkraft.maddprestige.core.admin.command.StaffHistoryCommandService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
+import net.maddkraft.maddprestige.core.admin.config.CanonicalGuidedConfigurationAdministration;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
 import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationCandidate;
 import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationWorkflow;
@@ -335,8 +336,10 @@ public final class ProductionRuntime implements AutoCloseable {
                 return staffConfigurationSummary();
             }
         };
+        CanonicalGuidedConfigurationAdministration guidedConfiguration =
+                new CanonicalGuidedConfigurationAdministration(administration, configuration::active, clock);
         staffGui = new StaffGuiService(gui, playerViews, staffPlayers,
-                this::activeRevision, staffHistory, staffStatus, manualPrestige);
+                this::activeRevision, staffHistory, staffStatus, manualPrestige, guidedConfiguration);
         StaffHistoryCommandService historyCommands = new StaffHistoryCommandService(staffHistory, staffPlayers);
         SetupWizardService setupWizard = new SetupWizardService(administration, providers);
         commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,

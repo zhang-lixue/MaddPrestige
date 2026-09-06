@@ -1,8 +1,11 @@
 package net.maddkraft.maddprestige.platform.paper.admin;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -42,10 +45,21 @@ import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.OperationKind;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
+import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
 import net.maddkraft.maddprestige.core.admin.command.CommandResponse;
 import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.config.GuidedConfigurationAdministration;
+import net.maddkraft.maddprestige.core.admin.config.GuidedMoneyConfigurationResult;
+import net.maddkraft.maddprestige.core.admin.config.GuidedMoneyConfigurationReview;
+import net.maddkraft.maddprestige.core.admin.config.GuidedNumericConfigurationInput;
+import net.maddkraft.maddprestige.core.admin.config.GuidedRewardConfigurationResult;
+import net.maddkraft.maddprestige.core.admin.config.GuidedRewardConfigurationReview;
+import net.maddkraft.maddprestige.core.admin.config.MoneyAmountPage;
+import net.maddkraft.maddprestige.core.admin.config.PrestigeLevelConfigurationView;
+import net.maddkraft.maddprestige.core.admin.config.PrestigeLevelPage;
+import net.maddkraft.maddprestige.core.admin.config.RewardAmountPage;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressView;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
@@ -57,6 +71,7 @@ import net.maddkraft.maddprestige.core.admin.ui.GuiItemIcon;
 import net.maddkraft.maddprestige.core.admin.ui.GuiScreenKind;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionService;
 import net.maddkraft.maddprestige.core.admin.ui.GuiSessionView;
+import net.maddkraft.maddprestige.core.admin.ui.GuiTextInput;
 import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiInteractionResult;
 import net.maddkraft.maddprestige.core.admin.ui.PlayerGuiService;
 import net.maddkraft.maddprestige.core.admin.ui.StaffGuiService;
@@ -69,16 +84,24 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.entity.Player;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
+import org.bukkit.event.inventory.InventoryType;
+import org.bukkit.event.inventory.PrepareAnvilEvent;
+import org.bukkit.event.player.PlayerKickEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.AnvilInventory;
 import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.InventoryView;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.inventory.view.AnvilView;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -104,6 +127,9 @@ class PaperGuiInventoryGuardTest {
         assertBlocked(ClickType.CREATIVE, InventoryAction.CLONE_STACK, 2);
         assertBlocked(ClickType.LEFT, InventoryAction.PLACE_ALL, 2);
         assertBlocked(ClickType.LEFT, InventoryAction.PICKUP_ALL, 12);
+        assertBlocked(ClickType.LEFT, InventoryAction.NOTHING, InventoryView.OUTSIDE);
+        assertThrows(IllegalArgumentException.class,
+                () -> guard.click(ClickType.LEFT, InventoryAction.NOTHING, -2, 9));
     }
 
     @Test
@@ -172,6 +198,46 @@ class PaperGuiInventoryGuardTest {
         verify(staffGui).click(any(), org.mockito.ArgumentMatchers.eq(sessionId),
                 org.mockito.ArgumentMatchers.eq(actionId));
         verify(playerGui, never()).click(any(), any(), any());
+        verify(player).closeInventory();
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Outside click is cancelled without consuming the Staff GUI session")
+    void outsideClickLeavesTrackedSessionUsable(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        StaffGuiService staffGui = mock(StaffGuiService.class);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        when(player.isOnline()).thenReturn(true);
+        PaperGuiInventory holder = mock(PaperGuiInventory.class);
+        UUID sessionId = UUID.randomUUID();
+        UUID closeActionId = UUID.randomUUID();
+        when(holder.audience()).thenReturn(GuiAudience.STAFF);
+        when(holder.sessionId()).thenReturn(sessionId);
+        when(holder.actionAt(22)).thenReturn(Optional.of(closeActionId));
+        when(staffGui.click(any(), org.mockito.ArgumentMatchers.eq(sessionId),
+                org.mockito.ArgumentMatchers.eq(closeActionId)))
+                .thenReturn(CompletableFuture.completedFuture(PlayerGuiInteractionResult.closed()));
+        DeferredScheduler deferred = new DeferredScheduler();
+        PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                playerGui, staffGui, guard, deferred, messages);
+        InventoryClickEvent outside = click(holder, player, InventoryView.OUTSIDE);
+
+        assertDoesNotThrow(() -> controller.onClick(outside));
+
+        verify(outside).setCancelled(true);
+        verify(staffGui, never()).click(any(), any(), any());
+        verify(playerGui, never()).click(any(), any(), any());
+        verify(player, never()).openInventory(any(Inventory.class));
+        verify(player, never()).closeInventory();
+        verify(player, never()).setItemOnCursor(any(ItemStack.class));
+
+        controller.onClick(click(holder, player, 22));
+        deferred.runNext();
+
+        verify(staffGui).click(any(), org.mockito.ArgumentMatchers.eq(sessionId),
+                org.mockito.ArgumentMatchers.eq(closeActionId));
         verify(player).closeInventory();
     }
 
@@ -278,7 +344,7 @@ class PaperGuiInventoryGuardTest {
         doAnswer(invocation -> sent.add(invocation.getArgument(0)))
                 .when(staff).sendMessage(any(Component.class));
         DeferredScheduler deferred = new DeferredScheduler();
-        ArrayList<PaperGuiInventory> holders = new ArrayList<>();
+        ArrayList<PaperGuiViewHolder> holders = new ArrayList<>();
         ArrayList<Component> titles = new ArrayList<>();
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
@@ -286,10 +352,21 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenAnswer(invocation -> {
-                        PaperGuiInventory holder = invocation.getArgument(0);
+                        PaperGuiViewHolder holder = invocation.getArgument(0);
                         Inventory inventory = mock(Inventory.class);
                         when(inventory.getHolder()).thenReturn(holder);
                         when(inventory.getSize()).thenReturn(27);
+                        holders.add(holder);
+                        titles.add(invocation.getArgument(2));
+                        return inventory;
+                    });
+            bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
+                    any(InventoryType.class), any(Component.class)))
+                    .thenAnswer(invocation -> {
+                        PaperGuiViewHolder holder = invocation.getArgument(0);
+                        AnvilInventory inventory = mock(AnvilInventory.class);
+                        when(inventory.getHolder()).thenReturn(holder);
+                        when(inventory.getSize()).thenReturn(3);
                         holders.add(holder);
                         titles.add(invocation.getArgument(2));
                         return inventory;
@@ -410,6 +487,628 @@ class PaperGuiInventoryGuardTest {
             verify(staff).closeInventory();
             assertTrue(sent.isEmpty());
             assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 correction] Every guided Money screen opens on the first Paper click")
+    void guidedMoneyPathOpensEveryDestinationOnFirstClick(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        ConfigRevisionId revision = new ConfigRevisionId("phase9f-c2-first-click");
+        PaperGuidedConfigurationStub guided = new PaperGuidedConfigurationStub(revision);
+        GuiSessionService sessions = new GuiSessionService(() -> Optional.of(revision),
+                (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
+                mock(GuiConfigurationAuthority.class), Duration.ofMinutes(5), Clock.systemUTC());
+        StaffGuiService staffGui = new StaffGuiService(sessions, mock(PlayerProgressViewService.class),
+                () -> List.of(), () -> Optional.of(revision),
+                new StaffHistorySource() {
+                    @Override
+                    public java.util.concurrent.CompletionStage<Page> recent(int offset, int limit) {
+                        return CompletableFuture.completedFuture(new Page(List.of(), false, false));
+                    }
+
+                    @Override
+                    public java.util.concurrent.CompletionStage<Page> forPlayer(
+                            UUID selectedPlayerId,
+                            int offset,
+                            int limit) {
+                        return CompletableFuture.completedFuture(new Page(List.of(), false, false));
+                    }
+                }, healthyStaffStatus(), null, guided);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        Player staff = mock(Player.class);
+        preparePlayer(staff);
+        when(staff.isOnline()).thenReturn(true);
+        ArrayList<Component> sent = new ArrayList<>();
+        doAnswer(invocation -> sent.add(invocation.getArgument(0)))
+                .when(staff).sendMessage(any(Component.class));
+        DeferredScheduler deferred = new DeferredScheduler();
+        ArrayList<PaperGuiViewHolder> holders = new ArrayList<>();
+        ArrayList<Component> titles = new ArrayList<>();
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems();
+                MockedConstruction<PaperNumericInputInventory> inputs =
+                        paperNumericInputs(holders, titles, messages)) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
+                    org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenAnswer(invocation -> {
+                        PaperGuiViewHolder holder = invocation.getArgument(0);
+                        Inventory inventory = mock(Inventory.class);
+                        when(inventory.getHolder()).thenReturn(holder);
+                        when(inventory.getSize()).thenReturn(27);
+                        holders.add(holder);
+                        titles.add(invocation.getArgument(2));
+                        return inventory;
+                    });
+            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                    playerGui, staffGui, guard, deferred, messages);
+            PermissionSubject subject = PaperPermissionSubjects.from(staff);
+            GuiSessionView dashboard = staffGui.open(subject);
+            controller.open(staff, dashboard);
+
+            UUID dashboardAction = holders.get(0).actionAt(12).orElseThrow();
+            controller.onClick(click(holders.get(0), staff, 12));
+            deferred.runNext();
+            assertEquals("Configuration", plain(titles.get(1)));
+            assertEquals("gui.session.expired", assertThrows(AdministrationException.class,
+                    () -> staffGui.click(subject, dashboard.sessionId(), dashboardAction)).code());
+            controller.onClose(close(holders.get(0)));
+
+            controller.onClick(click(holders.get(1), staff, 13));
+            deferred.runNext();
+            assertEquals("Prestige Levels", plain(titles.get(2)));
+            controller.onClose(close(holders.get(1)));
+
+            controller.onClick(click(holders.get(2), staff, 15));
+            deferred.runNext();
+            assertEquals("Prestige 6", plain(titles.get(3)));
+            controller.onClose(close(holders.get(2)));
+
+            controller.onClick(click(holders.get(3), staff, 13));
+            deferred.runNext();
+            assertEquals("Prestige 6 Money", plain(titles.get(4)));
+            assertEquals("6", ((PaperNumericInputInventory) holders.get(4)).initialValue());
+            controller.onClose(close(holders.get(3)));
+
+            controller.onClick(click(holders.get(4), staff, 2, "25"));
+            deferred.runNext();
+            assertEquals("Prestige 6 Review", plain(titles.get(5)));
+            controller.onClose(close(holders.get(4)));
+            assertTrue(holders.get(5).actionAt(22).isPresent());
+            assertEquals(1, guided.reviewCalls);
+            assertEquals(0, guided.confirmCalls);
+
+            controller.onClick(click(holders.get(5), staff, 18));
+            deferred.runNext();
+            assertEquals("Prestige 6", plain(titles.get(6)));
+            controller.onClose(close(holders.get(5)));
+            controller.onClick(click(holders.get(6), staff, 26));
+            deferred.runNext();
+
+            verify(staff, times(6)).openInventory(any(Inventory.class));
+            verify((PaperNumericInputInventory) holders.get(4)).open();
+            verify(staff).closeInventory();
+            verify(playerGui, never()).click(any(), any(), any());
+            assertTrue(sent.isEmpty());
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2] Every guided Reward screen opens on the first Paper click")
+    void guidedRewardPathOpensEveryDestinationOnFirstClick(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        ConfigRevisionId revision = new ConfigRevisionId("phase9f-c2-reward-first-click");
+        PaperGuidedConfigurationStub guided = new PaperGuidedConfigurationStub(revision);
+        GuiSessionService sessions = new GuiSessionService(() -> Optional.of(revision),
+                (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
+                mock(GuiConfigurationAuthority.class), Duration.ofMinutes(5), Clock.systemUTC());
+        StaffGuiService staffGui = new StaffGuiService(sessions, mock(PlayerProgressViewService.class),
+                () -> List.of(), () -> Optional.of(revision),
+                new StaffHistorySource() {
+                    @Override
+                    public java.util.concurrent.CompletionStage<Page> recent(int offset, int limit) {
+                        return CompletableFuture.completedFuture(new Page(List.of(), false, false));
+                    }
+                }, healthyStaffStatus(), null, guided);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        Player staff = mock(Player.class);
+        preparePlayer(staff);
+        when(staff.isOnline()).thenReturn(true);
+        ArrayList<Component> sent = new ArrayList<>();
+        doAnswer(invocation -> sent.add(invocation.getArgument(0)))
+                .when(staff).sendMessage(any(Component.class));
+        DeferredScheduler deferred = new DeferredScheduler();
+        ArrayList<PaperGuiViewHolder> holders = new ArrayList<>();
+        ArrayList<Component> titles = new ArrayList<>();
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems();
+                MockedConstruction<PaperNumericInputInventory> inputs =
+                        paperNumericInputs(holders, titles, messages)) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
+                    org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenAnswer(invocation -> {
+                        PaperGuiViewHolder holder = invocation.getArgument(0);
+                        Inventory inventory = mock(Inventory.class);
+                        when(inventory.getHolder()).thenReturn(holder);
+                        when(inventory.getSize()).thenReturn(27);
+                        holders.add(holder);
+                        titles.add(invocation.getArgument(2));
+                        return inventory;
+                    });
+            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                    playerGui, staffGui, guard, deferred, messages);
+            PermissionSubject subject = PaperPermissionSubjects.from(staff);
+            controller.open(staff, staffGui.open(subject));
+
+            controller.onClick(click(holders.get(0), staff, 12));
+            deferred.runNext();
+            assertEquals("Configuration", plain(titles.get(1)));
+            controller.onClose(close(holders.get(0)));
+
+            controller.onClick(click(holders.get(1), staff, 13));
+            deferred.runNext();
+            assertEquals("Prestige Levels", plain(titles.get(2)));
+            controller.onClose(close(holders.get(1)));
+
+            controller.onClick(click(holders.get(2), staff, 15));
+            deferred.runNext();
+            assertEquals("Prestige 6", plain(titles.get(3)));
+            controller.onClose(close(holders.get(2)));
+
+            controller.onClick(click(holders.get(3), staff, 16));
+            deferred.runNext();
+            assertEquals("Prestige 6 Rewards", plain(titles.get(4)));
+            assertEquals("2", ((PaperNumericInputInventory) holders.get(4)).initialValue());
+            controller.onClose(close(holders.get(3)));
+
+            controller.onClick(click(holders.get(4), staff, 2, "10"));
+            deferred.runNext();
+            assertEquals("Prestige 6 Review", plain(titles.get(5)));
+            controller.onClose(close(holders.get(4)));
+            assertTrue(holders.get(5).actionAt(22).isPresent());
+            assertEquals(1, guided.rewardReviewCalls);
+            assertEquals(0, guided.rewardConfirmCalls);
+
+            controller.onClick(click(holders.get(5), staff, 18));
+            deferred.runNext();
+            assertEquals("Prestige 6", plain(titles.get(6)));
+            controller.onClose(close(holders.get(5)));
+            controller.onClick(click(holders.get(6), staff, 26));
+            deferred.runNext();
+
+            verify(staff, times(6)).openInventory(any(Inventory.class));
+            verify((PaperNumericInputInventory) holders.get(4)).open();
+            verify(staff).closeInventory();
+            verify(playerGui, never()).click(any(), any(), any());
+            assertTrue(sent.isEmpty());
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 correction] Linear increment opens the Paper input on the first click")
+    void guidedScalingPathOpensInputOnFirstClick(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        ConfigRevisionId revision = new ConfigRevisionId("phase9f-c2-scaling-first-click");
+        PaperGuidedConfigurationStub guided = new PaperGuidedConfigurationStub(revision);
+        GuiSessionService sessions = new GuiSessionService(() -> Optional.of(revision),
+                (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
+                mock(GuiConfigurationAuthority.class), Duration.ofMinutes(5), Clock.systemUTC());
+        StaffGuiService staffGui = new StaffGuiService(sessions, mock(PlayerProgressViewService.class),
+                () -> List.of(), () -> Optional.of(revision),
+                new StaffHistorySource() {
+                    @Override
+                    public java.util.concurrent.CompletionStage<Page> recent(int offset, int limit) {
+                        return CompletableFuture.completedFuture(new Page(List.of(), false, false));
+                    }
+                }, healthyStaffStatus(), null, guided);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        Player staff = mock(Player.class);
+        preparePlayer(staff);
+        when(staff.isOnline()).thenReturn(true);
+        ArrayList<Component> sent = new ArrayList<>();
+        doAnswer(invocation -> sent.add(invocation.getArgument(0)))
+                .when(staff).sendMessage(any(Component.class));
+        DeferredScheduler deferred = new DeferredScheduler();
+        ArrayList<PaperGuiViewHolder> holders = new ArrayList<>();
+        ArrayList<Component> titles = new ArrayList<>();
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems();
+                MockedConstruction<PaperNumericInputInventory> inputs =
+                        paperNumericInputs(holders, titles, messages)) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
+                    org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenAnswer(invocation -> {
+                        PaperGuiViewHolder holder = invocation.getArgument(0);
+                        Inventory inventory = mock(Inventory.class);
+                        when(inventory.getHolder()).thenReturn(holder);
+                        when(inventory.getSize()).thenReturn(27);
+                        holders.add(holder);
+                        titles.add(invocation.getArgument(2));
+                        return inventory;
+                    });
+            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                    playerGui, staffGui, guard, deferred, messages);
+            controller.open(staff, staffGui.open(PaperPermissionSubjects.from(staff)));
+
+            controller.onClick(click(holders.get(0), staff, 12));
+            deferred.runNext();
+            controller.onClose(close(holders.get(0)));
+            controller.onClick(click(holders.get(1), staff, 13));
+            deferred.runNext();
+            controller.onClose(close(holders.get(1)));
+            controller.onClick(click(holders.get(2), staff, 15));
+            deferred.runNext();
+            controller.onClose(close(holders.get(2)));
+            controller.onClick(click(holders.get(3), staff, 22));
+            deferred.runNext();
+            controller.onClose(close(holders.get(3)));
+
+            controller.onClick(click(holders.get(4), staff, 13));
+            deferred.runNext();
+
+            assertEquals("Prestige 6 Increment", plain(titles.get(5)));
+            assertTrue(holders.get(5) instanceof PaperNumericInputInventory);
+            assertEquals("0.5", ((PaperNumericInputInventory) holders.get(5)).initialValue());
+            assertTrue(sent.isEmpty());
+            controller.onClose(close(holders.get(4)));
+
+            controller.onClick(click(holders.get(5), staff, 1));
+            deferred.runNext();
+            assertEquals("Prestige 6 Scaling", plain(titles.get(6)));
+            verify((PaperNumericInputInventory) holders.get(5)).retirePresentationItems();
+            controller.onClose(close(holders.get(5)));
+
+            controller.onClick(click(holders.get(6), staff, 13));
+            deferred.runNext();
+            assertEquals("0.5", ((PaperNumericInputInventory) holders.get(7)).initialValue());
+            controller.onClose(close(holders.get(6)));
+
+            controller.onClick(click(holders.get(7), staff, 2, "1"));
+            deferred.runNext();
+
+            assertEquals("Prestige 6 Review", plain(titles.get(8)));
+            assertEquals(1, guided.scalingReviewCalls);
+            verify((PaperNumericInputInventory) holders.get(7)).retirePresentationItems();
+            assertTrue(sent.isEmpty());
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 correction] Typed input uses a real Paper anvil view without casting")
+    void typedInputUsesRealAnvilView(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        AnvilView anvil = mock(AnvilView.class);
+        AnvilInventory inventory = mock(AnvilInventory.class);
+        when(anvil.getTopInventory()).thenReturn(inventory);
+        GuiSessionView view = numericInputView();
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems()) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            PaperNumericInputInventory input = new PaperNumericInputInventory(
+                    player, view, messages, (actor, title) -> anvil);
+
+            assertEquals(inventory, input.getInventory());
+            assertTrue(input.matches(anvil));
+            assertEquals("0.5", input.initialValue());
+            input.open();
+
+            verify(anvil).open();
+            verify(inventory, times(3)).setItem(org.mockito.ArgumentMatchers.anyInt(), any(ItemStack.class));
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 security] All guided numeric anvil items are cleared before vanilla return")
+    void nativeAnvilPresentationItemsNeverEnterPlayerInventory(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        ItemStack legitimate = mock(ItemStack.class);
+        ItemStack[] playerInventory = new ItemStack[41];
+        playerInventory[7] = legitimate;
+        ItemStack[] before = playerInventory.clone();
+        List<GuiSessionView> inputs = List.of(
+                numericInputView(GuiActionKind.STAFF_REVIEW_PRESTIGE_MONEY, GuiItemIcon.BALANCE, "6"),
+                numericInputView(GuiActionKind.STAFF_REVIEW_PRESTIGE_REWARD, GuiItemIcon.REWARD, "2"),
+                numericInputView(GuiActionKind.STAFF_REVIEW_SCALING_LINEAR_BASE,
+                        GuiItemIcon.CONFIGURATION, "1"),
+                numericInputView(GuiActionKind.STAFF_REVIEW_SCALING_LINEAR_INCREMENT,
+                        GuiItemIcon.INCREASE, "0.5"),
+                numericInputView(GuiActionKind.STAFF_REVIEW_SCALING_OVERRIDE,
+                        GuiItemIcon.PRESTIGE, "3"));
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> ignored = paperItems()) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            for (GuiSessionView view : inputs) {
+                AnvilView anvil = mock(AnvilView.class);
+                AnvilInventory top = mock(AnvilInventory.class);
+                ItemStack[] topContents = new ItemStack[3];
+                when(anvil.getTopInventory()).thenReturn(top);
+                doAnswer(invocation -> {
+                    topContents[(int) invocation.getArgument(0)] = invocation.getArgument(1);
+                    return null;
+                }).when(top).setItem(org.mockito.ArgumentMatchers.anyInt(), any(ItemStack.class));
+                doAnswer(invocation -> {
+                    topContents[(int) invocation.getArgument(0)] = null;
+                    return null;
+                }).when(top).clear(org.mockito.ArgumentMatchers.anyInt());
+
+                PaperNumericInputInventory input = new PaperNumericInputInventory(
+                        player, view, messages, ignoredValue -> true, (actor, title) -> anvil);
+                input.open();
+                assertTrue(java.util.Arrays.stream(topContents).allMatch(java.util.Objects::nonNull));
+
+                input.retirePresentationItems();
+
+                assertTrue(java.util.Arrays.stream(topContents).allMatch(java.util.Objects::isNull));
+                assertTrue(input.actionAt(1).isEmpty());
+                assertTrue(input.actionAt(2).isEmpty());
+                assertFalse(input.submitSlot(2));
+                // Paper''s ItemCombinerMenu.removed() now observes empty owned slots and has nothing to return.
+                java.util.Arrays.stream(topContents).filter(java.util.Objects::nonNull).forEach(item -> {
+                    int empty = java.util.Arrays.asList(playerInventory).indexOf(null);
+                    playerInventory[empty] = item;
+                });
+                assertArrayEquals(before, playerInventory);
+                verify(anvil).open();
+                verify(top).clear(0);
+                verify(top).clear(1);
+                verify(top).clear(2);
+            }
+            verify(player, never()).setItemOnCursor(any(ItemStack.class));
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 security] Close, replacement, logout, kick, and disable retire native input ownership")
+    void everyNativeInputExitClearsOwnedSlots(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        StaffGuiService staffGui = mock(StaffGuiService.class);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        when(player.isOnline()).thenReturn(true);
+        DeferredScheduler deferred = new DeferredScheduler();
+        Inventory ordinary = mock(Inventory.class);
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems();
+                MockedConstruction<PaperNumericInputInventory> constructed = mockConstruction(
+                        PaperNumericInputInventory.class, (input, context) -> {
+                            GuiSessionView view = (GuiSessionView) context.arguments().get(1);
+                            AnvilInventory inventory = mock(AnvilInventory.class);
+                            when(inventory.getSize()).thenReturn(3);
+                            when(inventory.getHolder()).thenReturn(input);
+                            when(input.getInventory()).thenReturn(inventory);
+                            when(input.sessionId()).thenReturn(view.sessionId());
+                            when(input.audience()).thenReturn(view.audience());
+                            when(input.matches(any(InventoryView.class))).thenReturn(true);
+                        })) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
+                    org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(ordinary);
+            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                    playerGui, staffGui, guard, deferred, messages);
+
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory closed = constructed.constructed().get(0);
+            InventoryCloseEvent close = mock(InventoryCloseEvent.class);
+            InventoryView closingView = mock(InventoryView.class);
+            Inventory closingInventory = closed.getInventory();
+            when(closingView.getTopInventory()).thenReturn(closingInventory);
+            when(closingView.getPlayer()).thenReturn(player);
+            when(close.getView()).thenReturn(closingView);
+            when(close.getInventory()).thenReturn(closingInventory);
+            when(close.getPlayer()).thenReturn(player);
+            controller.onClose(close);
+            verify(closed).retirePresentationItems();
+
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory replaced = constructed.constructed().get(1);
+            controller.open(player, blockedView());
+            verify(replaced).retirePresentationItems();
+
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory loggedOut = constructed.constructed().get(2);
+            PlayerQuitEvent quit = mock(PlayerQuitEvent.class);
+            when(quit.getPlayer()).thenReturn(player);
+            controller.onQuit(quit);
+            verify(loggedOut).retirePresentationItems();
+
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory kicked = constructed.constructed().get(3);
+            PlayerKickEvent kick = mock(PlayerKickEvent.class);
+            when(kick.getPlayer()).thenReturn(player);
+            controller.onKick(kick);
+            verify(kicked).retirePresentationItems();
+
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory disabled = constructed.constructed().get(4);
+            controller.shutdown();
+            verify(disabled).retirePresentationItems();
+            verify(staffGui, times(5)).closeView(any(UUID.class));
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 security] Native result follows canonical valid, invalid, valid input state")
+    void nativeAnvilResultRefreshesWithInputValidity(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        AnvilView anvil = mock(AnvilView.class);
+        AnvilInventory inventory = mock(AnvilInventory.class);
+        when(anvil.getTopInventory()).thenReturn(inventory);
+        when(anvil.getRenameText()).thenReturn("0.5", "", "1.25");
+        PrepareAnvilEvent event = mock(PrepareAnvilEvent.class);
+        when(event.getView()).thenReturn(anvil);
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems()) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            PaperNumericInputInventory input = new PaperNumericInputInventory(
+                    player, numericInputView(), messages,
+                    value -> value.equals("0.5") || value.equals("1.25"), (actor, title) -> anvil);
+
+            input.prepare(event);
+            input.prepare(event);
+            input.prepare(event);
+
+            ArgumentCaptor<ItemStack> results = ArgumentCaptor.forClass(ItemStack.class);
+            verify(event, times(3)).setResult(results.capture());
+            assertNotNull(results.getAllValues().get(0));
+            assertNull(results.getAllValues().get(1));
+            assertNotNull(results.getAllValues().get(2));
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 coexistence] Post-event refresh synchronizes valid-to-valid exact decimals")
+    void nativeAnvilResultReconcilesAfterCoexistingListenerOverwrite(@TempDir Path temporaryDirectory)
+            throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        AnvilView anvil = mock(AnvilView.class);
+        AnvilInventory inventory = mock(AnvilInventory.class);
+        when(anvil.getTopInventory()).thenReturn(inventory);
+        when(anvil.getRenameText()).thenReturn("1", "1.2", "1.25", "0.5", "0.55", "1.20", "");
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems()) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            PaperNumericInputInventory input = new PaperNumericInputInventory(
+                    player, numericInputView(), messages,
+                    java.util.Set.of("1", "1.2", "1.25", "0.5", "0.55", "1.20")::contains,
+                    (actor, title) -> anvil);
+
+            for (int validInput = 0; validInput < 6; validInput++) {
+                assertTrue(input.queueRefresh());
+                assertFalse(input.queueRefresh());
+                input.refreshResult();
+            }
+            verify(inventory, times(7)).setItem(
+                    org.mockito.ArgumentMatchers.eq(2), any(ItemStack.class));
+            verify(player, times(6)).updateInventory();
+
+            assertTrue(input.queueRefresh());
+            input.refreshResult();
+            verify(inventory).clear(2);
+            verify(player, times(7)).updateInventory();
+            assertFalse(items.constructed().isEmpty());
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 security] Deferred result refresh is coalesced and cannot revive a retired input")
+    void controllerReconcilesOnlyTheStillOwnedOpenInput(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        StaffGuiService staffGui = mock(StaffGuiService.class);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        when(player.isOnline()).thenReturn(true);
+        DeferredScheduler deferred = new DeferredScheduler();
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<PaperNumericInputInventory> constructed = mockConstruction(
+                        PaperNumericInputInventory.class, (input, context) -> {
+                            GuiSessionView view = (GuiSessionView) context.arguments().get(1);
+                            AnvilInventory inventory = mock(AnvilInventory.class);
+                            when(inventory.getSize()).thenReturn(3);
+                            when(inventory.getHolder()).thenReturn(input);
+                            when(input.getInventory()).thenReturn(inventory);
+                            when(input.sessionId()).thenReturn(view.sessionId());
+                            when(input.audience()).thenReturn(view.audience());
+                            when(input.matches(any(InventoryView.class))).thenReturn(true);
+                            when(input.queueRefresh()).thenReturn(true, false);
+                        })) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                    playerGui, staffGui, guard, deferred, messages);
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory input = constructed.constructed().getFirst();
+            AnvilView anvil = mock(AnvilView.class);
+            AnvilInventory inventory = input.getInventory();
+            when(anvil.getTopInventory()).thenReturn(inventory);
+            when(anvil.getPlayer()).thenReturn(player);
+            when(player.getOpenInventory()).thenReturn(anvil);
+            PrepareAnvilEvent event = mock(PrepareAnvilEvent.class);
+            when(event.getView()).thenReturn(anvil);
+
+            controller.onPrepareAnvil(event);
+            controller.onPrepareAnvil(event);
+            verify(input, times(2)).prepare(event);
+            verify(input, times(2)).queueRefresh();
+            deferred.runNext();
+            verify(input).refreshResult();
+
+            when(input.queueRefresh()).thenReturn(true);
+            controller.onPrepareAnvil(event);
+            PlayerQuitEvent quit = mock(PlayerQuitEvent.class);
+            when(quit.getPlayer()).thenReturn(player);
+            controller.onQuit(quit);
+            deferred.runNext();
+            verify(input).cancelQueuedRefresh();
+            verify(input).retirePresentationItems();
+        }
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 coexistence] Native input owns the final high-priority anvil result")
+    void nativeAnvilResultRunsAfterOrdinaryCoexistingHandlers() throws Exception {
+        EventHandler handler = PaperPhaseSixGuiController.class
+                .getDeclaredMethod("onPrepareAnvil", PrepareAnvilEvent.class)
+                .getAnnotation(EventHandler.class);
+
+        assertNotNull(handler);
+        assertEquals(EventPriority.HIGHEST, handler.priority());
+        assertFalse(handler.ignoreCancelled());
+    }
+
+    @Test
+    @DisplayName("[Phase 9F-C2 security] Unexpected numeric-input failure clears ownership before forced close")
+    void nativeInputFailureClearsBeforeClose(@TempDir Path temporaryDirectory) throws Exception {
+        PaperMessageService messages = messages(temporaryDirectory);
+        PlayerGuiService playerGui = mock(PlayerGuiService.class);
+        StaffGuiService staffGui = mock(StaffGuiService.class);
+        Player player = mock(Player.class);
+        preparePlayer(player);
+        when(player.isOnline()).thenReturn(true);
+        when(staffGui.submitNumericInput(any(), any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(CompletableFuture.failedFuture(new IllegalStateException("input review failed")));
+        DeferredScheduler deferred = new DeferredScheduler();
+        ArrayList<PaperGuiViewHolder> holders = new ArrayList<>();
+        ArrayList<Component> titles = new ArrayList<>();
+
+        try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
+                MockedConstruction<ItemStack> items = paperItems();
+                MockedConstruction<PaperNumericInputInventory> inputs =
+                        paperNumericInputs(holders, titles, messages)) {
+            bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
+            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+                    playerGui, staffGui, guard, deferred, messages);
+            controller.open(player, numericInputView());
+            PaperNumericInputInventory input = (PaperNumericInputInventory) holders.getFirst();
+
+            controller.onClick(click(input, player, 2, "0.5"));
+            deferred.runNext();
+
+            verify(input).retirePresentationItems();
+            verify(player).closeInventory();
         }
     }
 
@@ -762,7 +1461,9 @@ class PaperGuiInventoryGuardTest {
         DeferredScheduler deferred = new DeferredScheduler();
         InventoryClickEvent click = click(source, player);
         Inventory rendered = mock(Inventory.class);
-        doThrow(new IllegalStateException("qualification Preview open failure"))
+        ArrayList<Throwable> diagnostics = new ArrayList<>();
+        IllegalStateException openFailure = new IllegalStateException("qualification Preview open failure");
+        doThrow(openFailure)
                 .when(player).openInventory(rendered);
 
         try (MockedStatic<Bukkit> bukkit = mockStatic(Bukkit.class);
@@ -771,7 +1472,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(rendered);
             PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
-                    playerGui, guard, deferred, messages);
+                    playerGui, null, guard, deferred, messages, diagnostics::add);
 
             controller.onClick(click);
             deferred.runNext();
@@ -782,6 +1483,7 @@ class PaperGuiInventoryGuardTest {
             String visible = sent.stream().map(PlainTextComponentSerializer.plainText()::serialize)
                     .reduce((left, right) -> left + "\n" + right).orElse("");
             assertTrue(visible.contains("GUI action failed safely"));
+            assertEquals(List.of(openFailure), diagnostics);
         }
     }
 
@@ -791,17 +1493,33 @@ class PaperGuiInventoryGuardTest {
         assertFalse(decision.dispatchServerAction());
     }
 
-    private static InventoryClickEvent click(PaperGuiInventory holder, Player player) {
+    private static InventoryClickEvent click(PaperGuiViewHolder holder, Player player) {
         return click(holder, player, 22);
     }
 
-    private static InventoryClickEvent click(PaperGuiInventory holder, Player player, int rawSlot) {
+    private static InventoryClickEvent click(PaperGuiViewHolder holder, Player player, int rawSlot) {
+        return click(holder, player, rawSlot, "");
+    }
+
+    private static InventoryClickEvent click(
+            PaperGuiViewHolder holder,
+            Player player,
+            int rawSlot,
+            String input) {
         InventoryClickEvent event = mock(InventoryClickEvent.class);
-        InventoryView view = mock(InventoryView.class);
-        Inventory inventory = mock(Inventory.class);
+        InventoryView view = holder instanceof PaperNumericInputInventory
+                ? mock(AnvilView.class) : mock(InventoryView.class);
+        Inventory inventory = holder.getInventory();
+        if (inventory == null) {
+            inventory = mock(Inventory.class);
+            when(holder.getInventory()).thenReturn(inventory);
+        }
         when(inventory.getHolder()).thenReturn(holder);
-        when(inventory.getSize()).thenReturn(27);
+        when(inventory.getSize()).thenReturn(holder instanceof PaperNumericInputInventory ? 3 : 27);
         when(view.getTopInventory()).thenReturn(inventory);
+        if (view instanceof AnvilView anvil) {
+            when(anvil.getRenameText()).thenReturn(input);
+        }
         when(event.getView()).thenReturn(view);
         when(event.getClick()).thenReturn(ClickType.LEFT);
         when(event.getAction()).thenReturn(InventoryAction.PICKUP_ALL);
@@ -810,9 +1528,10 @@ class PaperGuiInventoryGuardTest {
         return event;
     }
 
-    private static InventoryCloseEvent close(PaperGuiInventory holder) {
+    private static InventoryCloseEvent close(PaperGuiViewHolder holder) {
         InventoryCloseEvent event = mock(InventoryCloseEvent.class);
-        when(event.getInventory()).thenReturn(holder.getInventory());
+        Inventory inventory = holder.getInventory();
+        when(event.getInventory()).thenReturn(inventory);
         return event;
     }
 
@@ -825,6 +1544,65 @@ class PaperGuiInventoryGuardTest {
                 return true;
             }).when(item).editMeta(any());
         });
+    }
+
+    private static MockedConstruction<PaperNumericInputInventory> paperNumericInputs(
+            List<PaperGuiViewHolder> holders,
+            List<Component> titles,
+            PaperMessageService messages) {
+        return mockConstruction(PaperNumericInputInventory.class, (input, context) -> {
+            GuiSessionView view = (GuiSessionView) context.arguments().get(1);
+            AnvilInventory inventory = mock(AnvilInventory.class);
+            when(inventory.getHolder()).thenReturn(input);
+            when(inventory.getSize()).thenReturn(3);
+            when(input.getInventory()).thenReturn(inventory);
+            when(input.sessionId()).thenReturn(view.sessionId());
+            when(input.audience()).thenReturn(view.audience());
+            when(input.initialValue()).thenReturn(view.textInput().orElseThrow().initialValue());
+            when(input.submitSlot(2)).thenReturn(true);
+            when(input.actionAt(org.mockito.ArgumentMatchers.anyInt())).thenAnswer(invocation -> {
+                int slot = invocation.getArgument(0);
+                return view.items().stream().filter(item -> item.slot() == slot).findFirst()
+                        .flatMap(GuiDisplayItem::actionId);
+            });
+            when(input.inputText(any(InventoryView.class))).thenAnswer(invocation ->
+                    ((AnvilView) invocation.getArgument(0)).getRenameText());
+            holders.add(input);
+            titles.add(PaperGuiInventory.renderTitle(view, messages));
+        });
+    }
+
+    private static GuiSessionView numericInputView() {
+        return numericInputView(GuiActionKind.STAFF_REVIEW_SCALING_LINEAR_INCREMENT,
+                GuiItemIcon.INCREASE, "0.5");
+    }
+
+    private static GuiSessionView numericInputView(
+            GuiActionKind submitKind,
+            GuiItemIcon inputIcon,
+            String initialValue) {
+        var back = new net.maddkraft.maddprestige.core.admin.ui.GuiAction(
+                UUID.randomUUID(), GuiActionKind.STAFF_BACK_PRESTIGE_SCALING,
+                MessageReference.of("gui.action.back"), "maddprestige.admin.config.view", false,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        var submit = new net.maddkraft.maddprestige.core.admin.ui.GuiAction(
+                UUID.randomUUID(), submitKind,
+                MessageReference.of("gui.action.staff.numeric_input.review"),
+                "maddprestige.admin.config.edit", false,
+                Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty());
+        return new GuiSessionView(UUID.randomUUID(), GuiAudience.STAFF,
+                MessageReference.of("gui.title.staff.scaling_input", "level", 6),
+                List.of(back, submit), Instant.now().plusSeconds(300),
+                GuiScreenKind.STAFF_PRESTIGE_SCALING_EDITOR, 9,
+                List.of(
+                        GuiDisplayItem.display(0, inputIcon,
+                                MessageReference.of("gui.item.staff.numeric_input.value", "value", initialValue),
+                                List.of()),
+                        GuiDisplayItem.action(1, GuiItemIcon.BACK, back.label(), List.of(),
+                                back.actionId(), false),
+                        GuiDisplayItem.action(2, GuiItemIcon.CONFIRM, submit.label(), List.of(),
+                                submit.actionId(), true)),
+                Optional.of(new GuiTextInput(initialValue)));
     }
 
     private static GuiSessionView blockedView() {
@@ -989,6 +1767,307 @@ class PaperGuiInventoryGuardTest {
                         new Component("Persistence", Health.HEALTHY, "SQLite schema is current"))));
             }
         };
+    }
+
+    private static final class PaperGuidedConfigurationStub implements GuidedConfigurationAdministration {
+        private final ConfigRevisionId revision;
+        private int reviewCalls;
+        private int confirmCalls;
+        private int rewardReviewCalls;
+        private int rewardConfirmCalls;
+        private int scalingReviewCalls;
+
+        private PaperGuidedConfigurationStub(ConfigRevisionId revision) {
+            this.revision = revision;
+        }
+
+        @Override
+        public PrestigeLevelPage prestigeLevels(PermissionSubject subject, int pageIndex, int pageSize) {
+            return new PrestigeLevelPage(revision, List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L),
+                    pageIndex, false, false);
+        }
+
+        @Override
+        public PrestigeLevelConfigurationView prestigeLevel(PermissionSubject subject, long prestigeLevel) {
+            return new PrestigeLevelConfigurationView(revision, prestigeLevel, true, "6", "6", 1, "2",
+                    "Linear with level override", true, true, true, true);
+        }
+
+        @Override
+        public MoneyAmountPage moneyAmounts(
+                PermissionSubject subject,
+                long prestigeLevel,
+                int pageIndex,
+                int pageSize) {
+            return new MoneyAmountPage(revision, prestigeLevel, "7",
+                    List.of("1", "2", "3", "4", "5", "6", "7"), pageIndex, false, false);
+        }
+
+        @Override
+        public GuidedNumericConfigurationInput moneyInput(PermissionSubject subject, long prestigeLevel) {
+            return new GuidedNumericConfigurationInput(revision, prestigeLevel, "6");
+        }
+
+        @Override
+        public String validateMoneyInput(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newAmount,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            return newAmount;
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<GuidedMoneyConfigurationReview> reviewMoney(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newAmount) {
+            return reviewMoney(subject, prestigeLevel, newAmount, revision);
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<GuidedMoneyConfigurationReview> reviewMoney(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newAmount,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            reviewCalls++;
+            return CompletableFuture.completedFuture(new GuidedMoneyConfigurationReview(
+                    UUID.fromString("44444444-4444-4444-8444-444444444444"), revision,
+                    prestigeLevel, "6", newAmount, Instant.now().plus(Duration.ofMinutes(5))));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<GuidedMoneyConfigurationResult> confirmMoney(
+                PermissionSubject subject,
+                UUID reviewId) {
+            confirmCalls++;
+            return CompletableFuture.failedFuture(new AssertionError("Money review must not be confirmed"));
+        }
+
+        @Override
+        public RewardAmountPage rewardAmounts(
+                PermissionSubject subject,
+                long prestigeLevel,
+                int pageIndex,
+                int pageSize) {
+            return new RewardAmountPage(revision, prestigeLevel, "1",
+                    List.of("1", "2", "3", "4", "5", "6", "7"), pageIndex, false, false);
+        }
+
+        @Override
+        public GuidedNumericConfigurationInput rewardInput(PermissionSubject subject, long prestigeLevel) {
+            return new GuidedNumericConfigurationInput(revision, prestigeLevel, "2");
+        }
+
+        @Override
+        public String validateRewardInput(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newAmount,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            return newAmount;
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<GuidedRewardConfigurationReview> reviewReward(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newAmount) {
+            return reviewReward(subject, prestigeLevel, newAmount, revision);
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<GuidedRewardConfigurationReview> reviewReward(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newAmount,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            rewardReviewCalls++;
+            return CompletableFuture.completedFuture(new GuidedRewardConfigurationReview(
+                    UUID.fromString("55555555-5555-4555-8555-555555555555"), revision,
+                    prestigeLevel, "2", newAmount, Instant.now().plus(Duration.ofMinutes(5))));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<GuidedRewardConfigurationResult> confirmReward(
+                PermissionSubject subject,
+                UUID reviewId) {
+            rewardConfirmCalls++;
+            return CompletableFuture.failedFuture(new AssertionError("Reward review must not be confirmed"));
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationView requirements(
+                PermissionSubject subject,
+                long prestigeLevel) {
+            return new net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationView(
+                    revision, prestigeLevel, List.of(
+                            new net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationEntry(
+                                    "money",
+                                    net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationEntry
+                                            .Kind.MONEY,
+                                    "Money", "6", true),
+                            new net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationEntry(
+                                    "skill",
+                                    net.maddkraft.maddprestige.core.admin.config.GuidedRequirementConfigurationEntry
+                                            .Kind.TOTAL_SKILL_LEVEL,
+                                    "Total Skill Level", "1", true)), false);
+        }
+
+        @Override
+        public GuidedNumericConfigurationInput totalSkillLevelInput(
+                PermissionSubject subject,
+                long prestigeLevel) {
+            return new GuidedNumericConfigurationInput(revision, prestigeLevel, "1");
+        }
+
+        @Override
+        public String validateTotalSkillLevelInput(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newTarget,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            return newTarget;
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedTotalSkillLevelReview> reviewTotalSkillLevel(
+                        PermissionSubject subject,
+                        long prestigeLevel,
+                        String newTarget,
+                        ConfigRevisionId expectedRevision) {
+            return CompletableFuture.completedFuture(
+                    new net.maddkraft.maddprestige.core.admin.config.GuidedTotalSkillLevelReview(
+                            UUID.fromString("99999999-9999-4999-8999-999999999999"), revision,
+                            prestigeLevel, "1", newTarget, Instant.now().plus(Duration.ofMinutes(5))));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedTotalSkillLevelResult> confirmTotalSkillLevel(
+                        PermissionSubject subject,
+                        UUID reviewId) {
+            return CompletableFuture.failedFuture(
+                    new AssertionError("Total Skill Level review must not be confirmed"));
+        }
+
+        @Override
+        public net.maddkraft.maddprestige.core.admin.config.GuidedScalingConfigurationView scaling(
+                PermissionSubject subject,
+                long prestigeLevel) {
+            return new net.maddkraft.maddprestige.core.admin.config.GuidedScalingConfigurationView(
+                    revision, prestigeLevel,
+                    net.maddkraft.maddprestige.core.scaling.SegmentScalingMode.LINEAR,
+                    "1", "0.5", "6", Optional.of("3"),
+                    java.util.Set.of(
+                            net.maddkraft.maddprestige.core.admin.config.GuidedScalingParameter.LINEAR_BASE,
+                            net.maddkraft.maddprestige.core.admin.config.GuidedScalingParameter.LINEAR_INCREMENT),
+                    false, true);
+        }
+
+        @Override
+        public GuidedNumericConfigurationInput scalingInput(
+                PermissionSubject subject,
+                long prestigeLevel,
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingParameter parameter) {
+            return new GuidedNumericConfigurationInput(revision, prestigeLevel, "0.5");
+        }
+
+        @Override
+        public String validateScalingInput(
+                PermissionSubject subject,
+                long prestigeLevel,
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingParameter parameter,
+                String newValue,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            return newValue;
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingConfigurationReview> reviewScaling(
+                PermissionSubject subject,
+                long prestigeLevel,
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingParameter parameter,
+                String newValue,
+                ConfigRevisionId expectedRevision) {
+            scalingReviewCalls++;
+            return CompletableFuture.completedFuture(
+                    new net.maddkraft.maddprestige.core.admin.config.GuidedScalingConfigurationReview(
+                            UUID.fromString("66666666-6666-4666-8666-666666666666"), revision,
+                            prestigeLevel, parameter, "0.5", newValue,
+                            Instant.now().plus(Duration.ofMinutes(5))));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingConfigurationResult> confirmScaling(
+                PermissionSubject subject,
+                UUID reviewId) {
+            return CompletableFuture.failedFuture(new AssertionError("Scaling review must not be confirmed"));
+        }
+        @Override
+        public GuidedNumericConfigurationInput scalingOverrideInput(
+                PermissionSubject subject,
+                long prestigeLevel) {
+            return new GuidedNumericConfigurationInput(revision, prestigeLevel, "3");
+        }
+
+        @Override
+        public String validateScalingOverrideInput(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newValue,
+                ConfigRevisionId expectedRevision) {
+            assertEquals(revision, expectedRevision);
+            return newValue;
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingOverrideReview> reviewScalingOverride(
+                PermissionSubject subject,
+                long prestigeLevel,
+                String newValue,
+                ConfigRevisionId expectedRevision) {
+            scalingReviewCalls++;
+            return CompletableFuture.completedFuture(
+                    new net.maddkraft.maddprestige.core.admin.config.GuidedScalingOverrideReview(
+                            UUID.fromString("77777777-7777-4777-8777-777777777777"), revision,
+                            prestigeLevel, Optional.of("3"), Optional.of(newValue), Optional.of("6"), Optional.of("8"),
+                            Instant.now().plus(Duration.ofMinutes(5))));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingOverrideReview>
+                reviewScalingOverrideRemoval(
+                        PermissionSubject subject,
+                        long prestigeLevel,
+                        ConfigRevisionId expectedRevision) {
+            scalingReviewCalls++;
+            return CompletableFuture.completedFuture(
+                    new net.maddkraft.maddprestige.core.admin.config.GuidedScalingOverrideReview(
+                            UUID.fromString("88888888-8888-4888-8888-888888888888"), revision,
+                            prestigeLevel, Optional.of("3"), Optional.empty(), Optional.of("6"), Optional.of("7"),
+                            Instant.now().plus(Duration.ofMinutes(5))));
+        }
+
+        @Override
+        public java.util.concurrent.CompletionStage<
+                net.maddkraft.maddprestige.core.admin.config.GuidedScalingOverrideResult> confirmScalingOverride(
+                PermissionSubject subject,
+                UUID reviewId) {
+            return CompletableFuture.failedFuture(new AssertionError("Override review must not be confirmed"));
+        }
     }
 
     private static PaperTaskScheduler immediateScheduler() {

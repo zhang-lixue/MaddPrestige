@@ -4,6 +4,7 @@ import java.util.Objects;
 import java.util.Set;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
+import org.bukkit.inventory.InventoryView;
 
 public final class PaperGuiInventoryGuard {
     public InventoryInteractionDecision click(
@@ -13,7 +14,7 @@ public final class PaperGuiInventoryGuard {
             int topInventorySize) {
         Objects.requireNonNull(click, "click type");
         Objects.requireNonNull(action, "inventory action");
-        if (topInventorySize < 0 || rawSlot < -1) {
+        if (topInventorySize < 0 || (rawSlot < -1 && rawSlot != InventoryView.OUTSIDE)) {
             throw new IllegalArgumentException("Inventory sizes/slots are invalid");
         }
         if (rawSlot < 0 || rawSlot >= topInventorySize) {
