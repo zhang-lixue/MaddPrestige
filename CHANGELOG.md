@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.0.0-rc.1
+
+- Replaced stage/rank progression with provider-driven numeric Prestige and exact `P -> P + 1` execution.
+- Added composable requirements, independent costs/rewards, exact-decimal currency handling, scaling, and milestones.
+- Added Player and Staff GUIs, player/history inspection, audited Set/Reset Prestige, and safe guided configuration.
+- Added session-bound confirmations, idempotent operation journals, restart recovery, and fail-closed provider behavior.
+- Added the stable `2.x-stable-1` Java API/provider SDK and Paper event baseline.
+- Qualified the release on Java 25, Paper 26.1.2 build 74, SQLite, and an isolated 42-plugin server stack.
+- Deferred MySQL/MariaDB, shared-database operation, automatic V1 import, and the first-party Prestige Shop.
+
 ## 1.2.0
 
 - Added a configurable relationship engine covering all 38 supplied plugin providers plus unlimited custom providers.

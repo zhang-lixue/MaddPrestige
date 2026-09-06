@@ -74,7 +74,7 @@ class PhaseSixCommandServiceTest {
         Fixture fixture = new Fixture();
 
         var response = fixture.commands.execute(new CommandInvocation(
-                subject(PhaseSixPermissions.PLAYER_VIEW), List.of("history", "tmydwc")))
+                subject(PhaseSixPermissions.PLAYER_VIEW), List.of("history", "FixturePlayer")))
                 .toCompletableFuture().join();
 
         assertTrue(response.successful());
@@ -911,7 +911,7 @@ class PhaseSixCommandServiceTest {
             CanonicalGuiMutationExecutor guiMutations = new CanonicalGuiMutationExecutor(configuration);
             gui = new GuiSessionService(() -> activeRevision(this), guiMutations::execute, guiMutations,
                     Duration.ofMinutes(1), CLOCK);
-            UUID historyPlayer = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+            UUID historyPlayer = UUID.fromString("00000000-0000-3000-8000-000000000001");
             StaffHistorySource historySource = new StaffHistorySource() {
                 @Override
                 public java.util.concurrent.CompletionStage<Page> recent(int offset, int limit) {
@@ -927,7 +927,7 @@ class PhaseSixCommandServiceTest {
                 }
             };
             StaffHistoryCommandService historyCommands = new StaffHistoryCommandService(historySource,
-                    () -> List.of(new StaffPlayerIdentity(historyPlayer, "tmydwc")));
+                    () -> List.of(new StaffPlayerIdentity(historyPlayer, "FixturePlayer")));
             commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, configuration,
                     doctor, why, preview, confirmation, new PlayerProgressViewService(preview),
                     new SetupWizardService(configuration, providers), manual, gui, null, null,

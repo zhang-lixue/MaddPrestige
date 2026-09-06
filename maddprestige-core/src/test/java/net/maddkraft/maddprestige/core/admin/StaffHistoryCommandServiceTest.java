@@ -28,7 +28,7 @@ import org.junit.jupiter.api.Test;
 
 class StaffHistoryCommandServiceTest {
     private static final UUID STAFF = UUID.fromString("11111111-1111-4111-8111-111111111111");
-    private static final UUID PLAYER = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+    private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
     private static final Instant NOW = Instant.parse("2026-09-02T20:24:00Z");
 
     @Test
@@ -41,7 +41,7 @@ class StaffHistoryCommandServiceTest {
         HistorySource source = new HistorySource(entries, 8);
         StaffHistoryCommandService service = service(source);
 
-        CommandResponse response = service.execute(staff(), List.of("history", "tmydwc", "1"))
+        CommandResponse response = service.execute(staff(), List.of("history", "FixturePlayer", "1"))
                 .toCompletableFuture().join();
 
         assertTrue(response.successful());
@@ -58,7 +58,7 @@ class StaffHistoryCommandServiceTest {
         assertEquals(StaffHistoryPresentation.timestamp(NOW),
                 response.messages().get(1).argument("value").orElseThrow());
         assertTrue(response.messages().subList(1, 4).stream().allMatch(line ->
-                line.argument("id").isPresent() && line.argument("player").filter("tmydwc"::equals).isPresent()));
+                line.argument("id").isPresent() && line.argument("player").filter("FixturePlayer"::equals).isPresent()));
     }
 
     @Test
@@ -71,16 +71,16 @@ class StaffHistoryCommandServiceTest {
         HistorySource source = new HistorySource(entries, entries.size());
         StaffHistoryCommandService service = service(source);
 
-        MessageReference first = service.execute(staff(), List.of("history", "tmydwc", "1"))
+        MessageReference first = service.execute(staff(), List.of("history", "FixturePlayer", "1"))
                 .toCompletableFuture().join().messages().getLast();
-        MessageReference last = service.execute(staff(), List.of("history", "tmydwc", "2"))
+        MessageReference last = service.execute(staff(), List.of("history", "FixturePlayer", "2"))
                 .toCompletableFuture().join().messages().getLast();
 
         assertEquals("", first.argument("previous").orElseThrow());
         assertEquals("2", first.argument("next").orElseThrow());
         assertEquals("1", last.argument("previous").orElseThrow());
         assertEquals("", last.argument("next").orElseThrow());
-        assertEquals("tmydwc", last.argument("player").orElseThrow());
+        assertEquals("FixturePlayer", last.argument("player").orElseThrow());
         assertEquals(5, source.requestedOffset.get(), "direct page argument must remain authoritative");
     }
 
@@ -92,7 +92,7 @@ class StaffHistoryCommandServiceTest {
 
         CommandResponse empty = service.execute(staff(), List.of("history", PLAYER.toString()))
                 .toCompletableFuture().join();
-        CommandResponse invalidPage = service.execute(staff(), List.of("history", "tmydwc", "2"))
+        CommandResponse invalidPage = service.execute(staff(), List.of("history", "FixturePlayer", "2"))
                 .toCompletableFuture().join();
 
         assertEquals(List.of("command.history.header", "command.history.empty"),
@@ -107,14 +107,14 @@ class StaffHistoryCommandServiceTest {
     @DisplayName("[Phase 9F-B] Stable detail lookup presents canonical transition, balance, reward, outcome, and time")
     void detailUsesStableOperationIdAndCanonicalFinancialProjection() {
         UUID entryId = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
-        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "tmydwc", 5, 6,
+        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "FixturePlayer", 5, 6,
                 StaffHistorySource.Outcome.RECOVERED, true, true,
                 Optional.of("$7"), Optional.of("$1"), Optional.of("$5"), Optional.of("$1"), NOW);
         HistorySource source = new HistorySource(List.of(entry), 1);
         StaffHistoryCommandService service = service(source);
 
         CommandResponse response = service.execute(staff(), List.of(
-                "history", "details", "tmydwc", entryId.toString())).toCompletableFuture().join();
+                "history", "details", "FixturePlayer", entryId.toString())).toCompletableFuture().join();
 
         assertTrue(response.successful());
         assertEquals(entryId, source.requestedEntry.get());
@@ -133,13 +133,13 @@ class StaffHistoryCommandServiceTest {
     @DisplayName("[Phase 9F-B UX] History detail truthfully falls back to cost when balance snapshots are absent")
     void detailFallsBackToCanonicalCostWithoutFabricatingBalance() {
         UUID entryId = UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
-        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "tmydwc", 4, 5,
+        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "FixturePlayer", 4, 5,
                 StaffHistorySource.Outcome.COMPLETED, true, true,
                 Optional.empty(), Optional.empty(), Optional.of("$7"), Optional.of("$1"), NOW);
         StaffHistoryCommandService service = service(new HistorySource(List.of(entry), 1));
 
         CommandResponse response = service.execute(staff(), List.of(
-                "history", "details", "tmydwc", entryId.toString())).toCompletableFuture().join();
+                "history", "details", "FixturePlayer", entryId.toString())).toCompletableFuture().join();
 
         assertEquals(List.of("command.history.detail.header", "command.history.outcome.completed",
                 "command.history.detail.cost", "command.history.detail.reward",
@@ -153,16 +153,16 @@ class StaffHistoryCommandServiceTest {
     @DisplayName("[Phase 9F-C1] Admin Set/Reset command history identifies the actor without fake finances")
     void administrativeHistoryIsDistinctAndNeverPresentsNormalPrestigeFinances() {
         UUID entryId = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
-        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "tmydwc",
+        StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "FixturePlayer",
                 StaffHistorySource.Kind.ADMIN_RESET, Optional.of(STAFF), Optional.of("Owner"),
                 8, 0, StaffHistorySource.Outcome.COMPLETED, true, true,
                 Optional.of("$8"), Optional.of("$1"), Optional.of("$7"), Optional.of("$1"), NOW);
         StaffHistoryCommandService service = service(new HistorySource(List.of(entry), 1));
 
-        CommandResponse summary = service.execute(staff(), List.of("history", "tmydwc"))
+        CommandResponse summary = service.execute(staff(), List.of("history", "FixturePlayer"))
                 .toCompletableFuture().join();
         CommandResponse detail = service.execute(staff(), List.of(
-                "history", "details", "tmydwc", entryId.toString())).toCompletableFuture().join();
+                "history", "details", "FixturePlayer", entryId.toString())).toCompletableFuture().join();
 
         assertEquals("command.history.kind.admin_reset", summary.messages().get(1).key());
         assertEquals(List.of("command.history.detail.admin_header", "command.history.detail.actor",
@@ -182,9 +182,9 @@ class StaffHistoryCommandServiceTest {
         StaffHistoryCommandService service = service(source);
 
         CommandResponse invalid = service.execute(staff(), List.of(
-                "history", "details", "tmydwc", "not-an-id")).toCompletableFuture().join();
+                "history", "details", "FixturePlayer", "not-an-id")).toCompletableFuture().join();
         CommandResponse missing = service.execute(staff(), List.of(
-                "history", "details", "tmydwc", UUID.randomUUID().toString()))
+                "history", "details", "FixturePlayer", UUID.randomUUID().toString()))
                 .toCompletableFuture().join();
         CommandResponse unknownPlayer = service.execute(staff(), List.of("history", "unknown"))
                 .toCompletableFuture().join();
@@ -206,16 +206,16 @@ class StaffHistoryCommandServiceTest {
         CommandCompletionService completion = new CommandCompletionService(service);
 
         assertThrows(AdministrationException.class, () -> service.execute(ordinary(),
-                List.of("history", "tmydwc")));
+                List.of("history", "FixturePlayer")));
         assertFalse(completion.suggest(ordinary(), List.of("")).contains("history"));
         assertTrue(completion.suggest(staff(), List.of("")).contains("history"));
-        assertEquals(List.of("tmydwc"), completion.suggest(staff(), List.of("history", "t")));
-        assertEquals(List.of("tmydwc"), completion.suggest(staff(), List.of("history", "details", "t")));
+        assertEquals(List.of("FixturePlayer"), completion.suggest(staff(), List.of("history", "F")));
+        assertEquals(List.of("FixturePlayer"), completion.suggest(staff(), List.of("history", "details", "F")));
 
-        service.execute(staff(), List.of("history", "tmydwc")).toCompletableFuture().join();
+        service.execute(staff(), List.of("history", "FixturePlayer")).toCompletableFuture().join();
 
         assertEquals(List.of(entry.entryId().toString()),
-                completion.suggest(staff(), List.of("history", "details", "tmydwc", "")));
+                completion.suggest(staff(), List.of("history", "details", "FixturePlayer", "")));
         assertEquals(1, source.reads.get());
         assertEquals(0, source.mutations.get());
     }
@@ -255,7 +255,7 @@ class StaffHistoryCommandServiceTest {
 
     private static StaffHistoryCommandService service(HistorySource source) {
         return new StaffHistoryCommandService(source,
-                () -> List.of(new StaffPlayerIdentity(PLAYER, "tmydwc")));
+                () -> List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer")));
     }
 
     private static StaffHistorySource.Entry entry(
@@ -264,7 +264,7 @@ class StaffHistoryCommandServiceTest {
             long after,
             StaffHistorySource.Outcome outcome) {
         UUID id = UUID.fromString("00000000-0000-4000-8000-00000000000" + suffix);
-        return new StaffHistorySource.Entry(id, "tmydwc", before, after, outcome, true, true,
+        return new StaffHistorySource.Entry(id, "FixturePlayer", before, after, outcome, true, true,
                 Optional.empty(), Optional.empty(), Optional.of("$5"), Optional.of("$1"), NOW);
     }
 

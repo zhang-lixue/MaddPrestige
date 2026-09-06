@@ -259,7 +259,7 @@ class PaperGuiInventoryGuardTest {
         PaperGuiInventory holder = mock(PaperGuiInventory.class);
         UUID sessionId = UUID.randomUUID();
         UUID actionId = UUID.randomUUID();
-        UUID selectedPlayer = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+        UUID selectedPlayer = UUID.fromString("00000000-0000-3000-8000-000000000001");
         when(holder.audience()).thenReturn(GuiAudience.STAFF);
         when(holder.sessionId()).thenReturn(sessionId);
         when(holder.actionAt(8)).thenReturn(Optional.of(actionId));
@@ -299,7 +299,7 @@ class PaperGuiInventoryGuardTest {
     void firstStaffClicksOpenPlayerManagementAndOverview(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         UUID staffId = UUID.fromString("11111111-1111-4111-8111-111111111111");
-        UUID playerId = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+        UUID playerId = UUID.fromString("00000000-0000-3000-8000-000000000001");
         ConfigRevisionId revision = new ConfigRevisionId("phase9f-b-first-click");
         assertDoesNotThrow(() -> messages.render(
                 MessageReference.of("gui.item.staff.player.uuid", "uuid", playerId)));
@@ -328,13 +328,13 @@ class PaperGuiInventoryGuardTest {
             private java.util.concurrent.CompletionStage<Page> page(int offset) {
                 return CompletableFuture.completedFuture(new Page(List.of(new Entry(
                         UUID.fromString("4be90c91-dd87-4210-bbeb-30d906d77a7a"),
-                        "tmydwc", 5, 6, Outcome.COMPLETED, true, true,
+                        "FixturePlayer", 5, 6, Outcome.COMPLETED, true, true,
                         Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(),
                         Instant.parse("2026-09-01T12:00:00Z"))), offset > 0, false));
             }
         };
         StaffGuiService staffGui = new StaffGuiService(sessions, progress,
-                () -> List.of(new StaffPlayerIdentity(playerId, "tmydwc")), () -> Optional.of(revision),
+                () -> List.of(new StaffPlayerIdentity(playerId, "FixturePlayer")), () -> Optional.of(revision),
                 staffHistory,
                 healthyStaffStatus());
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -434,40 +434,40 @@ class PaperGuiInventoryGuardTest {
             controller.onClick(click(holders.get(8), staff, 13));
             deferred.runNext();
 
-            assertEquals("tmydwc", plain(titles.get(9)));
+            assertEquals("FixturePlayer", plain(titles.get(9)));
             assertTrue(holders.get(9).actionAt(18).isPresent());
             assertTrue(holders.get(9).actionAt(26).isPresent());
             controller.onClose(close(holders.get(8)));
             controller.onClick(click(holders.get(9), staff, 13));
             deferred.runNext();
 
-            assertEquals("tmydwc Requirements", plain(titles.get(10)));
+            assertEquals("FixturePlayer Requirements", plain(titles.get(10)));
             controller.onClose(close(holders.get(9)));
             assertTrue(holders.get(10).actionAt(18).isPresent());
             assertTrue(holders.get(10).actionAt(26).isPresent());
             controller.onClick(click(holders.get(10), staff, 18));
             deferred.runNext();
 
-            assertEquals("tmydwc", plain(titles.get(11)));
+            assertEquals("FixturePlayer", plain(titles.get(11)));
             controller.onClose(close(holders.get(10)));
             assertTrue(holders.get(11).actionAt(24).isPresent());
             controller.onClick(click(holders.get(11), staff, 24));
             deferred.runNext();
 
-            assertEquals("tmydwc History", plain(titles.get(12)));
+            assertEquals("FixturePlayer History", plain(titles.get(12)));
             assertTrue(holders.get(12).actionAt(18).isPresent());
             assertTrue(holders.get(12).actionAt(26).isPresent());
             controller.onClose(close(holders.get(11)));
             controller.onClick(click(holders.get(12), staff, 18));
             deferred.runNext();
 
-            assertEquals("tmydwc", plain(titles.get(13)));
+            assertEquals("FixturePlayer", plain(titles.get(13)));
             controller.onClose(close(holders.get(12)));
             assertTrue(holders.get(13).actionAt(20).isPresent());
             controller.onClick(click(holders.get(13), staff, 20));
             deferred.runNext();
 
-            assertEquals("tmydwc Preview", plain(titles.get(14)));
+            assertEquals("FixturePlayer Preview", plain(titles.get(14)));
             assertTrue(holders.get(14).actionAt(18).isPresent());
             assertTrue(holders.get(14).actionAt(20).isPresent());
             assertTrue(holders.get(14).actionAt(24).isPresent());
@@ -476,12 +476,12 @@ class PaperGuiInventoryGuardTest {
             controller.onClick(click(holders.get(14), staff, 20));
             deferred.runNext();
 
-            assertEquals("tmydwc Preview", plain(titles.get(15)));
+            assertEquals("FixturePlayer Preview", plain(titles.get(15)));
             controller.onClose(close(holders.get(14)));
             controller.onClick(click(holders.get(15), staff, 18));
             deferred.runNext();
 
-            assertEquals("tmydwc", plain(titles.get(16)));
+            assertEquals("FixturePlayer", plain(titles.get(16)));
             controller.onClose(close(holders.get(15)));
             controller.onClick(click(holders.get(16), staff, 26));
             deferred.runNext();
@@ -1119,7 +1119,7 @@ class PaperGuiInventoryGuardTest {
     @DisplayName("[Phase 9F-B] Online player heads use live profiles and degrade to ordinary heads")
     void appliesLivePlayerProfileWithoutMakingItAuthority(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
-        UUID playerId = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+        UUID playerId = UUID.fromString("00000000-0000-3000-8000-000000000001");
         Player player = mock(Player.class);
         com.destroystokyo.paper.profile.PlayerProfile profile =
                 mock(com.destroystokyo.paper.profile.PlayerProfile.class);
@@ -1129,7 +1129,7 @@ class PaperGuiInventoryGuardTest {
                 MessageReference.of("gui.title.staff.players"), List.of(), Instant.now().plusSeconds(300),
                 GuiScreenKind.STAFF_PLAYER_SELECTION, 27, List.of(GuiDisplayItem.profiledDisplay(
                         13, GuiItemIcon.PLAYERS, MessageReference.of("gui.item.staff.player.title",
-                                "player", "tmydwc"), List.of(), playerId)));
+                                "player", "FixturePlayer"), List.of(), playerId)));
         when(player.isOnline()).thenReturn(true);
         when(player.getPlayerProfile()).thenReturn(profile)
                 .thenThrow(new IllegalArgumentException("profile unavailable"));
@@ -1160,7 +1160,7 @@ class PaperGuiInventoryGuardTest {
     void rendersStaffIdentityAndRequirementCardStyles(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         Component player = messages.render(MessageReference.of(
-                "gui.item.staff.player.title", "player", "tmydwc"));
+                "gui.item.staff.player.title", "player", "FixturePlayer"));
         Component online = messages.render(MessageReference.of("gui.item.staff.player.selection.online"));
         Component inspect = messages.render(MessageReference.of("gui.item.staff.player.selection.inspect"));
         Component info = messages.render(MessageReference.of("gui.item.staff.player.info.title"));
@@ -1179,7 +1179,7 @@ class PaperGuiInventoryGuardTest {
         Component blocked = messages.render(MessageReference.of("gui.item.staff.prestige_preview.not_ready"));
         Component refreshLore = messages.render(MessageReference.of("gui.item.staff.refresh.lore"));
 
-        assertHeading(List.of(player), "tmydwc", NamedTextColor.AQUA);
+        assertHeading(List.of(player), "FixturePlayer", NamedTextColor.AQUA);
         assertHeading(List.of(info), "Player Info", NamedTextColor.AQUA);
         assertHeading(List.of(summary), "Requirements Summary", NamedTextColor.AQUA);
         assertHeading(List.of(money), "Money", NamedTextColor.GOLD);

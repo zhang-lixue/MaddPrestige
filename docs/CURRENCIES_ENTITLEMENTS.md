@@ -14,5 +14,5 @@ currency balance.
 The feature may remain disabled. By owner product decision, a first-party Prestige Shop is deferred beyond the V2
 launch pending live/beta player feedback and a defined Prestige-specific reward catalog. There are no first-party shop
 entries, prices, purchases, discounts, permissions, commands, configuration, persistence, or GUI to configure. The
-absence of that optional future feature does not block Phase 9F completion, final acceptance, release qualification, or
-the V2 launch. See [the Phase 9F-C3 decision](V2_PHASE9F_C3_PRODUCT_DECISION.md).
+absence of that optional future feature does not block final acceptance, release qualification, or
+the 2.0 launch. See [Known limitations and deferred work](../README.md#known-limitations-and-deferred-work).

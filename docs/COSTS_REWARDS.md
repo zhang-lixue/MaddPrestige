@@ -20,4 +20,4 @@ block before partial state. Command actions are disabled by default and remain b
 templates, count, length, and nesting policy. Peer-to-peer shop turnover grants no progression credit by default.
 
 Preview all changes and run Doctor before enabling consequential providers. See
-[Providers and integrations](PROVIDERS_INTEGRATIONS.md) and [Troubleshooting](DIAGNOSTICS_TROUBLESHOOTING.md).
+[Providers and integrations](integrations.md) and [Troubleshooting](operations/troubleshooting.md).

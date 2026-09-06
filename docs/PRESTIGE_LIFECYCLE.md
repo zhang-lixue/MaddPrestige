@@ -15,4 +15,4 @@ observes a durable terminal outcome. Restart reloads the acknowledged numeric le
 or external plugins.
 
 LuckPerms is optional. Configured permission/group rewards are additive; missing groups fail without creation. See
-[the Phase 9B policy](V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md) for configuration and compatibility details.
+[Architecture](architecture.md) for configuration and compatibility details.

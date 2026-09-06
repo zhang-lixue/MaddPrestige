@@ -312,11 +312,11 @@ class PhaseSixConfigurationAdministrationTest {
                 < requirements.indexOf("setup_eligibility_veteran:"));
 
         Path root = Path.of("").toAbsolutePath();
-        if (!Files.isDirectory(root.resolve("examples/member-adventurer-veteran"))) {
+        if (!Files.isDirectory(root.resolve("examples/compatibility/member-adventurer-veteran"))) {
             root = root.getParent();
         }
         for (String document : first.keySet()) {
-            assertEquals(Files.readString(root.resolve("examples/member-adventurer-veteran").resolve(document),
+            assertEquals(Files.readString(root.resolve("examples/compatibility/member-adventurer-veteran").resolve(document),
                     StandardCharsets.UTF_8), first.get(document), document);
         }
     }

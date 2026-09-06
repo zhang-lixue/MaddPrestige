@@ -1,7 +1,0 @@
-Phase 8F A76 Correction Owner Review 3 reproducibility comparison
-Consecutive authoritative clean verifies: 2
-verify_1=553 tests / 103 suites / 0 failures / 0 errors / 0 skips / Checkstyle 0 / BUILD SUCCESS
-verify_2=553 tests / 103 suites / 0 failures / 0 errors / 0 skips / Checkstyle 0 / BUILD SUCCESS
-MaddPrestige-2.0.0-rc.1.jar|sealed-bytes=16507914|sealed-sha256=0D961DB73D6C44CF18986CA42B7950914CEA5A1598BA7D41D0E919BFB76C6513|comparison-bytes=16507914|comparison-sha256=0D961DB73D6C44CF18986CA42B7950914CEA5A1598BA7D41D0E919BFB76C6513|equal=True
-bom.json|sealed-bytes=190831|sealed-sha256=3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E|comparison-bytes=190831|comparison-sha256=3797F16C617B3207229EFD8A846BE2EC31FB9CD56BE681A2069447A859D5568E|equal=True
-No generated artifact was normalized, edited, or silently substituted between builds.

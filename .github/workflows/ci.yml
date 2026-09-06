@@ -1,0 +1,157 @@
+name: MaddPrestige release-candidate verification
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Java 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Verify frozen V1 source and artifacts
+        shell: bash
+        run: |
+          git diff --exit-code v1.2.0-baseline -- src dist baseline/v1/runtime baseline/v1/external ':(exclude)src/main/resources/plugin.yml'
+          test -z "$(git status --porcelain -- src dist baseline/v1/runtime baseline/v1/external)"
+      - name: Verify authorized V2 production descriptor
+        shell: bash
+        run: |
+          descriptor=src/main/resources/plugin.yml
+          test "$(sed -n 's/^name:[[:space:]]*//p' "$descriptor")" = "MaddPrestige"
+          test "$(sed -n 's/^main:[[:space:]]*//p' "$descriptor")" = "net.maddkraft.maddprestige.platform.paper.bootstrap.MaddPrestigeV2Plugin"
+          test "$(sed -n 's/^load:[[:space:]]*//p' "$descriptor")" = "POSTWORLD"
+      - name: Verify release-candidate reactor
+        run: bash ./mvnw --batch-mode --no-transfer-progress clean verify
+      - name: Verify build did not dirty protected V1 paths
+        if: always()
+        shell: bash
+        run: test -z "$(git status --porcelain -- src dist baseline/v1/runtime baseline/v1/external)"
+      - name: Upload coverage and SBOM evidence
+        uses: actions/upload-artifact@v5
+        with:
+          name: release-candidate-quality-evidence
+          path: |
+            **/target/site/jacoco/**
+            target/bom.json
+
+  reproducible-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Compare two clean distribution builds
+        shell: bash
+        run: |
+          version=$(bash ./mvnw --batch-mode --no-transfer-progress help:evaluate -Dexpression=project.version -q -DforceStdout)
+          artifact="maddprestige-distribution/target/MaddPrestige-${version}.jar"
+          bash ./mvnw --batch-mode --no-transfer-progress clean verify
+          cp "$artifact" /tmp/MaddPrestige-first.jar
+          cp target/bom.json /tmp/MaddPrestige-first-bom.json
+          bash ./mvnw --batch-mode --no-transfer-progress clean verify
+          cmp /tmp/MaddPrestige-first.jar "$artifact"
+          cmp /tmp/MaddPrestige-first-bom.json target/bom.json
+
+  dependency-review:
+    if: github.event_name == 'pull_request' && github.event.repository.private == false
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/dependency-review-action@v4
+
+  mysql-contract-foundation:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4.10
+        env:
+          MYSQL_ROOT_PASSWORD: contract_test
+          MYSQL_DATABASE: contract_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pcontract_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Run MySQL foundation contract harness
+        shell: bash
+        run: |
+          bash ./mvnw --batch-mode --no-transfer-progress -pl maddprestige-persistence -am verify \
+            -Pbackend-contracts -Dmp.backend.contract=true \
+            -Dmp.backend.url=jdbc:mysql://127.0.0.1:3306/contract_test \
+            -Dmp.backend.user=root -Dmp.backend.password=contract_test \
+            -Dmp.backend.driver=com.mysql.cj.jdbc.Driver
+          report=maddprestige-persistence/target/failsafe-reports/TEST-net.maddkraft.maddprestige.persistence.contract.ExternalBackendContractIT.xml
+          test -f "$report"
+          grep -q 'tests="1"' "$report"
+          grep -q 'skipped="0"' "$report"
+          grep -q 'failures="0"' "$report"
+          grep -q 'errors="0"' "$report"
+
+  mariadb-contract-foundation:
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:11.8.8
+        env:
+          MARIADB_ROOT_PASSWORD: contract_test
+          MARIADB_DATABASE: contract_test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+          cache: maven
+      - name: Run MariaDB foundation contract harness
+        shell: bash
+        run: |
+          bash ./mvnw --batch-mode --no-transfer-progress -pl maddprestige-persistence -am verify \
+            -Pbackend-contracts -Dmp.backend.contract=true \
+            -Dmp.backend.url=jdbc:mariadb://127.0.0.1:3306/contract_test \
+            -Dmp.backend.user=root -Dmp.backend.password=contract_test \
+            -Dmp.backend.driver=org.mariadb.jdbc.Driver
+          report=maddprestige-persistence/target/failsafe-reports/TEST-net.maddkraft.maddprestige.persistence.contract.ExternalBackendContractIT.xml
+          test -f "$report"
+          grep -q 'tests="1"' "$report"
+          grep -q 'skipped="0"' "$report"
+          grep -q 'failures="0"' "$report"
+          grep -q 'errors="0"' "$report"

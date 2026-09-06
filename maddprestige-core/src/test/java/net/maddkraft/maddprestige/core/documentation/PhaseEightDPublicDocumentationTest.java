@@ -55,15 +55,16 @@ import org.junit.jupiter.api.Test;
 
 class PhaseEightDPublicDocumentationTest {
     private static final List<String> PUBLIC_DOCUMENTS = List.of(
-            "README.md", "docs/INSTALLATION_V2.md", "docs/QUICK_START.md", "docs/CONFIGURATION.md",
-            "docs/COMMANDS_PERMISSIONS.md", "docs/STAGES_RANKS.md", "docs/REQUIREMENTS_SCOPES.md",
+            "README.md", "docs/getting-started.md", "docs/QUICK_START.md", "docs/configuration.md",
+            "docs/commands-permissions.md", "docs/STAGES_RANKS.md", "docs/REQUIREMENTS_SCOPES.md",
             "docs/COSTS_REWARDS.md", "docs/PRESTIGE_LIFECYCLE.md", "docs/CURRENCIES_ENTITLEMENTS.md",
-            "docs/SEASONS_MILESTONES.md", "docs/PROVIDERS_INTEGRATIONS.md",
-            "docs/MIGRATIONS_BACKUPS_RECOVERY.md", "docs/UPGRADE_ROLLBACK_V2.md",
-            "docs/DIAGNOSTICS_TROUBLESHOOTING.md",
-            "docs/API_SDK.md", "docs/EVENTS.md", "examples/member-adventurer-veteran/README.md",
-            "examples/provider-sdk/README.md", "docs/V2_PHASE9B_NUMERIC_PRESTIGE_POLICY.md",
-            "docs/V2_PHASE9B_ACCEPTANCE_MATRIX_PROPOSAL.md", "examples/numeric-prestige/README.md");
+            "docs/SEASONS_MILESTONES.md", "docs/integrations.md",
+            "docs/operations/recovery.md", "docs/operations/upgrading.md",
+            "docs/operations/deployment.md", "docs/operations/troubleshooting.md",
+            "docs/api.md", "docs/events.md", "docs/architecture.md", "docs/acceptance.md",
+            "docs/compatibility-baseline.md", "docs/player-guide.md", "docs/staff-guide.md",
+            "examples/compatibility/member-adventurer-veteran/README.md",
+            "examples/provider-sdk/README.md", "examples/numeric-prestige/README.md");
     private static final Set<String> COMMAND_ROOTS = Set.of("help", "status", "rankup", "prestige", "confirm",
             "simulate", "why", "player", "gui", "admin", "history", "config", "setup", "doctor", "locale", "staff");
     private static final Pattern LINK = Pattern.compile("\\[[^]]+]\\((?!https?://|#)([^)]+)\\)");
@@ -125,7 +126,7 @@ class PhaseEightDPublicDocumentationTest {
                 findings.add(document);
             }
         }
-        try (var files = Files.walk(root.resolve("examples/member-adventurer-veteran"))) {
+        try (var files = Files.walk(root.resolve("examples/compatibility/member-adventurer-veteran"))) {
             for (Path file : files.filter(Files::isRegularFile).toList()) {
                 if (V1_BRANDING.matcher(Files.readString(file, StandardCharsets.UTF_8)).find()) {
                     findings.add(root.relativize(file).toString());
@@ -138,7 +139,7 @@ class PhaseEightDPublicDocumentationTest {
     @Test
     @DisplayName("[A02][A70][D-F01..05] Historical stage example remains valid compatibility evidence")
     void exactExampleCompilesAndApplies() throws IOException {
-        Path example = repositoryRoot().resolve("examples/member-adventurer-veteran");
+        Path example = repositoryRoot().resolve("examples/compatibility/member-adventurer-veteran");
         LinkedHashMap<String, String> documents = new LinkedHashMap<>();
         for (String name : List.of("progression.yml", "requirements.yml", "rewards.yml", "lifecycle.yml",
                 "integrations.yml")) {
@@ -223,15 +224,16 @@ class PhaseEightDPublicDocumentationTest {
         }
 
         String readme = Files.readString(root.resolve("README.md"), StandardCharsets.UTF_8);
-        String installation = Files.readString(root.resolve("docs/INSTALLATION_V2.md"), StandardCharsets.UTF_8);
-        String upgrade = Files.readString(root.resolve("docs/UPGRADE_ROLLBACK_V2.md"), StandardCharsets.UTF_8);
-        String api = Files.readString(root.resolve("docs/API_SDK.md"), StandardCharsets.UTF_8);
+        String installation = Files.readString(root.resolve("docs/getting-started.md"), StandardCharsets.UTF_8);
+        String upgrade = Files.readString(root.resolve("docs/operations/upgrading.md"), StandardCharsets.UTF_8);
+        String api = Files.readString(root.resolve("docs/api.md"), StandardCharsets.UTF_8);
         assertTrue(readme.contains("MaddPrestige-2.0.0-rc.1.jar"));
-        assertTrue(readme.contains("not GA or production-ready"));
+        assertTrue(readme.contains("release candidate"));
+        assertTrue(readme.contains("2.0.0-rc.1 release"));
         assertTrue(installation.contains("Paper 26.1.2 build 74"));
         assertTrue(installation.contains("LuckPerms 5.5.71"));
         assertTrue(upgrade.contains("forward-only"));
-        assertTrue(upgrade.contains("Phase 9"));
+        assertTrue(upgrade.contains("fresh V2 player state starts at Prestige 0"));
         assertTrue(api.contains("2.x-stable-1"));
         assertTrue(api.contains("net.maddkraft:maddprestige-api:2.0.0-rc.1"));
 

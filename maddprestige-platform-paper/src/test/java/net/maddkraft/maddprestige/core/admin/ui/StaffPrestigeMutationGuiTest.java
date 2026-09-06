@@ -47,7 +47,7 @@ import org.junit.jupiter.api.Test;
 class StaffPrestigeMutationGuiTest {
     private static final UUID STAFF = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final UUID OTHER_STAFF = UUID.fromString("22222222-2222-4222-8222-222222222222");
-    private static final UUID PLAYER = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+    private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
     private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-c1");
     private static final Instant NOW = Instant.parse("2026-09-03T12:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
@@ -60,7 +60,7 @@ class StaffPrestigeMutationGuiTest {
     @BeforeEach
     void setUp() {
         store = new MemoryStore(state(6, 4));
-        service = service(new StaffPlayerIdentity(PLAYER, "tmydwc", true));
+        service = service(new StaffPlayerIdentity(PLAYER, "FixturePlayer", true));
     }
 
     @Test
@@ -185,7 +185,7 @@ class StaffPrestigeMutationGuiTest {
         GuiSessionView refreshed = result.nextView().orElseThrow();
         assertEquals(GuiScreenKind.STAFF_PLAYER_MANAGEMENT_ACTIONS, refreshed.screen());
         assertEquals("gui.staff.prestige_already_baseline", result.messages().getFirst().key());
-        assertEquals("tmydwc", result.messages().getFirst().argument("player").orElseThrow());
+        assertEquals("FixturePlayer", result.messages().getFirst().argument("player").orElseThrow());
         assertTrue(refreshed.actions().stream().noneMatch(action ->
                 action.kind() == GuiActionKind.STAFF_CONFIRM_PRESTIGE_ADJUSTMENT));
         assertTrue(store.adjustments.isEmpty());
@@ -277,7 +277,7 @@ class StaffPrestigeMutationGuiTest {
         assertEquals("gui.session.expired", expired.code());
         assertTrue(store.adjustments.isEmpty());
 
-        StaffPlayerIdentity online = new StaffPlayerIdentity(PLAYER, "tmydwc", true);
+        StaffPlayerIdentity online = new StaffPlayerIdentity(PLAYER, "FixturePlayer", true);
         AtomicReference<List<StaffPlayerIdentity>> known = new AtomicReference<>(List.of(online));
         StaffGuiService disappearing = service(directory(known));
         GuiSessionView missingIdentity = setReview(disappearing, owner, 8);
@@ -292,10 +292,10 @@ class StaffPrestigeMutationGuiTest {
     @Test
     @DisplayName("[Phase 9F-C1] Known offline players use the same provider-free administrative service")
     void supportsKnownOfflinePlayerWithoutProviderMutation() {
-        service = service(new StaffPlayerIdentity(PLAYER, "tmydwc", false));
+        service = service(new StaffPlayerIdentity(PLAYER, "FixturePlayer", false));
         PermissionSubject owner = owner(STAFF);
 
-        GuiSessionView results = service.findPlayers(owner, "tmydwc");
+        GuiSessionView results = service.findPlayers(owner, "FixturePlayer");
         GuiSessionView overview = click(service, owner, results, GuiActionKind.STAFF_SELECT_SEARCH_RESULT);
         GuiSessionView management = click(service, owner, overview, GuiActionKind.STAFF_MANAGE_PLAYER);
         GuiSessionView resetReview = click(service, owner, management,
@@ -313,7 +313,7 @@ class StaffPrestigeMutationGuiTest {
         StaffHistorySource.Entry reset = adminHistory(StaffHistorySource.Kind.ADMIN_RESET, 8, 0,
                 Optional.of("$5"), Optional.of("$1"));
         StaffHistorySource history = history(List.of(set, reset));
-        service = service(new StaffPlayerIdentity(PLAYER, "tmydwc", true), history);
+        service = service(new StaffPlayerIdentity(PLAYER, "FixturePlayer", true), history);
         PermissionSubject owner = owner(STAFF);
 
         GuiSessionView global = click(service, owner, service.open(owner), GuiActionKind.STAFF_VIEW_HISTORY);
@@ -393,7 +393,7 @@ class StaffPrestigeMutationGuiTest {
                         ? "gui.title.staff.review_set_prestige"
                         : "gui.title.staff.review_reset_prestige",
                 view.title().key());
-        assertEquals("tmydwc", view.title().argument("player").orElseThrow());
+        assertEquals("FixturePlayer", view.title().argument("player").orElseThrow());
         GuiDisplayItem confirmation = itemFor(view, GuiActionKind.STAFF_CONFIRM_PRESTIGE_ADJUSTMENT);
         assertTrue(confirmation.lore().isEmpty());
         if (kind == ManualPrestigeAdjustmentKind.RESET) {
@@ -496,7 +496,7 @@ class StaffPrestigeMutationGuiTest {
             long after,
             Optional<String> cost,
             Optional<String> reward) {
-        return new StaffHistorySource.Entry(UUID.randomUUID(), "tmydwc", kind, Optional.of(STAFF),
+        return new StaffHistorySource.Entry(UUID.randomUUID(), "FixturePlayer", kind, Optional.of(STAFF),
                 Optional.of("Owner"), before, after, StaffHistorySource.Outcome.COMPLETED,
                 cost.isPresent(), reward.isPresent(), Optional.empty(), Optional.empty(), cost, reward, NOW);
     }

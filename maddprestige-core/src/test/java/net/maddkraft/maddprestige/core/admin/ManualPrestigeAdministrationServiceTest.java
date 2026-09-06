@@ -20,7 +20,7 @@ import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
 import org.junit.jupiter.api.Test;
 
 class ManualPrestigeAdministrationServiceTest {
-    private static final UUID PLAYER = UUID.fromString("d7551bf9-6358-3218-89c4-06c9c57dc879");
+    private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
     private static final UUID STAFF = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-c1");
     private static final Instant NOW = Instant.parse("2026-09-03T12:00:00Z");
