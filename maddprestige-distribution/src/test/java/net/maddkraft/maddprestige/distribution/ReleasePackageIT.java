@@ -33,6 +33,7 @@ class ReleasePackageIT {
             "integrations.yml",
             "locales/en_US.yml",
             "THIRD-PARTY-NOTICES.txt",
+            "META-INF/LICENSE",
             "META-INF/MANIFEST.MF",
             "META-INF/services/java.sql.Driver",
             "sqlite-jdbc.properties",
@@ -120,9 +121,15 @@ class ReleasePackageIT {
             }
 
             String notices = text(archive, "THIRD-PARTY-NOTICES.txt");
+            String projectLicense = text(archive, "META-INF/LICENSE");
+            assertTrue(projectLicense.startsWith("MIT License"));
+            assertTrue(projectLicense.contains("Copyright (c) 2026 zhang-lixue"));
+            assertTrue(projectLicense.contains("Permission is hereby granted, free of charge"));
+            assertTrue(notices.contains("MaddPrestige is licensed under the MIT License"));
             assertTrue(notices.contains("Xerial SQLite JDBC 3.50.3.0"));
             assertTrue(notices.contains("SnakeYAML Engine 3.0.1"));
             assertTrue(notices.contains("Apache License 2.0"));
+            assertFalse(notices.contains("all rights reserved"));
             assertEquals("org.sqlite.JDBC", text(archive, "META-INF/services/java.sql.Driver").strip());
 
             for (String name : entries) {

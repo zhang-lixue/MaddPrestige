@@ -10,7 +10,7 @@
     <packaging>pom</packaging>
     <name>MaddPrestige V2 Parent</name>
     <description>Generic progression platform foundations built alongside the frozen V1 baseline.</description>
-    <url>https://github.com/MaddKraft/MaddPrestige</url>
+    <url>https://github.com/zhang-lixue/MaddPrestige</url>
 
     <licenses>
         <license><name>MIT License</name><url>https://opensource.org/license/mit</url><distribution>repo</distribution></license>

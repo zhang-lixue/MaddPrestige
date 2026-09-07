@@ -1,4 +1,11 @@
-MaddPrestige 2.0.0-rc.1 third-party notices
+MaddPrestige 2.0.0-rc.1 license and third-party notices
+
+MaddPrestige project license
+
+MaddPrestige is licensed under the MIT License. The complete project license
+is included at META-INF/LICENSE.
+
+Third-party dependency notices
 
 The MaddPrestige distribution contains the following runtime libraries:
 
@@ -9,8 +16,8 @@ The MaddPrestige distribution contains the following runtime libraries:
 
 The complete Apache License 2.0 text distributed at
 META-INF/maven/org.xerial/sqlite-jdbc/LICENSE applies to both Apache-licensed
-libraries listed above. This notice does not change the license of MaddPrestige
-itself, which remains described by its project metadata as all rights reserved.
+libraries listed above. These third-party notices do not change the MIT License
+that applies to MaddPrestige itself.
 
 Optional Paper plugins and their APIs are not bundled in the MaddPrestige JAR.
 Their names in plugin.yml and documentation describe optional runtime discovery,
