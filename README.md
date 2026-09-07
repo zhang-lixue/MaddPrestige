@@ -1,123 +1,131 @@
 # MaddPrestige
 
-MaddPrestige is a provider-driven numeric Prestige plugin for a single Paper server. A successful player operation
-advances exactly from Prestige `P` to `P + 1` after the configured requirements and costs are revalidated. Rewards,
-scaling, administration, history, and recovery all use the same revision-bound configuration and durable operation
-model.
+MaddPrestige adds a configurable Prestige system to Paper servers. You decide what players need to Prestige, what it
+costs, what they get for doing it, and how progression changes at higher levels.
 
-The current release is **2.0.0-rc.1**. It is a release candidate: rehearse installation and upgrades on a disposable
-copy before using it on a live server.
+Players can track everything through a simple GUI. Staff get their own dashboard for managing players, checking
+history, and editing common settings.
 
 ## Features
 
-- Numeric Prestige with exact `P -> P + 1` progression
-- Composable `ALL`, `ANY`, and `X_OF_N` requirements
-- Independent, provider-backed costs and rewards
-- Flat, linear, exponential, manual, segmented, and per-level scaling
-- Player GUI at `/prestige`
-- Permission-scoped Staff GUI, player inspection, history, and audit
-- Audited Set/Reset Prestige administration
-- Revision-bound, lossless guided configuration editing
-- Session-bound confirmations and durable crash recovery
-- Optional Vault, mcMMO, LuckPerms, PlaceholderAPI, and other integrations
-- Stable Java API, provider SDK, and Paper events
+- Configure requirements, costs, and rewards for each Prestige
+- Scale progression as players reach higher levels
+- Let players track progress and Prestige through `/prestige`
+- Manage players and common settings from the staff dashboard
+- Set or reset a player's Prestige
+- Track player history and staff changes
+- Integrates with Vault, mcMMO, LuckPerms, PlaceholderAPI, and custom providers
+- Use YAML when you need more control
 
 ## Requirements
 
+MaddPrestige currently supports:
+
 - Java 25
 - Paper 26.1.2 build 74
-- SQLite, embedded in the distribution
-- Optional plugins only when referenced by the active configuration
 
-These are the qualified versions, not a promise of compatibility with untested later builds. SQLite is the only
-supported production persistence backend for 2.0, with one Paper process and one server directory per database.
+SQLite is built in, so you don't need a separate database plugin or server.
 
-## Quick start
+Optional integrations include:
+
+- Vault and an economy plugin for money requirements, costs, and rewards
+- mcMMO for Total Skill Level requirements
+- LuckPerms 5.5.71 for permission or group rewards
+- PlaceholderAPI 2.12.2 or 2.12.3 for supported placeholders
+- CraftEngine, GriefPrevention, WorldGuard, and custom providers
+
+You only need the plugins used by your configuration. Check the
+[provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) for the full list.
+
+## Installation and Quick Start
 
 1. Download `MaddPrestige-2.0.0-rc.1.jar` from the
-   [2.0.0-rc.1 release](https://github.com/zhang-lixue/MaddPrestige/releases/tag/v2.0.0-rc.1).
-2. Verify its published SHA-256, then place it in the Paper server's `plugins/` directory.
-3. Start Paper once and wait for MaddPrestige to report ready.
-4. Run `/maddprestige status` and `/maddprestige setup discover`.
-5. Validate and apply a deliberate configuration; the shipped configuration is safely dormant.
+   [latest release](https://github.com/zhang-lixue/MaddPrestige/releases/tag/v2.0.0-rc.1).
+2. Put the JAR in your server's `plugins/` folder.
+3. Start the server.
+4. Configure your Prestige progression.
+5. Test it with `/prestige`.
 
-See [Getting started](docs/getting-started.md) and the [Quick Start](docs/QUICK_START.md) for the complete flow.
+The [Getting started](docs/getting-started.md) and [Quick Start](docs/QUICK_START.md) guides walk through the setup.
 
-## Player usage
+## For Players
 
-`/prestige` opens the Player GUI. Players can inspect their current and next Prestige, requirements, costs, rewards,
-and confirmation state without seeing implementation diagnostics. Advanced read-only explanations remain available
-through `/maddprestige why prestige` and `/maddprestige simulate prestige`.
+Running `/prestige` opens the Player GUI. Players can see:
 
-See the [player guide](docs/player-guide.md).
+- Their current Prestige and next level
+- What they still need
+- The cost and rewards
+- Whether they're ready
 
-## Administration
+Players can preview the next Prestige before confirming it. See the [Player guide](docs/player-guide.md) for more.
 
-`/maddprestige admin` opens the permission-scoped Staff Dashboard. It provides player lookup and inspection,
-history/audit views, safe Set/Reset Prestige workflows, system status, and bounded configuration editors. Complex
-configuration that cannot be represented losslessly remains read-only and must be edited through the documented
-draft workflow.
+## For Staff
 
-See the [staff guide](docs/staff-guide.md), [commands and permissions](docs/commands-permissions.md), and
-[configuration guide](docs/configuration.md).
+Staff can use `/maddprestige admin` to:
 
-## Configuration
+- Look up players and check their progress
+- View player history and server-wide audit history
+- Set a player's Prestige or reset it to 0
+- Edit common configuration settings
+- Check configuration, storage, and integration status
 
-Configuration is split into versioned YAML documents and compiled into one immutable active revision. Draft,
-validation, diff, apply, rollback, and guided GUI edits all use the same canonical pipeline. MaddPrestige preserves
-comments, ordering, and unsupported keys for supported narrow edits, and fails closed when it cannot do so safely.
+Each area has its own permissions. See the [Staff guide](docs/staff-guide.md) and
+[Commands and permissions](docs/commands-permissions.md).
 
-The active stage-free example is in [examples/numeric-prestige](examples/numeric-prestige). The former stage-ladder
-sample is retained only as [compatibility evidence](examples/compatibility/member-adventurer-veteran).
+## Configuration and Integrations
 
-## Integrations and compatibility
+You can configure requirements, costs, rewards, scaling, and per-level overrides. Common settings like money, rewards,
+Total Skill Level, and scaling can be changed right from the staff dashboard.
 
-MaddPrestige does not create LuckPerms groups. Administrators own groups, hierarchy, prefixes, and unrelated
-memberships. Optional providers are activated only when the current configuration references their capabilities.
+If you need more control, edit the YAML files directly. The GUI leaves complex sections alone when it can't edit them.
+Start with the [Configuration guide](docs/configuration.md) or the
+[numeric Prestige example](examples/numeric-prestige).
 
-Read the [compatibility baseline](docs/compatibility-baseline.md), [integrations guide](docs/integrations.md), and
-[provider capability matrix](docs/PROVIDER_CAPABILITY_MATRIX.md) before enabling integrations.
+If you're upgrading from an older setup, there's also a
+[compatibility example](examples/compatibility/member-adventurer-veteran).
 
-## API and extension points
+MaddPrestige works with Vault for economy features, mcMMO for Total Skill Level, LuckPerms for permission and group
+rewards, and PlaceholderAPI for Prestige placeholders. Other plugins can add their own features through the provider
+SDK. See [Integrations](docs/integrations.md) for details.
 
-The public API coordinate is:
+## Commands and Documentation
 
-```text
-net.maddkraft:maddprestige-api:2.0.0-rc.1
+| Command | What it does |
+|---|---|
+| `/prestige` | Opens the Player GUI |
+| `/maddprestige admin` | Opens the staff dashboard |
+
+For everything else, use these guides:
+
+- [Commands and permissions](docs/commands-permissions.md)
+- [Player guide](docs/player-guide.md) and [Staff guide](docs/staff-guide.md)
+- [Configuration](docs/configuration.md) and [Integrations](docs/integrations.md)
+- [Deployment](docs/operations/deployment.md), [Upgrading](docs/operations/upgrading.md), and
+  [Troubleshooting](docs/operations/troubleshooting.md)
+
+## API and Building
+
+Developers can use the [Java API and provider SDK](docs/api.md), listen for [Paper events](docs/events.md), or start
+from the [provider example](examples/provider-sdk).
+
+Build the project with:
+
+```bash
+./mvnw --no-transfer-progress clean verify
 ```
 
-The accepted `2.x-stable-1` compatibility baseline covers the stable Bukkit-free SDK and Paper event surfaces.
-Start with the [API and provider SDK guide](docs/api.md), [Paper events](docs/events.md), and the
-[provider example](examples/provider-sdk).
+On Windows, use `mvnw.cmd --no-transfer-progress clean verify`. The plugin JAR is written to
+`maddprestige-distribution/target/`.
 
-## Build and test
+## Current Release
 
-```powershell
-.\mvnw.cmd --no-transfer-progress clean verify
-```
+The 2.0.0-rc.1 release is the current release candidate. Test it on a copy of your server before using it in
+production.
 
-The shaded plugin is written to
-`maddprestige-distribution/target/MaddPrestige-2.0.0-rc.1.jar`; the aggregate CycloneDX SBOM is
-`target/bom.json`. See [Contributing](CONTRIBUTING.md) for repository expectations.
+## Known Limitations
 
-## Operations and troubleshooting
-
-- [Deployment](docs/operations/deployment.md)
-- [Upgrading and rollback](docs/operations/upgrading.md)
-- [Migrations, backups, and recovery](docs/operations/recovery.md)
-- [Diagnostics and troubleshooting](docs/operations/troubleshooting.md)
-- [Release acceptance](docs/acceptance.md)
-
-Never copy only a live SQLite main file, edit migration history, or force an active-configuration pointer. Preserve
-the complete stopped plugin-data directory and rehearse restoration before selecting a restored copy for service.
-
-## Known limitations and deferred work
-
-- MySQL, MariaDB, shared-database, and multi-process operation are not supported in 2.0.
-- V1 player/configuration data is not automatically imported into numeric Prestige.
-- External resource-world reset behavior remains outside MaddPrestige ownership and requires environment-specific
-  qualification.
-- A first-party Prestige Shop is intentionally deferred until player feedback defines a useful reward catalog; it is
-  not a launch requirement and no placeholder UI, command, permission, configuration, or persistence surface ships.
-
-Historical development records remain available from the release tag, merged pull requests, and Git history.
+- SQLite is the only storage option for now.
+- External resource-world resets are handled outside MaddPrestige, so make sure that behavior is tested separately for your
+  server setup.
+- The built-in Prestige Shop is being saved for later, once player feedback gives us a better idea of what should
+  actually go in it.
