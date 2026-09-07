@@ -130,3 +130,7 @@ production. Its already-published `MaddPrestige-2.0.0-rc.1.jar` asset keeps that
   server setup.
 - The built-in Prestige Shop is being saved for later, once player feedback gives us a better idea of what should
   actually go in it.
+
+## License
+
+MaddPrestige is available under the [MIT License](LICENSE).
