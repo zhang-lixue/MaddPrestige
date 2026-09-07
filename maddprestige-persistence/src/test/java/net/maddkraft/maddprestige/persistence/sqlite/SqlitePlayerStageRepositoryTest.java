@@ -47,7 +47,7 @@ class SqlitePlayerStageRepositoryTest {
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite,
                 new FileBackupService(database, temporaryDirectory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseSix());
+                Clock.systemUTC()).migrate(SqliteMigrations.throughVersionTen());
         revision = new ConfigRevisionId("revision_1");
         new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("revision one"));
         repository = new SqlitePlayerStageRepository(sqlite);

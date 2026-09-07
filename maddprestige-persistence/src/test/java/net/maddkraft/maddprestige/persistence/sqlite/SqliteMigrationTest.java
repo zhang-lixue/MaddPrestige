@@ -44,7 +44,7 @@ class SqliteMigrationTest {
     void appliesFreshFoundation() throws Exception {
         Path database = temporaryDirectory.resolve("fresh.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
-        var report = runner(sqlite, database).migrate(SqliteMigrations.phaseOne());
+        var report = runner(sqlite, database).migrate(SqliteMigrations.throughVersionOne());
 
         assertTrue(report.changed());
         assertEquals(1, report.records().size());
@@ -64,8 +64,8 @@ class SqliteMigrationTest {
     void upgradesLegacyTransitionLeasesWithoutRetainingOrphans() {
         Path database = temporaryDirectory.resolve("legacy-stage-leases.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
-        List<Migration> phaseSix = SqliteMigrations.phaseSix();
-        runner(sqlite, database).migrate(phaseSix.subList(0, 8));
+        List<Migration> administration = SqliteMigrations.throughVersionTen();
+        runner(sqlite, database).migrate(administration.subList(0, 8));
         ConfigRevisionId revision = new ConfigRevisionId("legacy_lease_revision");
         new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("legacy lease"));
         UUID live = UUID.randomUUID();
@@ -77,7 +77,7 @@ class SqliteMigrationTest {
         insertLegacyLease(sqlite, terminal, revision);
         insertLegacyLease(sqlite, orphan, revision);
 
-        runner(sqlite, database).migrate(phaseSix);
+        runner(sqlite, database).migrate(administration);
 
         assertEquals("1", scalar(sqlite, "SELECT COUNT(*) FROM mp_stage_transition_leases"));
         var fence = new SqliteStageReferenceMigrationStore(sqlite);
@@ -98,8 +98,8 @@ class SqliteMigrationTest {
     void upgradesLegacyPendingRemapAsIncompleteConfigurationAuthority() {
         Path database = temporaryDirectory.resolve("legacy-configuration-transition.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
-        List<Migration> phaseSix = SqliteMigrations.phaseSix();
-        runner(sqlite, database).migrate(phaseSix.subList(0, 9));
+        List<Migration> administration = SqliteMigrations.throughVersionTen();
+        runner(sqlite, database).migrate(administration.subList(0, 9));
         ConfigRevisionId revision = new ConfigRevisionId("legacy_configuration_transition");
         var hash = RevisionHasher.hashText("legacy candidate");
         new SqliteConfigRevisionRepository(sqlite).insert(revision, hash);
@@ -119,7 +119,7 @@ class SqliteMigrationTest {
                 + "target_stage_id, expected_state_revision, resulting_state_revision, source_config_revision_id) "
                 + "VALUES ('" + operation + "','" + player + "','b','c',0,1,'" + revision.value() + "')");
 
-        runner(sqlite, database).migrate(phaseSix);
+        runner(sqlite, database).migrate(administration);
 
         var transition = new SqliteStageReferenceMigrationStore(sqlite).transitions(10).getFirst();
         assertFalse(transition.scopeComplete());
@@ -141,7 +141,7 @@ class SqliteMigrationTest {
         execute(sqlite, "CREATE TABLE mp_operations (broken TEXT)");
 
         assertThrows(PersistenceException.class,
-                () -> runner(sqlite, database).migrate(SqliteMigrations.phaseOne()));
+                () -> runner(sqlite, database).migrate(SqliteMigrations.throughVersionOne()));
 
         assertFalse(tableExists(sqlite, "mp_schema_migrations"));
         assertEquals("0", scalar(sqlite,
@@ -160,7 +160,7 @@ class SqliteMigrationTest {
 
         assertThrows(PersistenceException.class, () -> new MigrationRunner(sqlite,
                 reason -> VerifiedBackup.failure("blocked", "injected backup failure"), Clock.systemUTC())
-                .migrate(SqliteMigrations.phaseOne()));
+                .migrate(SqliteMigrations.throughVersionOne()));
 
         assertEquals(schemaBefore, schemaSnapshot(sqlite));
         assertEquals("preserved", scalar(sqlite, "SELECT value FROM preexisting_data"));
@@ -364,58 +364,58 @@ class SqliteMigrationTest {
     @DisplayName("[OR8C-07] FAILED v1 after its APPLIED completion is contradictory")
     void rejectsFailedAttemptAfterSameVersionApplied() {
         Path database = temporaryDirectory.resolve("failed-after-applied.db");
-        SqliteFoundation sqlite = SqlitePhase8cFixture.historical(database, 1);
+        SqliteFoundation sqlite = SqliteMigrationFixture.historical(database, 1);
         insertFailedAttempt(sqlite, 1, Instant.parse("2026-08-17T20:00:01Z"), "impossible late v1");
 
         assertThrows(PersistenceException.class,
                 () -> new MigrationRunner(sqlite, ignored -> VerifiedBackup.failure("unused", "unused"),
-                        SqlitePhase8cFixture.CLOCK).migrate(SqliteMigrations.phaseEightC()));
+                        SqliteMigrationFixture.CLOCK).migrate(SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[OR8C-07] FAILED v2 before APPLIED v1 completion is contradictory")
     void rejectsNextFailureBeforePriorVersionApplied() {
         Path database = temporaryDirectory.resolve("failed-before-prior-applied.db");
-        SqliteFoundation sqlite = SqlitePhase8cFixture.historical(database, 1);
+        SqliteFoundation sqlite = SqliteMigrationFixture.historical(database, 1);
         insertFailedAttempt(sqlite, 2, Instant.parse("2026-08-17T19:59:59Z"), "impossible early v2");
 
         assertThrows(PersistenceException.class,
                 () -> new MigrationRunner(sqlite, ignored -> VerifiedBackup.failure("unused", "unused"),
-                        SqlitePhase8cFixture.CLOCK).migrate(SqliteMigrations.phaseEightC()));
+                        SqliteMigrationFixture.CLOCK).migrate(SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[OR8C-07] Equal FAILED/APPLIED timestamp boundaries remain valid")
     void acceptsEqualFailedAttemptBoundaries() {
         Path database = temporaryDirectory.resolve("equal-failed-boundaries.sqlite");
-        SqliteFoundation sqlite = SqlitePhase8cFixture.historical(database, 1);
-        insertFailedAttempt(sqlite, 1, SqlitePhase8cFixture.CLOCK.instant(), "equal prior v1 retry");
-        insertFailedAttempt(sqlite, 2, SqlitePhase8cFixture.CLOCK.instant(), "equal next v2 retry");
+        SqliteFoundation sqlite = SqliteMigrationFixture.historical(database, 1);
+        insertFailedAttempt(sqlite, 1, SqliteMigrationFixture.CLOCK.instant(), "equal prior v1 retry");
+        insertFailedAttempt(sqlite, 2, SqliteMigrationFixture.CLOCK.instant(), "equal next v2 retry");
 
-        SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC());
+        SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven());
     }
 
     @Test
     @DisplayName("[OR8C-03] Independent validation enforces FAILED-attempt prefix ordering")
     void independentValidatorEnforcesFailedAttemptOrdering() {
         Path validDatabase = temporaryDirectory.resolve("valid-failed-prefix.sqlite");
-        SqliteFoundation valid = SqlitePhase8cFixture.historical(validDatabase, 9);
+        SqliteFoundation valid = SqliteMigrationFixture.historical(validDatabase, 9);
         insertFailedAttempt(valid, 9, "prior retry");
         insertFailedAttempt(valid, 10, "next retry");
-        SqliteDatabaseValidator.validate(validDatabase, SqliteMigrations.phaseEightC());
+        SqliteDatabaseValidator.validate(validDatabase, SqliteMigrations.throughVersionEleven());
 
         Path invalidDatabase = temporaryDirectory.resolve("invalid-failed-prefix.sqlite");
-        SqliteFoundation invalid = SqlitePhase8cFixture.historical(invalidDatabase, 9);
+        SqliteFoundation invalid = SqliteMigrationFixture.historical(invalidDatabase, 9);
         insertFailedAttempt(invalid, 11, "skipped known migration");
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(invalidDatabase, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(invalidDatabase, SqliteMigrations.throughVersionEleven()));
 
         Path causallyInvalidDatabase = temporaryDirectory.resolve("invalid-failed-causality.sqlite");
-        SqliteFoundation causallyInvalid = SqlitePhase8cFixture.historical(causallyInvalidDatabase, 9);
+        SqliteFoundation causallyInvalid = SqliteMigrationFixture.historical(causallyInvalidDatabase, 9);
         insertFailedAttempt(causallyInvalid, 10, Instant.parse("2026-08-17T19:59:59Z"),
                 "next attempt predates applied prefix");
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(causallyInvalidDatabase, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(causallyInvalidDatabase, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
@@ -454,7 +454,7 @@ class SqliteMigrationTest {
     }
 
     @Test
-    @DisplayName("[Phase1-Sonar] Successful history initialization surfaces restoration failure")
+    @DisplayName("Successful history initialization surfaces restoration failure")
     void surfacesRestorationFailureAfterSuccessfulHistoryInitialization() {
         Path database = temporaryDirectory.resolve("history-restoration.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
@@ -477,7 +477,7 @@ class SqliteMigrationTest {
     }
 
     @Test
-    @DisplayName("[Phase1-Sonar] Initialization failure stays primary when restoration also fails")
+    @DisplayName("Initialization failure stays primary when restoration also fails")
     void preservesInitializationFailureWhenRestorationAlsoFails() {
         Path database = temporaryDirectory.resolve("history-double-failure.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);

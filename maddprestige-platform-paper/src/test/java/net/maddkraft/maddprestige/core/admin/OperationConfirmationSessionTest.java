@@ -43,7 +43,7 @@ final class OperationConfirmationSessionTest {
     private static final ConfigRevisionId REVISION = new ConfigRevisionId("session-confirmation-revision");
 
     @Test
-    @DisplayName("[Phase 9D UX] Confirmation remains valid in the login session beyond the former short timer")
+    @DisplayName("Confirmation remains valid in the login session beyond the former short timer")
     void sessionIsAuthoritativeUntilTheSecondaryCap() {
         MutableClock clock = new MutableClock(Instant.parse("2026-08-30T12:00:00Z"));
         Fixture fixture = new Fixture(clock);
@@ -62,7 +62,7 @@ final class OperationConfirmationSessionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9D UX] Logout and restart invalidate in-memory confirmation authority")
+    @DisplayName("Logout and restart invalidate in-memory confirmation authority")
     void logoutAndRestartInvalidateConfirmations() {
         Fixture fixture = new Fixture(Clock.systemUTC());
         fixture.authorize(PLAYER, plan(PLAYER, 0, 1, 0));
@@ -84,7 +84,7 @@ final class OperationConfirmationSessionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9D UX] Replacement supersedes the old preview and shorthand selects the replacement")
+    @DisplayName("Replacement supersedes the old preview and shorthand selects the replacement")
     void replacementSupersedesPriorConfirmation() {
         Fixture fixture = new Fixture(Clock.systemUTC());
         PrestigePlan firstPlan = plan(PLAYER, 0, 1, 0);
@@ -106,7 +106,7 @@ final class OperationConfirmationSessionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9D UX] Confirmation performs fresh authorization and rejects a changed Prestige target")
+    @DisplayName("Confirmation performs fresh authorization and rejects a changed Prestige target")
     void finalStateIsRevalidatedBeforeExecution() {
         Fixture fixture = new Fixture(Clock.systemUTC());
         fixture.authorize(PLAYER, plan(PLAYER, 0, 1, 4), plan(PLAYER, 1, 2, 5));
@@ -122,7 +122,7 @@ final class OperationConfirmationSessionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9D UX] Successful confirmations reject replay")
+    @DisplayName("Successful confirmations reject replay")
     void successfulConfirmationIsSingleUse() {
         Fixture fixture = new Fixture(Clock.systemUTC());
         fixture.authorize(PLAYER, plan(PLAYER, 0, 1, 0), plan(PLAYER, 0, 1, 0));
@@ -138,7 +138,7 @@ final class OperationConfirmationSessionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9D UX] Valid-ID discovery and consumption remain isolated by player")
+    @DisplayName("Valid-ID discovery and consumption remain isolated by player")
     void confirmationIdsArePlayerIsolated() {
         Fixture fixture = new Fixture(Clock.systemUTC());
         PermissionSubject other = subject(OTHER);
@@ -197,7 +197,7 @@ final class OperationConfirmationSessionTest {
 
     private static PermissionSubject subject(UUID playerId) {
         return new PermissionSubject(new Actor("player", Optional.of(playerId), playerId.toString()),
-                Set.of(PhaseSixPermissions.PRESTIGE));
+                Set.of(AdministrationPermissions.PRESTIGE));
     }
 
     private static final class Fixture {

@@ -56,7 +56,7 @@ class StageConfigurationCompilerTest {
     }
 
     @Test
-    @DisplayName("[A03] Duplicate IDs and malformed Phase 3 references never pretend to work")
+    @DisplayName("[A03] Duplicate IDs and malformed provider-backed progression references never pretend to work")
     void rejectsDuplicatesAndMalformedReferences() {
         String duplicate = """
                 active: true
@@ -84,7 +84,7 @@ class StageConfigurationCompilerTest {
 
     @Test
     @DisplayName("[A09-A26] Stages reference stable requirement, cost, and reward IDs")
-    void compilesPhaseThreeReferences() {
+    void compilesProgressionReferences() {
         var compilation = compile("""
                 schema-version: 3
                 active: true
@@ -151,7 +151,7 @@ class StageConfigurationCompilerTest {
     }
 
     @Test
-    @DisplayName("[A03] Generic Phase 2 production source/resources contain no deployment rank terminology")
+    @DisplayName("[A03] Generic stage progression production source/resources contain no deployment rank terminology")
     void genericityScanIsClean() throws IOException {
         List<String> prohibited = List.of(
                 "CURIOUS", "ODD", "UNBOUND", "Wanderer", "Dreamer", "Tea Guest", "Wonderlander",

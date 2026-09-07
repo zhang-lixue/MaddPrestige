@@ -10,7 +10,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.ui.StaffHistoryPresentation;
 import net.maddkraft.maddprestige.core.admin.ui.StaffHistorySource;
@@ -30,7 +30,7 @@ public final class StaffHistoryCommandService {
     }
 
     public CompletionStage<CommandResponse> execute(PermissionSubject subject, List<String> arguments) {
-        Objects.requireNonNull(subject, "subject").require(PhaseSixPermissions.PLAYER_VIEW);
+        Objects.requireNonNull(subject, "subject").require(AdministrationPermissions.PLAYER_VIEW);
         List<String> tokens = List.copyOf(Objects.requireNonNull(arguments, "arguments"));
         if (tokens.size() >= 2 && tokens.get(1).equalsIgnoreCase("details")) {
             return detail(tokens);

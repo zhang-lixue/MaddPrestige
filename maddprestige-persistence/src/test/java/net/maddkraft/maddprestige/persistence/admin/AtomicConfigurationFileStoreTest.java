@@ -50,7 +50,7 @@ class AtomicConfigurationFileStoreTest {
     }
 
     @Test
-    @DisplayName("[Phase6-security] Unsafe names and tampered prior snapshots fail before active replacement")
+    @DisplayName("Unsafe names and tampered prior snapshots fail before active replacement")
     void rejectsPathEscapeAndCorruptBackup() throws Exception {
         Path root = temporaryDirectory.resolve("configuration");
         AtomicConfigurationFileStore store = new AtomicConfigurationFileStore(root, Clock.systemUTC());
@@ -70,7 +70,7 @@ class AtomicConfigurationFileStoreTest {
     }
 
     @Test
-    @DisplayName("[Phase6-security] Prepared document, manifest, missing file, and extra file tamper cannot activate")
+    @DisplayName("Prepared document, manifest, missing file, and extra file tamper cannot activate")
     void verifiesExactPreparedSnapshotImmediatelyBeforePointerSwitch() throws Exception {
         Path root = temporaryDirectory.resolve("tamper-configuration");
         AtomicConfigurationFileStore store = new AtomicConfigurationFileStore(root, Clock.systemUTC());

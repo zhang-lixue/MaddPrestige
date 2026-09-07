@@ -24,10 +24,10 @@ public final class DisposableSqliteFixture implements AutoCloseable {
 
     private DisposableSqliteFixture(Path directory) {
         this.directory = directory;
-        this.database = directory.resolve("phase1-test.db");
+        this.database = directory.resolve("persistence-test.db");
         this.foundation = new SqliteFoundation(database);
         new MigrationRunner(foundation, new FileBackupService(database, directory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseNineB());
+                Clock.systemUTC()).migrate(SqliteMigrations.current());
     }
 
     public static DisposableSqliteFixture create() throws IOException {

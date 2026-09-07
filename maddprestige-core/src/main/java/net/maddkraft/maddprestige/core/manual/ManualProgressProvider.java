@@ -13,6 +13,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -260,7 +261,8 @@ public final class ManualProgressProvider implements MetricProvider {
                 .map(metric -> new CapabilityDescriptor(metric.definition.metricId().value(), "manual-progress",
                         metric.definition.description(), Map.of("value-type", metric.definition.valueType().name(),
                                 "owner", ownerIdentity))).toList();
-        return new ProviderDescriptor(providerId, ownerIdentity, "phase3-foundation", "1",
+        return new ProviderDescriptor(providerId, ownerIdentity, ProviderMetadataVersions.STABLE_API,
+                ProviderMetadataVersions.implementationVersion(ManualProgressProvider.class),
                 List.of(), capabilities);
     }
 

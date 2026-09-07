@@ -27,7 +27,7 @@ import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistration;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration.PlaceholderInput;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfiguration.PlaceholderInput;
 import net.maddkraft.maddprestige.integrations.mcmmo.McMmoExperienceAccess;
 import net.maddkraft.maddprestige.integrations.mcmmo.McMmoMetricProvider;
 import net.maddkraft.maddprestige.integrations.placeholder.PlaceholderInputMetricProvider;
@@ -201,7 +201,7 @@ class McMmoAndPlaceholderProviderTest {
     }
 
     @Test
-    @DisplayName("[A48][A51][A53] Phase 5 metric paths accept only AVAILABLE and ACTIVE health")
+    @DisplayName("[A48][A51][A53] integration metric paths accept only AVAILABLE and ACTIVE health")
     void metricProviderHealthGatesUseCanonicalAllowlist() {
         MetricQuery mcmmoQuery = new MetricQuery(McMmoMetricProvider.POWER_LEVEL, MetricReadMode.CURRENT, Map.of());
         MetricQuery placeholderQuery = placeholderQuery();

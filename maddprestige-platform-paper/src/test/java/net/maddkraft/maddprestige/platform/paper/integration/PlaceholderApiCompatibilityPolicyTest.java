@@ -19,8 +19,8 @@ import net.maddkraft.maddprestige.api.metric.MetricValueType;
 import net.maddkraft.maddprestige.core.manual.ManualMetricHandle;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.integrations.IntegrationTaskScheduler;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration.PlaceholderInput;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfiguration;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfiguration.PlaceholderInput;
 import net.maddkraft.maddprestige.integrations.placeholder.PlaceholderInputMetricProvider;
 import net.maddkraft.maddprestige.platform.paper.placeholder.MaddPrestigePlaceholderCache;
 import org.bukkit.Server;
@@ -37,10 +37,10 @@ class PlaceholderApiCompatibilityPolicyTest {
     @Test
     @DisplayName("[P9D-PAPI] Only explicitly qualified PlaceholderAPI versions are accepted")
     void onlyExplicitlyQualifiedVersionsAreAccepted() {
-        assertTrue(PhaseSevenOptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.12.2"));
-        assertTrue(PhaseSevenOptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.12.3"));
-        assertFalse(PhaseSevenOptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.12.4"));
-        assertFalse(PhaseSevenOptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.13.0"));
+        assertTrue(OptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.12.2"));
+        assertTrue(OptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.12.3"));
+        assertFalse(OptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.12.4"));
+        assertFalse(OptionalIntegrationManager.supportsVersion("PlaceholderAPI", "2.13.0"));
     }
 
     @Test
@@ -98,20 +98,20 @@ class PlaceholderApiCompatibilityPolicyTest {
         }
 
         ProviderRegistry registry = new ProviderRegistry();
-        PhaseSevenOptionalIntegrationManager manager = new PhaseSevenOptionalIntegrationManager(
+        OptionalIntegrationManager manager = new OptionalIntegrationManager(
                 owner, registry, mock(IntegrationTaskScheduler.class), mock(ManualMetricHandle.class),
                 new MaddPrestigePlaceholderCache(16), CLOCK);
         return new Fixture(manager, registry);
     }
 
-    private static PhaseFiveIntegrationConfiguration configuration() {
-        return new PhaseFiveIntegrationConfiguration(
+    private static IntegrationConfiguration configuration() {
+        return new IntegrationConfiguration(
                 7, false, false, false,
                 Map.of("external", new PlaceholderInput(
                         "%external_value%", MetricValueType.COUNT, Duration.ofSeconds(5))),
                 false, false, false, false, false, false, false, 128);
     }
 
-    private record Fixture(PhaseSevenOptionalIntegrationManager manager, ProviderRegistry registry) {
+    private record Fixture(OptionalIntegrationManager manager, ProviderRegistry registry) {
     }
 }

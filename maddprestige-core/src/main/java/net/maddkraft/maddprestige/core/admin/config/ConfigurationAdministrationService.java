@@ -24,7 +24,7 @@ import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.AdministrationSemanticVariant;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.config.ActiveConfiguration;
 import net.maddkraft.maddprestige.core.config.ConfigCompiler;
 import net.maddkraft.maddprestige.core.config.ConfigDraft;
@@ -44,7 +44,7 @@ public final class ConfigurationAdministrationService {
     private static final Duration DRAFT_LIFETIME = Duration.ofHours(2);
     private static final Duration ACKNOWLEDGEMENT_LIFETIME = Duration.ofMinutes(5);
     private final ConfigurationService canonical;
-    private final PhaseSixConfigurationWorkflow workflow;
+    private final AdministrationConfigurationWorkflow workflow;
     private final SchemaRegistry schema;
     private final ConfigurationHistoryStore history;
     private final ConfigurationSnapshotStore snapshots;
@@ -57,7 +57,7 @@ public final class ConfigurationAdministrationService {
 
     public ConfigurationAdministrationService(
             ConfigurationService canonical,
-            PhaseSixConfigurationWorkflow workflow,
+            AdministrationConfigurationWorkflow workflow,
             SchemaRegistry schema,
             ConfigurationHistoryStore history,
             ConfigurationSnapshotStore snapshots,
@@ -67,14 +67,14 @@ public final class ConfigurationAdministrationService {
 
     public ConfigurationAdministrationService(
             ConfigurationService canonical,
-            PhaseSixConfigurationWorkflow workflow,
+            AdministrationConfigurationWorkflow workflow,
             SchemaRegistry schema,
             ConfigurationHistoryStore history,
             ConfigurationSnapshotStore snapshots,
             Clock clock,
             Consumer<StoredConfigurationRevision> appliedListener) {
         this.canonical = Objects.requireNonNull(canonical, "canonical configuration service");
-        this.workflow = Objects.requireNonNull(workflow, "Phase 6 workflow");
+        this.workflow = Objects.requireNonNull(workflow, "configuration workflow");
         this.schema = Objects.requireNonNull(schema, "schema");
         this.history = Objects.requireNonNull(history, "history");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots");
@@ -83,7 +83,7 @@ public final class ConfigurationAdministrationService {
     }
 
     public UUID beginDraft(PermissionSubject subject, String sourceSurface) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         ActiveConfiguration current = canonical.active().orElseThrow(() -> new AdministrationException(
                 "config.active.absent", "There is no active configuration to edit.",
                 "Use the setup wizard to create the first validated configuration."));
@@ -94,11 +94,11 @@ public final class ConfigurationAdministrationService {
     /** Returns only current, usable draft identifiers owned by the exact requesting actor. */
     public List<UUID> ownedDraftIds(PermissionSubject subject) {
         Objects.requireNonNull(subject, "subject");
-        if (!subject.has(PhaseSixPermissions.CONFIG_VIEW)
-                && !subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                && !subject.has(PhaseSixPermissions.CONFIG_APPLY)
-                && !subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)
-                && !subject.has(PhaseSixPermissions.SETUP)) {
+        if (!subject.has(AdministrationPermissions.CONFIG_VIEW)
+                && !subject.has(AdministrationPermissions.CONFIG_EDIT)
+                && !subject.has(AdministrationPermissions.CONFIG_APPLY)
+                && !subject.has(AdministrationPermissions.CONFIG_ROLLBACK)
+                && !subject.has(AdministrationPermissions.SETUP)) {
             return List.of();
         }
         pruneExpiredAuthorities();
@@ -115,7 +115,7 @@ public final class ConfigurationAdministrationService {
             PermissionSubject subject,
             Map<String, String> documents,
             String sourceSurface) {
-        subject.require(PhaseSixPermissions.SETUP);
+        subject.require(AdministrationPermissions.SETUP);
         if (canonical.active().isPresent()) {
             throw new AdministrationException("setup.already_active", "An active configuration already exists.",
                     "Create a normal draft instead of replacing the active revision through setup.");
@@ -128,7 +128,7 @@ public final class ConfigurationAdministrationService {
             PermissionSubject subject,
             ConfigRevisionId targetRevision,
             String sourceSurface) {
-        subject.require(PhaseSixPermissions.CONFIG_ROLLBACK);
+        subject.require(AdministrationPermissions.CONFIG_ROLLBACK);
         ActiveConfiguration current = canonical.active().orElseThrow(() -> new AdministrationException(
                 "config.active.absent", "No active configuration can be rolled back.",
                 "Apply a valid configuration first."));
@@ -151,7 +151,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             String actualPath,
             String replacement) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(replacement, "replacement");
         DraftState state = requireOwnedDraft(subject, draftId);
         SchemaNode node = schema.resolve(actualPath).orElseThrow(() -> new AdministrationException(
@@ -192,7 +192,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             ScalingOverrideEdit requirementOverride,
             GuidedMoneyScalingPair pair) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(requirementOverride, "requirement override");
         Objects.requireNonNull(pair, "guided Money pair");
         requireMatchingScalingPath(requirementOverride.scalingPath(), pair);
@@ -258,7 +258,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             ScalingParameterEdit edit,
             GuidedMoneyScalingPair pair) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(edit, "scaling parameter edit");
         Objects.requireNonNull(pair, "guided Money pair");
         requireMatchingScalingPath(edit.scalingPath(), pair);
@@ -307,7 +307,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             ScalingOverrideEdit edit,
             GuidedMoneyScalingPair pair) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(edit, "scaling override edit");
         Objects.requireNonNull(pair, "guided Money pair");
         requireMatchingScalingPath(edit.scalingPath(), pair);
@@ -355,7 +355,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             ScalingOverrideRemoval removal,
             GuidedMoneyScalingPair pair) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(removal, "scaling override removal");
         Objects.requireNonNull(pair, "guided Money pair");
         requireMatchingScalingPath(removal.scalingPath(), pair);
@@ -431,7 +431,7 @@ public final class ConfigurationAdministrationService {
     }
 
     public List<String> listValues(PermissionSubject subject, UUID draftId, String actualPath) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         DraftState state = requireOwnedDraft(subject, draftId);
         SchemaNode node = schema.resolve(actualPath).orElseThrow(() -> new AdministrationException(
                 "config.path.unknown", "Unknown canonical configuration path: " + actualPath,
@@ -465,7 +465,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             String actualPath,
             String value) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         DraftState state = requireOwnedDraft(subject, draftId);
         SchemaNode node = requireStructuralNode(subject, actualPath, SchemaValueType.LIST);
         ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(actualPath).orElseThrow();
@@ -485,7 +485,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             String actualPath,
             String value) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         DraftState state = requireOwnedDraft(subject, draftId);
         requireStructuralNode(subject, actualPath, SchemaValueType.LIST);
         ConfigurationPathResolver.ResolvedPath resolved = paths.resolve(actualPath).orElseThrow();
@@ -506,7 +506,7 @@ public final class ConfigurationAdministrationService {
             String collectionPath,
             Optional<String> key,
             StructuredConfigurationValue value) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(key, "structured object key");
         Objects.requireNonNull(value, "structured object");
         DraftState state = requireOwnedDraft(subject, draftId);
@@ -540,7 +540,7 @@ public final class ConfigurationAdministrationService {
             String collectionPath,
             String selector,
             StructuredConfigurationValue value) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(selector, "structured object selector");
         Objects.requireNonNull(value, "structured object");
         DraftState state = requireOwnedDraft(subject, draftId);
@@ -572,7 +572,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             String collectionPath,
             String selector) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         Objects.requireNonNull(selector, "structured object selector");
         DraftState state = requireOwnedDraft(subject, draftId);
         SchemaNode collection = requireCollectionNode(subject, collectionPath);
@@ -601,7 +601,7 @@ public final class ConfigurationAdministrationService {
             String displayName,
             Optional<net.maddkraft.maddprestige.api.id.ProviderId> providerId,
             Optional<String> externalGroup) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         DraftState state = requireOwnedDraft(subject, draftId);
         if (displayName == null || displayName.isBlank() || displayName.length() > 128
                 || displayName.codePoints().anyMatch(Character::isISOControl)) {
@@ -643,7 +643,7 @@ public final class ConfigurationAdministrationService {
             UUID draftId,
             net.maddkraft.maddprestige.api.id.StageId stageId,
             Optional<net.maddkraft.maddprestige.api.id.StageId> replacement) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         DraftState state = requireOwnedDraft(subject, draftId);
         replacement.ifPresent(value -> {
             if (value.equals(stageId)) {
@@ -774,7 +774,7 @@ public final class ConfigurationAdministrationService {
     }
 
     public List<StoredConfigurationRevision> history(PermissionSubject subject, int limit) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         if (limit < 1 || limit > MAX_HISTORY_LIMIT) {
             throw new IllegalArgumentException("History limit must be between 1 and " + MAX_HISTORY_LIMIT);
         }
@@ -782,19 +782,19 @@ public final class ConfigurationAdministrationService {
     }
 
     public Optional<ActiveConfiguration> active(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         return canonical.active();
     }
 
     public boolean activeConfigurationPresentForSetup(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.SETUP);
+        subject.require(AdministrationPermissions.SETUP);
         return canonical.active().isPresent();
     }
 
     public void discardDraft(PermissionSubject subject, UUID draftId) {
         DraftState state = requireOwnedDraft(subject, draftId);
         subject.require(state.requiredKind() == ConfigurationApplyKind.NORMAL
-                ? PhaseSixPermissions.CONFIG_EDIT : permission(state.requiredKind()));
+                ? AdministrationPermissions.CONFIG_EDIT : permission(state.requiredKind()));
         if (!drafts.remove(draftId, state)) {
             throw new AdministrationException("config.draft.concurrent_change",
                     "The draft changed while cancellation was requested.",
@@ -1028,7 +1028,7 @@ public final class ConfigurationAdministrationService {
             throw new AdministrationException("config.preview.stale", "Draft changed after its last preview.",
                     "Preview the current draft version before applying it.");
         }
-        PhaseSixConfigurationCandidate previewedCandidate = state.candidate().orElseThrow(() ->
+        AdministrationConfigurationCandidate previewedCandidate = state.candidate().orElseThrow(() ->
                 new AdministrationException("config.preview.candidate_missing",
                         "The exact preview candidate is no longer available.",
                         "Preview the current draft again before applying it."));
@@ -1058,7 +1058,7 @@ public final class ConfigurationAdministrationService {
     private synchronized StoredConfigurationRevision finalizeApply(
             PermissionSubject subject,
             DraftState state,
-            PhaseSixConfigurationCandidate candidate,
+            AdministrationConfigurationCandidate candidate,
             Optional<ConfigRevisionId> expectedBase,
             Set<String> acknowledgements,
             String reason) {
@@ -1374,7 +1374,7 @@ public final class ConfigurationAdministrationService {
     }
 
     private static void requireGuidedMoneyInvariant(
-            PhaseSixConfigurationCandidate candidate,
+            AdministrationConfigurationCandidate candidate,
             Optional<GuidedMoneyScalingPair> pair) {
         if (pair.isEmpty()) {
             return;
@@ -1382,13 +1382,13 @@ public final class ConfigurationAdministrationService {
         GuidedMoneyScalingPair binding = pair.orElseThrow();
         RequirementId requirementId = new RequirementId(binding.requirementId());
         CostId costId = new CostId(binding.costId());
-        var requirement = candidate.phaseThree().requirements().get(requirementId);
-        CostDefinition cost = candidate.phaseThree().costs().get(costId);
-        var costScaling = candidate.phaseFour().valueScaling().costs().get(costId);
+        var requirement = candidate.progression().requirements().get(requirementId);
+        CostDefinition cost = candidate.progression().costs().get(costId);
+        var costScaling = candidate.lifecycle().valueScaling().costs().get(costId);
         boolean paired = requirement != null
                 && cost != null
                 && costScaling != null
-                && candidate.phaseFour().prestige().costIds().contains(costId)
+                && candidate.lifecycle().prestige().costIds().contains(costId)
                 && requirement.target().upper().isEmpty()
                 && requirement.target().lower().type().isNumeric()
                 && cost.amount().type().isNumeric()
@@ -1594,9 +1594,9 @@ public final class ConfigurationAdministrationService {
 
     private static String permission(ConfigurationApplyKind kind) {
         return switch (kind) {
-            case NORMAL -> PhaseSixPermissions.CONFIG_APPLY;
-            case ROLLBACK -> PhaseSixPermissions.CONFIG_ROLLBACK;
-            case SETUP -> PhaseSixPermissions.SETUP;
+            case NORMAL -> AdministrationPermissions.CONFIG_APPLY;
+            case ROLLBACK -> AdministrationPermissions.CONFIG_ROLLBACK;
+            case SETUP -> AdministrationPermissions.SETUP;
         };
     }
 
@@ -1656,7 +1656,7 @@ public final class ConfigurationAdministrationService {
     private void requirePreviewPermission(PermissionSubject subject, UUID draftId) {
         DraftState state = requireOwnedDraft(subject, draftId);
         subject.require(state.requiredKind() == ConfigurationApplyKind.NORMAL
-                ? PhaseSixPermissions.CONFIG_VIEW : permission(state.requiredKind()));
+                ? AdministrationPermissions.CONFIG_VIEW : permission(state.requiredKind()));
     }
 
     private Optional<ConfigRevisionId> activeRevision() {
@@ -1759,7 +1759,7 @@ public final class ConfigurationAdministrationService {
             Optional<ConfigRevisionId> rollbackSource,
             ConfigurationApplyKind requiredKind,
             Optional<ConfigurationPreview> preview,
-            Optional<PhaseSixConfigurationCandidate> candidate,
+            Optional<AdministrationConfigurationCandidate> candidate,
             Optional<StageRemapPlan> remapPlan,
             Optional<GuidedMoneyScalingPair> guidedMoneyPair,
             boolean applying) {
@@ -1807,7 +1807,7 @@ public final class ConfigurationAdministrationService {
 
         private DraftState withPreview(
                 ConfigurationPreview replacement,
-                PhaseSixConfigurationCandidate replacementCandidate) {
+                AdministrationConfigurationCandidate replacementCandidate) {
             return new DraftState(draft, version, sourceSurface, rollbackSource, requiredKind,
                     Optional.of(replacement),
                     Optional.of(replacementCandidate), remapPlan, guidedMoneyPair, false);

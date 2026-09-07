@@ -68,8 +68,8 @@ public final class PaperMessageService {
             "locale.reload.permission_denied",
             "locale.reload.success",
             "locale.reload.usage",
-            "phase7.permission_denied",
-            "phase7.usage");
+            "command.runtime.permission_denied",
+            "command.runtime.usage");
     private static final LoadSettings YAML = LoadSettings.builder()
             .setLabel("MaddPrestige locale catalog")
             .setAllowDuplicateKeys(false)
@@ -139,6 +139,12 @@ public final class PaperMessageService {
             String locale = configuredLocale();
             Map<String, String> selected = selectedCatalog(locale);
             selected.forEach(PaperMessageService::validateTemplate);
+            LegacyLocaleKeys.aliases().forEach((canonical, legacy) -> {
+                if (selected.containsKey(canonical) && selected.containsKey(legacy)) {
+                    diagnostics.accept("Locale key " + canonical
+                            + " overrides its deprecated alias " + legacy + ".");
+                }
+            });
             CatalogSnapshot replacement = new CatalogSnapshot(
                     locale, selected, builtInFallback, versions.incrementAndGet());
             current.set(replacement);
@@ -162,9 +168,13 @@ public final class PaperMessageService {
     }
 
     public Component render(String key, Map<String, ?> arguments) {
-        String safeKey = requireKey(key);
+        String safeKey = LegacyLocaleKeys.canonicalize(requireKey(key));
         CatalogSnapshot snapshot = current.get();
         String template = snapshot.selected().get(safeKey);
+        if (template == null) {
+            template = LegacyLocaleKeys.legacyForCanonical(safeKey)
+                    .map(snapshot.selected()::get).orElse(null);
+        }
         if (template == null) {
             template = snapshot.fallback().get(safeKey);
         }

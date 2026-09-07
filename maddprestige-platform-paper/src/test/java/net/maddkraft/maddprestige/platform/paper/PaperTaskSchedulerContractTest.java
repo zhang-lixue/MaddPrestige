@@ -34,7 +34,7 @@ class PaperTaskSchedulerContractTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Deferred server work queues even from Paper''s primary thread")
+    @DisplayName("Deferred server work queues even from Paper''s primary thread")
     void deferredServerWorkNeverRunsInline() {
         Plugin plugin = mock(Plugin.class);
         BukkitScheduler bukkitScheduler = mock(BukkitScheduler.class);

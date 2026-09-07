@@ -121,13 +121,13 @@ class StageConfigurationWorkflowTest {
                 providers);
         ActiveStageConfiguration active = workflow.activeCanonical().orElseThrow();
         assertEquals(validatedGeneration,
-                active.phaseThree().providerGenerations().get(new ProviderId("rank_provider")));
-        assertEquals(active.stages().revisionId(), active.phaseThree().revisionId());
+                active.progression().providerGenerations().get(new ProviderId("rank_provider")));
+        assertEquals(active.stages().revisionId(), active.progression().revisionId());
 
         providers.unregister(firstRegistration);
         var replacement = providers.register("test-owner", new CatalogAdapter(Set.of("existing")));
         providers.activate(replacement);
-        assertEquals(validatedGeneration, workflow.activePhaseThree().orElseThrow().providerGenerations()
+        assertEquals(validatedGeneration, workflow.activeProgression().orElseThrow().providerGenerations()
                 .get(new ProviderId("rank_provider")), "active pins cannot follow the mutable registry");
 
         var staleCandidate = workflow.prepare(draft("existing"), Map.of(), Optional.empty(), providers)
@@ -136,11 +136,11 @@ class StageConfigurationWorkflowTest {
         assertThrows(IllegalStateException.class, () -> workflow.apply(new ConfigRevisionId("revision_2"),
                 staleCandidate, acknowledgements(staleCandidate), backup(), providers));
         assertEquals(active, workflow.activeCanonical().orElseThrow(),
-                "failed apply must preserve the prior atomic stage/Phase 3 snapshot and pins");
+                "failed apply must preserve the prior atomic stage/provider-backed progression snapshot and pins");
         assertThrows(IllegalArgumentException.class, () -> new ActiveStageConfiguration(active.stages(),
-                new net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot(
-                        new ConfigRevisionId("mixed"), active.phaseThree().configuration(),
-                        active.phaseThree().providerGenerations())));
+                new net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationSnapshot(
+                        new ConfigRevisionId("mixed"), active.progression().configuration(),
+                        active.progression().providerGenerations())));
     }
 
     @Test

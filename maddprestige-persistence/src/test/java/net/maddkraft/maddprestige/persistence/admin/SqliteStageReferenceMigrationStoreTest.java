@@ -58,7 +58,7 @@ class SqliteStageReferenceMigrationStoreTest {
         Path database = temporaryDirectory.resolve("stage-remap.db");
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite, new FileBackupService(database, temporaryDirectory.resolve("backups"), CLOCK),
-                CLOCK).migrate(SqliteMigrations.phaseSix());
+                CLOCK).migrate(SqliteMigrations.throughVersionTen());
         SqliteConfigRevisionRepository revisions = new SqliteConfigRevisionRepository(sqlite);
         revisions.insert(SOURCE_REVISION, RevisionHasher.hashText("source"));
         revisions.insert(TARGET_REVISION, RevisionHasher.hashText("target"));

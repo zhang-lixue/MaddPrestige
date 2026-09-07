@@ -32,7 +32,7 @@ class StaffHistoryCommandServiceTest {
     private static final Instant NOW = Instant.parse("2026-09-02T20:24:00Z");
 
     @Test
-    @DisplayName("[Phase 9F-B] Player history summary is selected-player filtered, newest-first, concise, and paged")
+    @DisplayName("Player history summary is selected-player filtered, newest-first, concise, and paged")
     void summaryUsesCanonicalSelectedPlayerPageAndOutcomeLanguage() {
         List<StaffHistorySource.Entry> entries = List.of(
                 entry(1, 5, 6, StaffHistorySource.Outcome.COMPLETED),
@@ -62,7 +62,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B UX] History pagination exposes truthful Previous and Next command targets")
+    @DisplayName("History pagination exposes truthful Previous and Next command targets")
     void paginationCarriesOnlyAvailableDirectPageTargets() {
         List<StaffHistorySource.Entry> entries = java.util.stream.IntStream.rangeClosed(1, 8)
                 .mapToObj(index -> entry(index, index - 1L, index,
@@ -85,7 +85,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Page selection and compact empty history never read another player")
+    @DisplayName("Page selection and compact empty history never read another player")
     void selectsPageAndRendersCompactEmptyState() {
         HistorySource source = new HistorySource(List.of(), 0);
         StaffHistoryCommandService service = service(source);
@@ -104,7 +104,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Stable detail lookup presents canonical transition, balance, reward, outcome, and time")
+    @DisplayName("Stable detail lookup presents canonical transition, balance, reward, outcome, and time")
     void detailUsesStableOperationIdAndCanonicalFinancialProjection() {
         UUID entryId = UUID.fromString("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
         StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "FixturePlayer", 5, 6,
@@ -130,7 +130,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B UX] History detail truthfully falls back to cost when balance snapshots are absent")
+    @DisplayName("History detail truthfully falls back to cost when balance snapshots are absent")
     void detailFallsBackToCanonicalCostWithoutFabricatingBalance() {
         UUID entryId = UUID.fromString("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
         StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "FixturePlayer", 4, 5,
@@ -150,7 +150,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Admin Set/Reset command history identifies the actor without fake finances")
+    @DisplayName("Admin Set/Reset command history identifies the actor without fake finances")
     void administrativeHistoryIsDistinctAndNeverPresentsNormalPrestigeFinances() {
         UUID entryId = UUID.fromString("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
         StaffHistorySource.Entry entry = new StaffHistorySource.Entry(entryId, "FixturePlayer",
@@ -176,7 +176,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Missing, invalid, and cross-player detail selectors fail closed")
+    @DisplayName("Missing, invalid, and cross-player detail selectors fail closed")
     void invalidAndMissingDetailsFailClosed() {
         HistorySource source = new HistorySource(List.of(), 0);
         StaffHistoryCommandService service = service(source);
@@ -198,7 +198,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] History permission and completion remain isolated and read-only")
+    @DisplayName("History permission and completion remain isolated and read-only")
     void permissionAwareCompletionCachesOnlyDisplayedCanonicalIdsWithoutMutation() {
         StaffHistorySource.Entry entry = entry(4, 2, 3, StaffHistorySource.Outcome.COMPLETED);
         HistorySource source = new HistorySource(List.of(entry), 1);
@@ -221,7 +221,7 @@ class StaffHistoryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Offline known players remain valid history and admin-find selectors")
+    @DisplayName("Offline known players remain valid history and admin-find selectors")
     void offlineKnownPlayerRemainsAvailableToHistoryAndCompletion() {
         UUID offlineId = UUID.fromString("33333333-3333-4333-8333-333333333333");
         StaffPlayerDirectory directory = new StaffPlayerDirectory() {
@@ -239,7 +239,7 @@ class StaffHistoryCommandServiceTest {
         StaffHistoryCommandService service = new StaffHistoryCommandService(source, directory);
         PermissionSubject authorized = new PermissionSubject(
                 new Actor("player", Optional.of(STAFF), "Staff"),
-                Set.of(PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW));
+                Set.of(AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW));
 
         CommandResponse response = service.execute(authorized, List.of("history", "KnownPlayer"))
                 .toCompletableFuture().join();
@@ -270,7 +270,7 @@ class StaffHistoryCommandServiceTest {
 
     private static PermissionSubject staff() {
         return new PermissionSubject(new Actor("player", Optional.of(STAFF), "Staff"),
-                Set.of(PhaseSixPermissions.PLAYER_VIEW));
+                Set.of(AdministrationPermissions.PLAYER_VIEW));
     }
 
     private static PermissionSubject ordinary() {

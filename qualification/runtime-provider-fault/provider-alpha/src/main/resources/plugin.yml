@@ -1,0 +1,15 @@
+name: Qualification-Provider-Alpha
+version: '1.0.0'
+main: net.maddkraft.qualification.runtimefault.alpha.AlphaProviderPlugin
+description: Independently owned Stable Alpha provider for disposable runtime provider/fault qualification.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend: [MaddPrestige]
+commands:
+  qualificationalpha:
+    description: Controls the disposable runtime provider/fault Alpha provider.
+    permission: maddprestige.qualification.provider.alpha
+permissions:
+  maddprestige.qualification.provider.alpha:
+    default: op

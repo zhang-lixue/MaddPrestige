@@ -59,13 +59,13 @@ import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
 import net.maddkraft.maddprestige.core.admin.OperationPreviewService;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.ContextualHelpService;
-import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.command.AdministrationCommandService;
 import net.maddkraft.maddprestige.core.admin.command.StaffHistoryCommandService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.CanonicalGuidedConfigurationAdministration;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
-import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationCandidate;
-import net.maddkraft.maddprestige.core.admin.config.PhaseSixConfigurationWorkflow;
+import net.maddkraft.maddprestige.core.admin.config.AdministrationConfigurationCandidate;
+import net.maddkraft.maddprestige.core.admin.config.AdministrationConfigurationWorkflow;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.ConfigurationHistoryDiagnosticProbe;
@@ -73,8 +73,8 @@ import net.maddkraft.maddprestige.core.admin.diagnostic.DatabaseDiagnosticProbe;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DatabaseHealth;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticProviderReference;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticSubsystemState;
-import net.maddkraft.maddprestige.core.admin.diagnostic.PhaseSixOperationalDiagnosticProbe;
-import net.maddkraft.maddprestige.core.admin.diagnostic.PhaseSixOperationalSnapshot;
+import net.maddkraft.maddprestige.core.admin.diagnostic.OperationalDiagnosticProbe;
+import net.maddkraft.maddprestige.core.admin.diagnostic.OperationalSnapshot;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyService;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
@@ -96,7 +96,7 @@ import net.maddkraft.maddprestige.core.admin.ui.StaffSystemStatusSource.Summary;
 import net.maddkraft.maddprestige.core.config.BackupMetadata;
 import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.ConfigurationService;
-import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.ActiveLifecycleConfiguration;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationResult;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
 import net.maddkraft.maddprestige.core.prestige.PrestigeAuthorizationResult;
@@ -113,11 +113,11 @@ import net.maddkraft.maddprestige.core.requirement.RequirementGroup;
 import net.maddkraft.maddprestige.core.requirement.RequirementLeaf;
 import net.maddkraft.maddprestige.core.requirement.RequirementNode;
 import net.maddkraft.maddprestige.core.requirement.ScalingStrategy;
-import net.maddkraft.maddprestige.core.schema.PhaseSixSchema;
+import net.maddkraft.maddprestige.core.schema.ActiveConfigurationSchema;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompilation;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationCompiler;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationSchema;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfigurationCompilation;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfigurationCompiler;
+import net.maddkraft.maddprestige.integrations.config.IntegrationSchema;
 import net.maddkraft.maddprestige.persistence.admin.AtomicConfigurationFileStore;
 import net.maddkraft.maddprestige.persistence.PrestigeHistoryRecord;
 import net.maddkraft.maddprestige.persistence.admin.SqliteConfigurationHistoryStore;
@@ -144,7 +144,7 @@ import net.maddkraft.maddprestige.platform.paper.placeholder.PlaceholderSnapshot
 import net.maddkraft.maddprestige.platform.paper.service.ProductionMaddPrestigeService;
 import org.bukkit.plugin.Plugin;
 
-/** Live operation composition backed by the exact Phase 6 configuration revision authority. */
+/** Live operation composition backed by the exact administration configuration revision authority. */
 public final class ProductionRuntime implements AutoCloseable {
     private final Plugin plugin;
     private final Clock clock;
@@ -153,7 +153,7 @@ public final class ProductionRuntime implements AutoCloseable {
     private final RuntimeConfigurationReconciler runtimeReconciler;
     private final PaperTaskScheduler scheduler;
     private final ConfigurationService canonical = new ConfigurationService();
-    private final PhaseSixConfigurationWorkflow configuration;
+    private final AdministrationConfigurationWorkflow configuration;
     private final SqlitePlayerPrestigeRepository prestiges;
     private final SqliteSeasonStore seasons;
     private final SqliteCurrencyLedgerStore currencyLedger;
@@ -168,7 +168,7 @@ public final class ProductionRuntime implements AutoCloseable {
     private final PaperOperationLifecycle lifecycleEvents;
     private final PlaceholderSnapshotPublisher placeholders;
     private final ProductionMaddPrestigeService service;
-    private final PhaseSixCommandService commands;
+    private final AdministrationCommandService commands;
     private final CommandCompletionService completion;
     private final OperationConfirmationService confirmations;
     private final GuiSessionService gui;
@@ -207,7 +207,7 @@ public final class ProductionRuntime implements AutoCloseable {
         operations = new SqliteOperationRepository(foundation);
         playerInitialization = new SqlitePlayerInitializationStore(foundation);
         transitions = new SqliteStageReferenceMigrationStore(foundation);
-        configuration = new PhaseSixConfigurationWorkflow(canonical, providers, transitions,
+        configuration = new AdministrationConfigurationWorkflow(canonical, providers, transitions,
                 List.of(compiled -> integrationCompilation(compiled.documents()).validation()));
 
         requirementStates = new SqliteRequirementStateRepository(foundation);
@@ -246,16 +246,16 @@ public final class ProductionRuntime implements AutoCloseable {
                         "Rank-up execution is compatibility-only")),
                 plan -> CompletableFuture.supplyAsync(() -> prestigeExecutor.execute(plan), worker),
                 this::activeRevision, () -> configuration.active()
-                        .map(active -> active.phaseFour().configuration().prestige().confirmationMaximumLifetime())
+                        .map(active -> active.lifecycle().configuration().prestige().confirmationMaximumLifetime())
                         .orElse(OperationConfirmationService.DEFAULT_MAXIMUM_LIFETIME), clock);
         Supplier<CompletionStage<DatabaseHealth>> databaseHealth = () -> CompletableFuture.supplyAsync(() -> {
             var validation = SqliteDatabaseValidator.validate(
-                    foundation.databaseFile(), SqliteMigrations.phaseNineB());
+                    foundation.databaseFile(), SqliteMigrations.current());
             return new DatabaseHealth(true, validation.schemaVersion() == 12, "SQLite",
                     "validated schema " + validation.schemaVersion());
         }, worker);
         var databaseProbe = new DatabaseDiagnosticProbe(databaseHealth);
-        var operationalProbe = new PhaseSixOperationalDiagnosticProbe(providers,
+        var operationalProbe = new OperationalDiagnosticProbe(providers,
                 () -> CompletableFuture.supplyAsync(this::operationalDiagnosticSnapshot, worker));
         var historyProbe = new ConfigurationHistoryDiagnosticProbe(history, worker);
         DoctorService doctor = new DoctorService(providers, canonical::active,
@@ -271,7 +271,7 @@ public final class ProductionRuntime implements AutoCloseable {
                 prestigeAdministration, () -> activeRevision().orElseThrow(), worker,
                 this::initializePlayerLifecycle, () -> configuration.active()
                         .map(active -> new ManualPrestigeAdjustmentPolicy(0,
-                                active.phaseFour().configuration().prestige().limit().maximum()))
+                                active.lifecycle().configuration().prestige().limit().maximum()))
                         .orElseThrow(() -> new IllegalStateException("No active Prestige adjustment policy")));
         CanonicalGuiMutationExecutor mutations = new CanonicalGuiMutationExecutor(administration);
         CanonicalGuiActionExecutor guiActions = new CanonicalGuiActionExecutor(playerViews, previews, confirmations,
@@ -342,7 +342,7 @@ public final class ProductionRuntime implements AutoCloseable {
                 this::activeRevision, staffHistory, staffStatus, manualPrestige, guidedConfiguration);
         StaffHistoryCommandService historyCommands = new StaffHistoryCommandService(staffHistory, staffPlayers);
         SetupWizardService setupWizard = new SetupWizardService(administration, providers);
-        commands = new PhaseSixCommandService(new ContextualHelpService(schema), introspection, administration,
+        commands = new AdministrationCommandService(new ContextualHelpService(schema), introspection, administration,
                 doctor, why, previews, confirmations, playerViews, setupWizard,
                 manualPrestige, gui, playerGui, staffGui, historyCommands, this::activeRevision, worker);
         completion = new CommandCompletionService(setupWizard, confirmations, historyCommands, administration);
@@ -356,7 +356,7 @@ public final class ProductionRuntime implements AutoCloseable {
         return service;
     }
 
-    public PhaseSixConfigurationWorkflow configuration() {
+    public AdministrationConfigurationWorkflow configuration() {
         return configuration;
     }
 
@@ -377,7 +377,7 @@ public final class ProductionRuntime implements AutoCloseable {
         return compositionFailure.get();
     }
 
-    public PhaseSixCommandService commands() {
+    public AdministrationCommandService commands() {
         return commands;
     }
 
@@ -541,27 +541,27 @@ public final class ProductionRuntime implements AutoCloseable {
     }
 
     private ConfigurationSummary staffConfigurationSummary() {
-        Optional<ActivePhaseFourConfiguration> active = configuration.active();
+        Optional<ActiveLifecycleConfiguration> active = configuration.active();
         if (active.isEmpty()) {
             return ConfigurationSummary.inactive();
         }
-        ActivePhaseFourConfiguration current = active.orElseThrow();
-        var phaseThree = current.priorPhases().phaseThree().configuration();
-        var phaseFour = current.phaseFour().configuration();
-        var prestige = phaseFour.prestige();
-        List<RequirementDefinition> requirements = activeRequirements(phaseThree.trees(),
+        ActiveLifecycleConfiguration current = active.orElseThrow();
+        var progression = current.prerequisites().progression().configuration();
+        var lifecycle = current.lifecycle().configuration();
+        var prestige = lifecycle.prestige();
+        List<RequirementDefinition> requirements = activeRequirements(progression.trees(),
                 prestige.requirementTreeId());
         java.util.LinkedHashSet<String> providerNames = new java.util.LinkedHashSet<>();
         requirements.stream().map(RequirementDefinition::providerId).map(ProductionRuntime::providerLabel)
                 .sorted().forEach(providerNames::add);
-        prestige.costIds().stream().map(phaseThree.costs()::get).filter(Objects::nonNull)
+        prestige.costIds().stream().map(progression.costs()::get).filter(Objects::nonNull)
                 .map(value -> providerLabel(value.providerId())).sorted().forEach(providerNames::add);
-        prestige.rewardIds().stream().map(phaseThree.rewards()::get).filter(Objects::nonNull)
+        prestige.rewardIds().stream().map(progression.rewards()::get).filter(Objects::nonNull)
                 .map(value -> providerLabel(value.providerId())).sorted().forEach(providerNames::add);
         long requirementScaling = requirements.stream().filter(ProductionRuntime::scaled).count();
-        long costScaling = prestige.costIds().stream().filter(phaseFour.valueScaling().costs()::containsKey).count();
+        long costScaling = prestige.costIds().stream().filter(lifecycle.valueScaling().costs()::containsKey).count();
         long rewardScaling = prestige.rewardIds().stream()
-                .filter(phaseFour.valueScaling().rewards()::containsKey).count();
+                .filter(lifecycle.valueScaling().rewards()::containsKey).count();
         int scalingProfiles = Math.toIntExact(requirementScaling + costScaling + rewardScaling);
         String range = prestige.enabled()
                 ? prestige.limit().maximum().isPresent()
@@ -719,23 +719,23 @@ public final class ProductionRuntime implements AutoCloseable {
                 .collect(Collectors.joining(" "));
     }
 
-    private PhaseSixOperationalSnapshot operationalDiagnosticSnapshot() {
+    private OperationalSnapshot operationalDiagnosticSnapshot() {
         var current = configuration.active();
-        int schemaVersion = current.map(value -> value.priorPhases().phaseThree().configuration().schemaVersion())
+        int schemaVersion = current.map(value -> value.prerequisites().progression().configuration().schemaVersion())
                 .orElse(3);
         List<DiagnosticProviderReference> metrics = current.stream()
-                .flatMap(value -> value.priorPhases().phaseThree().configuration().requirements().values().stream())
+                .flatMap(value -> value.prerequisites().progression().configuration().requirements().values().stream())
                 .map(requirement -> new DiagnosticProviderReference(requirement.providerId(),
                         Optional.of(requirement.metricId()),
                         "requirements." + requirement.id().value() + ".metric"))
                 .sorted(java.util.Comparator.comparing(DiagnosticProviderReference::path)).toList();
         List<DiagnosticProviderReference> costs = current.stream()
-                .flatMap(value -> value.priorPhases().phaseThree().configuration().costs().values().stream())
+                .flatMap(value -> value.prerequisites().progression().configuration().costs().values().stream())
                 .map(cost -> new DiagnosticProviderReference(cost.providerId(), Optional.empty(),
                         "costs." + cost.id().value() + ".provider"))
                 .sorted(java.util.Comparator.comparing(DiagnosticProviderReference::path)).toList();
         List<DiagnosticProviderReference> rewards = current.stream()
-                .flatMap(value -> value.priorPhases().phaseThree().configuration().rewards().values().stream())
+                .flatMap(value -> value.prerequisites().progression().configuration().rewards().values().stream())
                 .map(reward -> new DiagnosticProviderReference(reward.providerId(), Optional.empty(),
                         "rewards." + reward.id().value() + ".provider"))
                 .sorted(java.util.Comparator.comparing(DiagnosticProviderReference::path)).toList();
@@ -753,7 +753,7 @@ public final class ProductionRuntime implements AutoCloseable {
         DiagnosticSubsystemState flushState = DiagnosticSubsystemState.healthy(
                 "Manual-progress drain health is exposed through the provider registry; no failed drain is active.");
 
-        return new PhaseSixOperationalSnapshot(schemaVersion, 3, metrics, costs, rewards,
+        return new OperationalSnapshot(schemaVersion, 3, metrics, costs, rewards,
                 Map.copyOf(pending), Map.copyOf(reconciliation),
                 Map.of(), Map.of(), Map.of(), Set.of(), List.of(), List.of(), placeholder, schedulerState,
                 flushState, Map.of());
@@ -762,7 +762,7 @@ public final class ProductionRuntime implements AutoCloseable {
     private DiagnosticSubsystemState placeholderDiagnosticState() {
         boolean enabled = Optional.ofNullable(authoritativeRevision.get()).map(StoredConfigurationRevision::compiled)
                 .map(value -> value.documents().get("integrations.yml")).filter(Objects::nonNull)
-                .map(source -> new PhaseFiveIntegrationCompiler().compile(source).configuration()
+                .map(source -> new IntegrationConfigurationCompiler().compile(source).configuration()
                         .placeholderOutputEnabled()).orElse(false);
         if (!enabled) {
             return DiagnosticSubsystemState.healthy("PlaceholderAPI output is disabled and was checked.");
@@ -827,7 +827,7 @@ public final class ProductionRuntime implements AutoCloseable {
         return CompletableFuture.supplyAsync(() -> {
             requirePlayerLifecycle(playerId);
             return configuration.active().map(active ->
-                active.phaseFour().configuration().currencies().values().stream()
+                active.lifecycle().configuration().currencies().values().stream()
                         .sorted(java.util.Comparator.comparing(value -> value.id().value()))
                         .map(currency -> new CurrencyBalanceView(currency.id().value(), MetricValue.fromNumber(
                                 MetricValueType.CURRENCY_AMOUNT,
@@ -900,7 +900,7 @@ public final class ProductionRuntime implements AutoCloseable {
                 playerInitializationLocks.length)];
         lock.lock();
         try {
-            ActivePhaseFourConfiguration active = configuration.active().orElse(null);
+            ActiveLifecycleConfiguration active = configuration.active().orElse(null);
             if (active == null) {
                 return PlaceholderSnapshotPublisher.InitializationResult.dormantResult();
             }
@@ -927,10 +927,10 @@ public final class ProductionRuntime implements AutoCloseable {
 
     private Optional<String> initializePlayerState(
             UUID playerId,
-            ActivePhaseFourConfiguration active) {
+            ActiveLifecycleConfiguration active) {
         try {
-            var phaseThree = active.priorPhases().phaseThree();
-            List<RequirementDefinition> definitions = phaseThree.configuration().requirements().values().stream()
+            var progression = active.prerequisites().progression();
+            List<RequirementDefinition> definitions = progression.configuration().requirements().values().stream()
                     .filter(definition -> definition.scope() == MeasurementScope.SINCE_PRESTIGE_START)
                     .sorted(java.util.Comparator.comparing(definition -> definition.id().value())).toList();
             LinkedHashMap<ProviderId, List<RequirementDefinition>> grouped = new LinkedHashMap<>();
@@ -940,7 +940,7 @@ public final class ProductionRuntime implements AutoCloseable {
                     new LinkedHashMap<>();
             for (var entry : grouped.entrySet()) {
                 ProviderId providerId = entry.getKey();
-                Long generation = phaseThree.providerGenerations().get(providerId);
+                Long generation = progression.providerGenerations().get(providerId);
                 providers.refreshHealth(providerId);
                 var snapshot = providers.find(providerId);
                 var provider = providers.provider(providerId)
@@ -975,8 +975,8 @@ public final class ProductionRuntime implements AutoCloseable {
             var scope = AuthoritativeProgressContextFactory.initialPrestigeScope(playerId);
             var baselines = new BaselineInitializationService(requirementStates, clock).prepareScope(
                     playerId, MeasurementScope.SINCE_PRESTIGE_START, scope, definitions, samples,
-                    phaseThree.providerGenerations());
-            playerInitialization.initializePrestige(playerId, active.phaseFour().revisionId(), scope,
+                    progression.providerGenerations());
+            playerInitialization.initializePrestige(playerId, active.lifecycle().revisionId(), scope,
                     clock.instant(), baselines);
             return Optional.empty();
         } catch (RuntimeException exception) {
@@ -1064,12 +1064,12 @@ public final class ProductionRuntime implements AutoCloseable {
         authoritativeRevision.set(stored);
         publishedRevision.set(null);
         try {
-            PhaseFiveIntegrationCompilation integrations = integrationCompilation(stored.compiled().documents());
+            IntegrationConfigurationCompilation integrations = integrationCompilation(stored.compiled().documents());
             if (integrations.validation().hasErrors()) {
                 throw new IllegalStateException("Applied integration configuration failed runtime validation");
             }
             runtimeReconciler.reconcile(integrations.configuration());
-            PhaseSixConfigurationCandidate candidate = hydrate(stored);
+            AdministrationConfigurationCandidate candidate = hydrate(stored);
             latestValidation.set(candidate.validation());
             completion.refresh(providers, productionSchema(), candidate.stages());
             compositionFailure.set(Optional.empty());
@@ -1103,10 +1103,10 @@ public final class ProductionRuntime implements AutoCloseable {
         });
     }
 
-    private PhaseSixConfigurationCandidate hydrate(StoredConfigurationRevision stored) {
+    private AdministrationConfigurationCandidate hydrate(StoredConfigurationRevision stored) {
         ConfigDraft draft = new ConfigDraft(UUID.randomUUID(), stored.parent(), stored.compiled().documents(),
                 new Actor("SYSTEM", Optional.empty(), "Exact configuration runtime hydration"), clock.instant());
-        PhaseSixConfigurationCandidate candidate = configuration.prepare(draft, Optional.empty())
+        AdministrationConfigurationCandidate candidate = configuration.prepare(draft, Optional.empty())
                 .toCompletableFuture().join();
         if (!candidate.compiled().contentHash().equals(stored.compiled().contentHash())) {
             throw new IllegalStateException("Runtime hydration changed the authoritative configuration content");
@@ -1126,17 +1126,17 @@ public final class ProductionRuntime implements AutoCloseable {
         return candidate;
     }
 
-    private static PhaseFiveIntegrationCompilation integrationCompilation(Map<String, String> documents) {
+    private static IntegrationConfigurationCompilation integrationCompilation(Map<String, String> documents) {
         String source = documents.get("integrations.yml");
         if (source == null) {
             throw new IllegalArgumentException("Canonical configuration is missing integrations.yml");
         }
-        return new PhaseFiveIntegrationCompiler().compile(source);
+        return new IntegrationConfigurationCompiler().compile(source);
     }
 
     static SchemaRegistry productionSchema() {
-        SchemaRegistry schema = PhaseSixSchema.create();
-        PhaseFiveIntegrationSchema.extend(schema);
+        SchemaRegistry schema = ActiveConfigurationSchema.create();
+        IntegrationSchema.extend(schema);
         return schema;
     }
 
@@ -1145,7 +1145,8 @@ public final class ProductionRuntime implements AutoCloseable {
             return false;
         }
         boolean directProviderFailure = errorCodes.stream().allMatch(code ->
-                code.startsWith("phase3.provider.") || code.startsWith("phase4.provider.")
+                code.startsWith("progression.configuration.provider.")
+                        || code.startsWith("lifecycle.configuration.provider.")
                         || code.startsWith("stage.rank_provider."));
         Set<String> providerDiscoveryFallout = Set.of(
                 "requirement.value_type.required", "requirement.reference.unknown", "requirement.group.empty");

@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -55,7 +56,7 @@ public final class McMmoMetricProvider implements MetricProvider {
         this.scheduler = scheduler;
         this.health = health;
         this.clock = clock;
-        descriptor = new ProviderDescriptor(PROVIDER_ID, "maddprestige", "phase5", implementationVersion,
+        descriptor = new ProviderDescriptor(PROVIDER_ID, "maddprestige", ProviderMetadataVersions.STABLE_API, implementationVersion,
                 List.of(new DependencyDescriptor("mcMMO", "[2.2,2.3)", Optional.of(implementationVersion))),
                 List.of(new CapabilityDescriptor("mcmmo_levels", "metric", "Read-only mcMMO levels",
                         Map.of("thread", "server", "mutation", "none"))));

@@ -9,7 +9,7 @@ import java.util.function.Supplier;
 import net.maddkraft.maddprestige.api.validation.ValidationReport;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.config.ActiveConfiguration;
 import net.maddkraft.maddprestige.core.schema.SchemaNode;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
@@ -32,7 +32,7 @@ public final class ConfigurationIntrospectionService {
     }
 
     public List<ConfigurationSearchResult> search(PermissionSubject subject, String query, int limit) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         Objects.requireNonNull(query, "query");
         if (limit < 1 || limit > MAX_RESULTS) {
             throw new IllegalArgumentException("Search limit must be between 1 and " + MAX_RESULTS);
@@ -47,7 +47,7 @@ public final class ConfigurationIntrospectionService {
     }
 
     public ConfigurationExplanation explain(PermissionSubject subject, String actualPath) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         SchemaNode node = schema.resolve(actualPath).orElseThrow(() -> new AdministrationException(
                 "config.path.unknown", "Unknown canonical configuration path: " + actualPath,
                 "Use config search to discover schema-owned paths.", "path", actualPath));

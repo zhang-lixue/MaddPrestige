@@ -7,8 +7,8 @@ public enum ManualPrestigeAdjustmentKind {
 
     public String permission() {
         return this == SET
-                ? PhaseSixPermissions.PLAYER_PRESTIGE_SET
-                : PhaseSixPermissions.PLAYER_PRESTIGE_RESET;
+                ? AdministrationPermissions.PLAYER_PRESTIGE_SET
+                : AdministrationPermissions.PLAYER_PRESTIGE_RESET;
     }
 
     public String operationType() {

@@ -1,0 +1,13 @@
+package net.maddkraft.maddprestige.core.config.lifecycle;
+
+public enum ResetComponent {
+    PROGRESSION_STAGE,
+    ACTIVE_REQUIREMENT_PROGRESS,
+    LATCHED_COMPLETIONS,
+    BASELINES,
+    PRESTIGE_SCOPED_CURRENCY,
+    PURCHASED_PERKS,
+    MILESTONE_HISTORY,
+    SEASON_PROGRESS,
+    HISTORICAL_STATISTICS
+}

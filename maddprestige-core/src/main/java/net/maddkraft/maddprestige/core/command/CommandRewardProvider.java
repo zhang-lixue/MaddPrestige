@@ -10,6 +10,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.action.ActionCharacteristics;
 import net.maddkraft.maddprestige.api.action.ActionExecutionResult;
 import net.maddkraft.maddprestige.api.id.ProviderId;
@@ -146,7 +147,8 @@ public final class CommandRewardProvider implements RewardProvider {
 
     @Override
     public ProviderDescriptor descriptor() {
-        return new ProviderDescriptor(providerId, ownerIdentity, "phase3-foundation", "core-command-reward",
+        return new ProviderDescriptor(providerId, ownerIdentity, ProviderMetadataVersions.STABLE_API,
+                ProviderMetadataVersions.implementationVersion(CommandRewardProvider.class),
                 List.of(), List.of(new CapabilityDescriptor("command", "reward",
                         "Reviewed allowlisted console-command reward", Map.of(
                                 "default", "disabled", "idempotent", "false", "external-uncertainty", "true"))));

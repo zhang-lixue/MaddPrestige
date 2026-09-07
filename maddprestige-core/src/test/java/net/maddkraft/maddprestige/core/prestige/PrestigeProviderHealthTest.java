@@ -45,14 +45,14 @@ import net.maddkraft.maddprestige.api.result.StructuredError;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.command.CommandActionPolicy;
 import net.maddkraft.maddprestige.core.competition.CompetitionConfiguration;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
-import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfigurationSnapshot;
-import net.maddkraft.maddprestige.core.config.phase4.PrestigeConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PrestigeLimit;
-import net.maddkraft.maddprestige.core.config.phase4.ResetPreservePolicy;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfiguration;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.lifecycle.ActiveLifecycleConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.LifecycleConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.LifecycleConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.lifecycle.PrestigeConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.PrestigeLimit;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetPreservePolicy;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.rank.ReconciliationPolicy;
 import net.maddkraft.maddprestige.core.requirement.BaselineKey;
@@ -146,7 +146,7 @@ class PrestigeProviderHealthTest {
         Map<RequirementId, RequirementDefinition> definitions = boundary == null ? Map.of() : Map.of(BOUNDARY, boundary);
         Map<RequirementId, net.maddkraft.maddprestige.core.requirement.RequirementNode> trees = boundary == null
                 ? Map.of() : Map.of(BOUNDARY, new RequirementLeaf(boundary));
-        PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16, definitions, trees, Map.of(),
+        ProgressionConfiguration progression = new ProgressionConfiguration(3, 16, definitions, trees, Map.of(),
                 Map.of(), CommandActionPolicy.safeDefaults());
         StageDefinition origin = new StageDefinition(ORIGIN, true, "Origin", Map.of(), resetProjection);
         if (reachableBoundary) {
@@ -159,12 +159,12 @@ class PrestigeProviderHealthTest {
         PrestigeConfiguration prestige = new PrestigeConfiguration(true, Set.of(SUMMIT), ORIGIN, 1, 1,
                 PrestigeLimit.unlimited(), Duration.ZERO, Optional.empty(), List.of(), List.of(), Optional.empty(),
                 Optional.empty(), ResetPreservePolicy.safeDefaults(), false);
-        PhaseFourConfiguration phaseFour = new PhaseFourConfiguration(4, prestige, Map.of(), Map.of(), Map.of(),
+        LifecycleConfiguration lifecycle = new LifecycleConfiguration(4, prestige, Map.of(), Map.of(), Map.of(),
                 Map.of(), CompetitionConfiguration.disabled());
         ActiveStageConfiguration prior = new ActiveStageConfiguration(new StageConfigurationSnapshot(REVISION, stages),
-                new PhaseThreeConfigurationSnapshot(REVISION, phaseThree, pins));
-        ActivePhaseFourConfiguration active = new ActivePhaseFourConfiguration(prior,
-                new PhaseFourConfigurationSnapshot(REVISION, phaseFour, pins));
+                new ProgressionConfigurationSnapshot(REVISION, progression, pins));
+        ActiveLifecycleConfiguration active = new ActiveLifecycleConfiguration(prior,
+                new LifecycleConfigurationSnapshot(REVISION, lifecycle, pins));
         PlayerPrestigeState prestigeState = new PlayerPrestigeState(player, 0, 0, 0, REVISION,
                 new ScopeId("prestige-current"), Optional.empty(), NOW, NOW);
         return new PrestigeAuthorizationService(() -> Optional.of(active),

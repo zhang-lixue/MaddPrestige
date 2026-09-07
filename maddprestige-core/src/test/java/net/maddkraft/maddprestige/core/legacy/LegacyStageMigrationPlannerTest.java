@@ -45,7 +45,7 @@ class LegacyStageMigrationPlannerTest {
     }
 
     @Test
-    @DisplayName("[Phase 9A] Exact nested V1 config shape is detected without treating patrons as progression")
+    @DisplayName("Exact nested V1 config shape is detected without treating patrons as progression")
     void detectsNestedV1ConfigurationShape() {
         String source = """
                 integrations:

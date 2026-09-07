@@ -4,6 +4,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.provider.CapabilityDescriptor;
 import net.maddkraft.maddprestige.api.provider.DependencyDescriptor;
@@ -28,7 +29,7 @@ public final class CraftEngineProviderDescriptors {
     }
 
     static ProviderDescriptor descriptor(ProviderId id, String category, String detectedVersion) {
-        return new ProviderDescriptor(id, "maddprestige", "phase7", detectedVersion,
+        return new ProviderDescriptor(id, "maddprestige", ProviderMetadataVersions.STABLE_API, detectedVersion,
                 List.of(new DependencyDescriptor("CraftEngine", "[26.7.4,26.7.5)",
                         Optional.of(detectedVersion))),
                 List.of(new CapabilityDescriptor(id.value(), category,

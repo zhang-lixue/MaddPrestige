@@ -47,5 +47,4 @@ Production data, permissions, balance, and services were not changed by qualific
 - MySQL/MariaDB and shared-database operation: deferred beyond 2.0 and not a launch gate.
 - No known product, persistence, runtime, or implementation blocker remained at publication.
 
-Full historical evidence and phase-by-phase records are preserved by the release tag and Git history. See the
-[development archive index](archive/v2-development/README.md).
+Full historical evidence and development records remain available through the release tag, merged pull requests, and Git history.

@@ -8,7 +8,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import net.maddkraft.maddprestige.api.id.ScopeId;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
-import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.ActiveLifecycleConfiguration;
 import net.maddkraft.maddprestige.core.plan.RankUpProgressContext;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
 import net.maddkraft.maddprestige.core.prestige.PrestigeProgressContext;
@@ -45,9 +45,9 @@ final class AuthoritativeProgressContextFactory {
     PrestigeProgressContext prestige(
             UUID playerId,
             PlayerPrestigeState prestige,
-            ActivePhaseFourConfiguration active) {
+            ActiveLifecycleConfiguration active) {
         SeasonPosition season = seasonPosition(playerId);
-        return new PrestigeProgressContext(playerId, active.phaseFour().revisionId(), prestige.currentPrestige(),
+        return new PrestigeProgressContext(playerId, active.lifecycle().revisionId(), prestige.currentPrestige(),
                 season.catchUpPosition(), prestigeScopes(playerId, prestige, season.context()));
     }
 

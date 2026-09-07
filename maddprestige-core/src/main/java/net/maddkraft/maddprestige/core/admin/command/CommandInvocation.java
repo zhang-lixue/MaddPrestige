@@ -9,7 +9,7 @@ public record CommandInvocation(PermissionSubject subject, List<String> argument
         subject = Objects.requireNonNull(subject, "subject");
         arguments = List.copyOf(Objects.requireNonNull(arguments, "arguments"));
         if (arguments.size() > 64 || arguments.stream().anyMatch(value -> value.length() > 1024)) {
-            throw new IllegalArgumentException("Command input exceeds the bounded Phase 6 surface");
+            throw new IllegalArgumentException("Command input exceeds the bounded administration surface");
         }
     }
 }

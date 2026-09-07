@@ -22,15 +22,15 @@ import net.maddkraft.maddprestige.api.operation.OperationPlan;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.command.CommandActionPolicy;
 import net.maddkraft.maddprestige.core.competition.CompetitionConfiguration;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
-import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfigurationSnapshot;
-import net.maddkraft.maddprestige.core.config.phase4.PrestigeConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PrestigeLimit;
-import net.maddkraft.maddprestige.core.config.phase4.ResetComponent;
-import net.maddkraft.maddprestige.core.config.phase4.ResetPreservePolicy;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfiguration;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.lifecycle.ActiveLifecycleConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.LifecycleConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.LifecycleConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.lifecycle.PrestigeConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.PrestigeLimit;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetComponent;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetPreservePolicy;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.rank.ReconciliationPolicy;
 import net.maddkraft.maddprestige.core.requirement.BaselineKey;
@@ -51,7 +51,7 @@ import org.junit.jupiter.api.Test;
 
 class PrestigeAuthorizationServiceTest {
     private static final Instant NOW = Instant.parse("2026-08-15T12:00:00Z");
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase4-test");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("prestige-lifecycle-test");
     private static final StageId ORIGIN = new StageId("origin_stage");
     private static final StageId SUMMIT = new StageId("summit_stage");
 
@@ -209,17 +209,17 @@ class PrestigeAuthorizationServiceTest {
         StageDefinition summit = new StageDefinition(SUMMIT, true, "Summit", Map.of(), StageProjection.none());
         StageConfiguration stages = new StageConfiguration(2, true, Map.of(ORIGIN, origin, SUMMIT, summit),
                 List.of(ORIGIN, SUMMIT), Optional.of(ORIGIN), ReconciliationPolicy.WARN_ONLY);
-        PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16, Map.of(), Map.of(), Map.of(),
+        ProgressionConfiguration progression = new ProgressionConfiguration(3, 16, Map.of(), Map.of(), Map.of(),
                 Map.of(), CommandActionPolicy.safeDefaults());
         PrestigeConfiguration prestige = new PrestigeConfiguration(true, Set.of(requiredStage), resetStage, 1, 1,
                 limit, cooldown, Optional.empty(), List.of(), List.of(), Optional.empty(), Optional.empty(),
                 ResetPreservePolicy.safeDefaults(), false);
-        PhaseFourConfiguration phaseFour = new PhaseFourConfiguration(4, prestige, Map.of(), Map.of(), Map.of(),
+        LifecycleConfiguration lifecycle = new LifecycleConfiguration(4, prestige, Map.of(), Map.of(), Map.of(),
                 Map.of(), CompetitionConfiguration.disabled());
         ActiveStageConfiguration prior = new ActiveStageConfiguration(new StageConfigurationSnapshot(REVISION, stages),
-                new PhaseThreeConfigurationSnapshot(REVISION, phaseThree, Map.of()));
-        ActivePhaseFourConfiguration active = new ActivePhaseFourConfiguration(prior,
-                new PhaseFourConfigurationSnapshot(REVISION, phaseFour, Map.of()));
+                new ProgressionConfigurationSnapshot(REVISION, progression, Map.of()));
+        ActiveLifecycleConfiguration active = new ActiveLifecycleConfiguration(prior,
+                new LifecycleConfigurationSnapshot(REVISION, lifecycle, Map.of()));
         ProviderRegistry providers = new ProviderRegistry();
         RequirementStateReader requirementStates = new RequirementStateReader() {
             @Override

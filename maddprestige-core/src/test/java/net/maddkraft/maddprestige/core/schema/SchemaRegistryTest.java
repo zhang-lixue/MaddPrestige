@@ -15,7 +15,7 @@ class SchemaRegistryTest {
     @Test
     @DisplayName("[A38][A40] Schema fields expose permissions, risk, defaults, values, and sensitivity")
     void exposesRepresentativeMetadata() {
-        SchemaRegistry registry = PhaseOneSchema.create();
+        SchemaRegistry registry = FoundationSchema.create();
         SchemaNode quickShop = registry.find("integrations.quickshop.progression-income-weight").orElseThrow();
         assertEquals("0", quickShop.defaultValue().orElseThrow());
         assertEquals(RiskLevel.HIGH, quickShop.risk());
@@ -35,9 +35,9 @@ class SchemaRegistryTest {
     }
 
     @Test
-    @DisplayName("[Phase4-config] Canonical schema exposes lifecycle fields and safe feature defaults")
-    void exposesPhaseFourLifecycleSchema() {
-        SchemaRegistry registry = PhaseFourSchema.create();
+    @DisplayName("Canonical schema exposes lifecycle fields and safe feature defaults")
+    void exposesPrestigeLifecycleSchema() {
+        SchemaRegistry registry = PrestigeLifecycleSchema.create();
 
         assertEquals("false", registry.find("prestige.enabled").orElseThrow().defaultValue().orElseThrow());
         assertEquals("unlimited", registry.find("prestige.maximum").orElseThrow()
@@ -55,9 +55,9 @@ class SchemaRegistryTest {
     }
 
     @Test
-    @DisplayName("[Phase 9C] Numeric schema exposes compact scaling and inherited segment defaults")
+    @DisplayName("Numeric schema exposes compact scaling and inherited segment defaults")
     void exposesCompactScalingSchema() {
-        SchemaRegistry registry = PhaseSixSchema.create();
+        SchemaRegistry registry = ActiveConfigurationSchema.create();
 
         assertTrue(registry.resolve("requirements.requirements.play.scope").isPresent());
         assertTrue(registry.resolve("requirements.requirements.play.completion").isPresent());

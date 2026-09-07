@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
 
 class ManagedMembershipPolicyTest {
     @Test
-    @DisplayName("[A06][Phase1-hard-2] Only explicitly configured direct progression groups are mutable")
+    @DisplayName("[A06]Only explicitly configured direct progression groups are mutable")
     void isolatesManagedMemberships() {
         ManagedMembershipDelta delta = new ManagedMembershipPolicy().plan(
                 Set.of("member", "supporter", "staff", "temporary-event"),
@@ -24,7 +24,7 @@ class ManagedMembershipPolicyTest {
     }
 
     @Test
-    @DisplayName("[A05][Phase1-hard-1] Missing group is a structured error and catalog has no creation operation")
+    @DisplayName("[A05]Missing group is a structured error and catalog has no creation operation")
     void representsMissingGroupWithoutCreationApi() {
         ExternalGroupCatalog missing = group -> Result.success(false);
         var report = new RankProjectionValidator().validate("stages.veteran", ProjectionPolicy.GROUP,

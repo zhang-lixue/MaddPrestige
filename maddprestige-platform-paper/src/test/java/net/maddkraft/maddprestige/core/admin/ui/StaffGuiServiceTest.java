@@ -31,7 +31,7 @@ import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.OperationKind;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.config.GuidedConfigurationAdministration;
 import net.maddkraft.maddprestige.core.admin.config.GuidedMoneyConfigurationResult;
@@ -67,7 +67,7 @@ class StaffGuiServiceTest {
     private static final UUID OTHER_STAFF = UUID.fromString("22222222-2222-4222-8222-222222222222");
     private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
     private static final UUID OFFLINE_PLAYER = UUID.fromString("33333333-3333-4333-8333-333333333333");
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-b-read-only");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("staff-gui-read-only");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-01T12:00:00Z"), ZoneOffset.UTC);
     private final AtomicReference<Optional<ConfigRevisionId>> revision =
             new AtomicReference<>(Optional.of(REVISION));
@@ -87,10 +87,10 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff Dashboard is permission-filtered and entirely read-only")
+    @DisplayName("Staff Dashboard is permission-filtered and entirely read-only")
     void opensReadOnlyPermissionFilteredDashboard() {
-        GuiSessionView allowed = service.open(staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW));
+        GuiSessionView allowed = service.open(staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW));
 
         assertEquals(GuiAudience.STAFF, allowed.audience());
         assertEquals(GuiScreenKind.STAFF_DASHBOARD, allowed.screen());
@@ -121,18 +121,18 @@ class StaffGuiServiceTest {
         assertTrue(allowed.actions().stream().allMatch(action -> !action.mutating()));
         assertTrue(allowed.actions().stream().noneMatch(StaffGuiServiceTest::mutationAction));
 
-        GuiSessionView limited = service.open(staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI));
+        GuiSessionView limited = service.open(staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI));
         assertTrue(limited.actions().stream().noneMatch(action ->
                 action.kind() == GuiActionKind.STAFF_OPEN_PLAYERS));
         assertEquals("gui.item.staff.players.unavailable", itemAt(limited, 10).lore().getFirst().key());
         assertTrue(limited.actions().stream().anyMatch(action ->
                 action.kind() == GuiActionKind.STAFF_VIEW_CONFIGURATION));
         assertThrows(AdministrationException.class, () -> service.open(
-                staff(UUID.randomUUID(), PhaseSixPermissions.PLAYER_VIEW)));
+                staff(UUID.randomUUID(), AdministrationPermissions.PLAYER_VIEW)));
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Configuration uses level-first disclosure and stops at one sealed Money review")
+    @DisplayName("Configuration uses level-first disclosure and stops at one sealed Money review")
     void opensGuidedMoneyReviewWithoutApplyingConfiguration() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -141,8 +141,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of(new StaffPlayerIdentity(PLAYER, "TargetPlayer"))), revision::get,
                 historySource(List.of(), List.of()), healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -215,7 +215,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Reward editor reaches one concise sealed review without applying")
+    @DisplayName("Reward editor reaches one concise sealed review without applying")
     void opensGuidedRewardReviewWithoutApplyingConfiguration() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -224,8 +224,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of(new StaffPlayerIdentity(PLAYER, "TargetPlayer"))), revision::get,
                 historySource(List.of(), List.of()), healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -269,7 +269,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Requirements opens first click and reaches a sealed Total Skill Level review")
+    @DisplayName("Requirements opens first click and reaches a sealed Total Skill Level review")
     void opensGuidedTotalSkillLevelReviewWithoutApplyingConfiguration() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -278,8 +278,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -347,7 +347,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Complex requirement trees remain visible without guided mutation controls")
+    @DisplayName("Complex requirement trees remain visible without guided mutation controls")
     void keepsComplexRequirementTreesReadOnly() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub(true, true);
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -356,8 +356,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -378,7 +378,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Scaling opens first click and reaches a sealed Linear increment review")
+    @DisplayName("Scaling opens first click and reaches a sealed Linear increment review")
     void opensGuidedScalingReviewWithoutApplyingConfiguration() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -387,8 +387,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -452,7 +452,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Linear Base opens first click with prefill and reaches review without mutation")
+    @DisplayName("Linear Base opens first click with prefill and reaches review without mutation")
     void opensGuidedLinearBaseReviewOnFirstClick() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -461,8 +461,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -511,7 +511,7 @@ class StaffGuiServiceTest {
         assertEquals(0, guided.scalingConfirmCalls);
     }
     @Test
-    @DisplayName("[Phase 9F-C2] Prestige Override edit and structural removal reach sealed reviews on first click")
+    @DisplayName("Prestige Override edit and structural removal reach sealed reviews on first click")
     void opensPrestigeOverrideEditAndRemovalReviewsWithoutApplyingConfiguration() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -520,10 +520,10 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
-        PermissionSubject other = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.CONFIG_VIEW, PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
+        PermissionSubject other = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.CONFIG_VIEW, AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -620,7 +620,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Inherited Override keeps its stable slot and opens Add Override on first click")
+    @DisplayName("Inherited Override keeps its stable slot and opens Add Override on first click")
     void inheritedOverrideRemainsVisibleAndOpensCanonicalAddReview() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub(false, false);
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -629,8 +629,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -683,7 +683,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Complex Scaling does not expose unsupported Override mutation controls")
+    @DisplayName("Complex Scaling does not expose unsupported Override mutation controls")
     void complexOverrideRemainsReadOnly() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub(true, true);
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -692,8 +692,8 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -711,7 +711,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Numeric input is actor/revision-bound, cancelable, replaceable, and retryable")
+    @DisplayName("Numeric input is actor/revision-bound, cancelable, replaceable, and retryable")
     void numericInputPreservesSessionAndRevisionSafety() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -720,10 +720,10 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()),
                 healthyStatus(), null, guided);
-        PermissionSubject editor = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW,
-                PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
-        PermissionSubject other = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.CONFIG_VIEW, PhaseSixPermissions.CONFIG_EDIT, PhaseSixPermissions.CONFIG_APPLY);
+        PermissionSubject editor = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW,
+                AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
+        PermissionSubject other = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.CONFIG_VIEW, AdministrationPermissions.CONFIG_EDIT, AdministrationPermissions.CONFIG_APPLY);
 
         GuiSessionView configuration = click(route, editor, route.open(editor),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -769,7 +769,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Guided mutation controls require distinct edit and apply authority")
+    @DisplayName("Guided mutation controls require distinct edit and apply authority")
     void hidesGuidedMoneyMutationWithoutBothPermissions() {
         GuidedConfigurationStub guided = new GuidedConfigurationStub();
         GuiSessionService sessions = new GuiSessionService(revision::get,
@@ -778,7 +778,7 @@ class StaffGuiServiceTest {
         StaffGuiService route = new StaffGuiService(sessions, progress,
                 directory(List.of()), revision::get, historySource(List.of(), List.of()), healthyStatus(), null,
                 guided);
-        PermissionSubject viewer = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.CONFIG_VIEW);
+        PermissionSubject viewer = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.CONFIG_VIEW);
 
         GuiSessionView configuration = click(route, viewer, route.open(viewer),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -794,7 +794,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] History renders canonical activity, empty state, paging, Back, and Close")
+    @DisplayName("History renders canonical activity, empty state, paging, Back, and Close")
     void rendersPagedAndEmptyHistoryWithoutInternalOperationDetails() {
         List<StaffHistorySource.Entry> entries = java.util.stream.IntStream.range(0, 8)
                 .mapToObj(index -> historyEntry(
@@ -814,8 +814,8 @@ class StaffGuiServiceTest {
                     page, offset > 0, last < entries.size()));
         };
         StaffGuiService route = service(source, healthyStatus());
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView dashboard = route.open(subject);
         GuiSessionView first = click(route, subject, dashboard, GuiActionKind.STAFF_VIEW_HISTORY);
@@ -857,7 +857,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Player History is selected-player filtered, paged, and actor-bound")
+    @DisplayName("Player History is selected-player filtered, paged, and actor-bound")
     void rendersSelectedPlayerHistoryWithFirstClickNavigationAndExplicitEmptyState() {
         OperationPreview preview = preview();
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
@@ -895,14 +895,14 @@ class StaffGuiServiceTest {
             }
         };
         StaffGuiService route = service(source, healthyStatus());
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView selection = onlinePlayers(route, subject, route.open(subject));
         GuiSessionView overview = click(route, subject, selection, GuiActionKind.STAFF_SELECT_PLAYER);
         GuiAction historyAction = action(overview, GuiActionKind.STAFF_VIEW_PLAYER_HISTORY);
-        PermissionSubject other = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject other = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
         AdministrationException mismatch = assertThrows(AdministrationException.class,
                 () -> route.click(other, overview.sessionId(), historyAction.actionId()));
         assertEquals("gui.session.actor_mismatch", mismatch.code());
@@ -966,7 +966,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] System Status renders healthy/unavailable truth and stable paging")
+    @DisplayName("System Status renders healthy/unavailable truth and stable paging")
     void rendersSystemHealthAndUnavailableStates() {
         List<StaffSystemStatusSource.Component> components = java.util.stream.IntStream.range(0, 8)
                 .mapToObj(index -> new StaffSystemStatusSource.Component(
@@ -981,8 +981,8 @@ class StaffGuiServiceTest {
         StaffSystemStatusSource source = status(summary, components);
         StaffGuiService route = service((offset, limit) -> CompletableFuture.completedFuture(
                 new StaffHistorySource.Page(List.of(), offset > 0, false)), source);
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView dashboard = route.open(subject);
         assertEquals("gui.action.staff.system_status.warning", itemAt(dashboard, 16).title().key());
@@ -1030,26 +1030,26 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Admin completion is visible only to authorized in-game staff")
+    @DisplayName("Admin completion is visible only to authorized in-game staff")
     void completesAdminRouteOnlyForAuthorizedPlayer() {
         CommandCompletionService completion = new CommandCompletionService();
 
-        assertTrue(completion.suggest(staff(STAFF, PhaseSixPermissions.ADMIN_GUI), List.of(""))
+        assertTrue(completion.suggest(staff(STAFF, AdministrationPermissions.ADMIN_GUI), List.of(""))
                 .contains("admin"));
-        assertFalse(completion.suggest(staff(STAFF, PhaseSixPermissions.PLAYER_VIEW), List.of(""))
+        assertFalse(completion.suggest(staff(STAFF, AdministrationPermissions.PLAYER_VIEW), List.of(""))
                 .contains("admin"));
         PermissionSubject console = new PermissionSubject(new Actor("console", Optional.empty(), "Console"),
-                Set.of(PhaseSixPermissions.ADMIN_GUI));
+                Set.of(AdministrationPermissions.ADMIN_GUI));
         assertFalse(completion.suggest(console, List.of("")).contains("admin"));
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Dashboard navigates through online selection, canonical overview, and requirements")
+    @DisplayName("Dashboard navigates through online selection, canonical overview, and requirements")
     void navigatesFirstReadOnlyOwnerReviewMilestone() {
         OperationPreview preview = preview();
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
                 new PlayerProgressView(PLAYER, preview)));
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView configuration = click(subject, service.open(subject),
                 GuiActionKind.STAFF_VIEW_CONFIGURATION);
@@ -1163,7 +1163,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Known offline players resolve explicitly into read-only canonical views")
+    @DisplayName("Known offline players resolve explicitly into read-only canonical views")
     void findsKnownOfflinePlayerWithoutFabricatingLiveProviderState() {
         StaffPlayerDirectory directory = directory(List.of(
                 new StaffPlayerIdentity(PLAYER, "FixturePlayer", true),
@@ -1176,10 +1176,10 @@ class StaffGuiServiceTest {
         StaffHistorySource.Entry persisted = historyEntry("KnownPlayer", 2, 3,
                 StaffHistorySource.Outcome.COMPLETED, true, true, CLOCK.instant());
         StaffGuiService route = service(directory, historySource(List.of(), List.of(persisted)), healthyStatus());
-        PermissionSubject owner = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
-        PermissionSubject other = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject owner = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
+        PermissionSubject other = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView management = click(route, owner, route.open(owner), GuiActionKind.STAFF_OPEN_PLAYERS);
         assertEquals(GuiScreenKind.STAFF_PLAYER_MANAGEMENT, management.screen());
@@ -1240,15 +1240,15 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Partial known-player searches expose candidates without ambiguous auto-selection")
+    @DisplayName("Partial known-player searches expose candidates without ambiguous auto-selection")
     void keepsPartialAndAmbiguousKnownPlayerMatchesExplicit() {
         StaffPlayerDirectory directory = directory(List.of(
                 new StaffPlayerIdentity(OFFLINE_PLAYER, "AlexOne", false),
                 new StaffPlayerIdentity(UUID.fromString("44444444-4444-4444-8444-444444444444"),
                         "AlexTwo", false)));
         StaffGuiService route = service(directory, historySource(List.of(), List.of()), healthyStatus());
-        PermissionSubject owner = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject owner = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView results = route.findPlayers(owner, "alex");
 
@@ -1283,7 +1283,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Server-known offline identity without Prestige state remains inspectable")
+    @DisplayName("Server-known offline identity without Prestige state remains inspectable")
     void rendersTruthfulReadOnlyOverviewWhenCanonicalPrestigeStateIsAbsent() {
         StaffPlayerDirectory directory = directory(List.of(
                 new StaffPlayerIdentity(OFFLINE_PLAYER, "KnownPlayer", false)));
@@ -1294,8 +1294,8 @@ class StaffGuiServiceTest {
         when(progress.inspect(any(), eq(OFFLINE_PLAYER))).thenReturn(
                 CompletableFuture.failedFuture(missingState));
         StaffGuiService route = service(directory, historySource(List.of(), List.of()), healthyStatus());
-        PermissionSubject owner = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject owner = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView results = route.findPlayers(owner, OFFLINE_PLAYER.toString());
         GuiSessionView overview = click(route, owner, results,
@@ -1321,15 +1321,15 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Selected-player Preview renders canonical Why data and refreshes read-only")
+    @DisplayName("Selected-player Preview renders canonical Why data and refreshes read-only")
     void rendersSelectedPlayerPrestigePreviewWithBoundFirstClickNavigation() {
         AtomicReference<OperationPreview> current = new AtomicReference<>(preview());
         when(progress.inspect(any(), eq(PLAYER))).thenAnswer(invocation ->
                 CompletableFuture.completedFuture(new PlayerProgressView(PLAYER, current.get())));
-        PermissionSubject owner = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
-        PermissionSubject other = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject owner = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
+        PermissionSubject other = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView selection = onlinePlayers(owner, service.open(owner));
         GuiSessionView overview = click(owner, selection, GuiActionKind.STAFF_SELECT_PLAYER);
@@ -1394,7 +1394,7 @@ class StaffGuiServiceTest {
         AdministrationException forged = assertThrows(AdministrationException.class,
                 () -> service.click(owner, blocked.sessionId(), UUID.randomUUID()));
         assertEquals("gui.action.forged", forged.code());
-        revision.set(Optional.of(new ConfigRevisionId("phase9f-b-preview-stale")));
+        revision.set(Optional.of(new ConfigRevisionId("staff-gui-preview-stale")));
         AdministrationException stale = assertThrows(AdministrationException.class,
                 () -> service.click(owner, blocked.sessionId(), refresh.actionId()));
         assertEquals("gui.action.stale", stale.code());
@@ -1426,13 +1426,13 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff Preview shows truthful unavailable balance without reconstruction")
+    @DisplayName("Staff Preview shows truthful unavailable balance without reconstruction")
     void staffPrestigePreviewDoesNotInventUnavailableBalanceProjection() {
         OperationPreview unavailable = withoutBalanceProjection(preview());
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
                 new PlayerProgressView(PLAYER, unavailable)));
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView selection = onlinePlayers(subject, service.open(subject));
         GuiSessionView overview = click(subject, selection, GuiActionKind.STAFF_SELECT_PLAYER);
@@ -1449,13 +1449,13 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff Preview shows only current balance when canonical shortfall is unavailable")
+    @DisplayName("Staff Preview shows only current balance when canonical shortfall is unavailable")
     void staffPrestigePreviewDoesNotInventUnavailableShortfall() {
         OperationPreview noShortfall = withoutBalanceShortfall(preview());
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
                 new PlayerProgressView(PLAYER, noShortfall)));
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView selection = onlinePlayers(subject, service.open(subject));
         GuiSessionView overview = click(subject, selection, GuiActionKind.STAFF_SELECT_PLAYER);
@@ -1470,7 +1470,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Requirements use stable server-owned paging without truncating canonical leaves")
+    @DisplayName("Requirements use stable server-owned paging without truncating canonical leaves")
     void paginatesLargerCanonicalRequirementSets() {
         List<ExplanationNode> leaves = java.util.stream.IntStream.rangeClosed(1, 8)
                 .mapToObj(index -> leaf("metric_" + index, Integer.toString(index), Integer.toString(index),
@@ -1478,7 +1478,7 @@ class StaffGuiServiceTest {
                 .toList();
         when(progress.inspect(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(
                 new PlayerProgressView(PLAYER, preview(leaves, true))));
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView selection = onlinePlayers(subject, service.open(subject));
         GuiSessionView overview = click(subject, selection, GuiActionKind.STAFF_SELECT_PLAYER);
@@ -1496,11 +1496,11 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff sessions reject cross-actor, forged, replayed, stale, and logout authority")
+    @DisplayName("Staff sessions reject cross-actor, forged, replayed, stale, and logout authority")
     void preservesActorBoundSingleUseRevisionAwareAuthority() {
-        PermissionSubject owner = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW);
-        PermissionSubject other = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject owner = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW);
+        PermissionSubject other = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
         GuiSessionView dashboard = service.open(owner);
         GuiAction players = action(dashboard, GuiActionKind.STAFF_OPEN_PLAYERS);
 
@@ -1518,7 +1518,7 @@ class StaffGuiServiceTest {
         assertEquals("gui.session.expired", replay.code());
 
         GuiAction onlinePlayers = action(management, GuiActionKind.STAFF_OPEN_ONLINE_PLAYERS);
-        revision.set(Optional.of(new ConfigRevisionId("phase9f-b-changed")));
+        revision.set(Optional.of(new ConfigRevisionId("staff-gui-changed")));
         AdministrationException stale = assertThrows(AdministrationException.class,
                 () -> service.click(owner, management.sessionId(), onlinePlayers.actionId()));
         assertEquals("gui.action.stale", stale.code());
@@ -1533,9 +1533,9 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Empty online selector remains explicit without a fabricated player")
+    @DisplayName("Empty online selector remains explicit without a fabricated player")
     void emptyOnlineSelectionRemainsTruthful() {
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW);
         GuiSessionView dashboard = service.open(subject);
         GuiSessionView selection = onlinePlayers(subject, dashboard);
         StaffGuiService disconnected = new StaffGuiService(new GuiSessionService(revision::get,
@@ -1558,7 +1558,7 @@ class StaffGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff Preview preserves identity across online and offline refreshes")
+    @DisplayName("Staff Preview preserves identity across online and offline refreshes")
     void staffPrestigePreviewRefreshTracksOnlineStateWithoutLosingSelection() {
         AtomicReference<List<StaffPlayerIdentity>> known = new AtomicReference<>(
                 List.of(new StaffPlayerIdentity(PLAYER, "FixturePlayer")));
@@ -1579,8 +1579,8 @@ class StaffGuiServiceTest {
                 (ignoredSubject, ignoredAction) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
                 mock(GuiConfigurationAuthority.class), Duration.ofMinutes(5), CLOCK), progress,
                 directory, revision::get, historySource(List.of(), List.of()), healthyStatus());
-        PermissionSubject subject = staff(STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject subject = staff(STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
 
         GuiSessionView selection = onlinePlayers(route, subject, route.open(subject));
         GuiSessionView overview = click(route, subject, selection, GuiActionKind.STAFF_SELECT_PLAYER);

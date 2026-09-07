@@ -6,7 +6,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationResult;
 import net.maddkraft.maddprestige.core.plan.RankUpIntent;
 import net.maddkraft.maddprestige.core.prestige.PrestigeAuthorizationResult;
@@ -49,9 +49,9 @@ public final class WhyService {
 
     private static void requireView(PermissionSubject subject, UUID playerId) {
         if (subject.actor().uuid().filter(playerId::equals).isPresent()) {
-            subject.require(PhaseSixPermissions.USE);
+            subject.require(AdministrationPermissions.USE);
         } else {
-            subject.require(PhaseSixPermissions.PLAYER_VIEW);
+            subject.require(AdministrationPermissions.PLAYER_VIEW);
         }
     }
 }

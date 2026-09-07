@@ -10,9 +10,9 @@ import org.jetbrains.annotations.NotNull;
 
 /** Player root ingress that opens the canonical GUI without exposing the advanced command namespace. */
 public final class PaperPlayerGuiCommandAdapter implements CommandExecutor, TabCompleter {
-    private final PaperPhaseSixCommandAdapter delegate;
+    private final PaperAdministrationCommandAdapter delegate;
 
-    public PaperPlayerGuiCommandAdapter(PaperPhaseSixCommandAdapter delegate) {
+    public PaperPlayerGuiCommandAdapter(PaperAdministrationCommandAdapter delegate) {
         this.delegate = Objects.requireNonNull(delegate, "command delegate");
     }
 

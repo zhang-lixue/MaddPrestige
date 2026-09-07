@@ -32,7 +32,7 @@ class StartupConfigurationLoaderTest {
     Path temporaryDirectory;
 
     @Test
-    @DisplayName("[Phase 9E] Production administration exposes only reachable numeric configuration")
+    @DisplayName("Production administration exposes only reachable numeric configuration")
     void productionSchemaContainsReachableNumericConfigurationOnly() {
         var schema = ProductionRuntime.productionSchema();
         assertTrue(schema.resolve("integrations.placeholderapi.output.enabled").isPresent());
@@ -45,10 +45,10 @@ class StartupConfigurationLoaderTest {
         }
         assertFalse(schema.resolve("milestones.*.trigger").orElseThrow()
                 .allowedValues().staticValues().contains("STAGE_REACHED"));
-        assertTrue(ProductionRuntime.providerLifecycleRelated(List.of("phase3.provider.unavailable")));
+        assertTrue(ProductionRuntime.providerLifecycleRelated(List.of("progression.configuration.provider.unavailable")));
         assertTrue(ProductionRuntime.providerLifecycleRelated(List.of(
                 "requirement.value_type.required", "requirement.reference.unknown", "requirement.group.empty")));
-        assertFalse(ProductionRuntime.providerLifecycleRelated(List.of("phase3.provider.unavailable",
+        assertFalse(ProductionRuntime.providerLifecycleRelated(List.of("progression.configuration.provider.unavailable",
                 "progression.invalid")));
         assertFalse(ProductionRuntime.providerLifecycleRelated(List.of("requirement.group.empty")));
     }

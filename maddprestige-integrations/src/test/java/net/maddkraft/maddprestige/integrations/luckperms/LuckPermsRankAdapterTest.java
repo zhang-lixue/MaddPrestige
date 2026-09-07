@@ -52,7 +52,7 @@ class LuckPermsRankAdapterTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-15T00:00:00Z"), ZoneOffset.UTC);
 
     @Test
-    @DisplayName("[Phase 9B] Permission and existing-group rewards are additive and never create groups")
+    @DisplayName("Permission and existing-group rewards are additive and never create groups")
     void additiveRewardsPreserveEveryUnrelatedNodeAndNeverCreateGroups() {
         Node unrelatedPermission = permission("unrelated.permission");
         Harness harness = new Harness(true, Set.of("configured_reward_group"),
@@ -82,7 +82,7 @@ class LuckPermsRankAdapterTest {
     }
 
     @Test
-    @DisplayName("[Phase 9B] Missing configured group reward fails preflight and is never created")
+    @DisplayName("Missing configured group reward fails preflight and is never created")
     void missingRewardGroupFailsClosedWithoutCreation() {
         Harness harness = new Harness(false, Set.of(), List.of(group("supporter")));
         var preflight = harness.rewardProvider(() -> true)

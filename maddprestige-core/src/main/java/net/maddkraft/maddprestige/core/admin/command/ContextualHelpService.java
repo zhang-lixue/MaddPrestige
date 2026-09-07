@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.schema.SchemaNode;
 import net.maddkraft.maddprestige.core.schema.SchemaRegistry;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
@@ -17,7 +17,7 @@ public final class ContextualHelpService {
     }
 
     public List<MessageReference> help(PermissionSubject subject, String topic) {
-        subject.require(PhaseSixPermissions.USE);
+        subject.require(AdministrationPermissions.USE);
         String normalized = Objects.requireNonNull(topic, "topic").toLowerCase(Locale.ROOT);
         if (normalized.equals("overview")) {
             return List.of(MessageReference.of("command.help.overview.title"),

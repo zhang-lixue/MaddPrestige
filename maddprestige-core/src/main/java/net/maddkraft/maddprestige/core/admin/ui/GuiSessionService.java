@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationApplyKind;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 
@@ -46,33 +46,33 @@ public final class GuiSessionService implements AutoCloseable {
     public GuiSessionView openPlayer(PermissionSubject subject, UUID playerId) {
         boolean self = subject.actor().uuid().filter(playerId::equals).isPresent();
         if (self) {
-            subject.require(PhaseSixPermissions.USE);
+            subject.require(AdministrationPermissions.USE);
         } else {
-            subject.require(PhaseSixPermissions.PLAYER_VIEW);
+            subject.require(AdministrationPermissions.PLAYER_VIEW);
         }
         Optional<ConfigRevisionId> revision = activeRevision.get();
         java.util.ArrayList<GuiAction> actions = new java.util.ArrayList<>();
-        addIfPermitted(actions, subject, GuiActionKind.VIEW_PROGRESS, m("gui.action.view_progress"), self ? PhaseSixPermissions.USE
-                : PhaseSixPermissions.PLAYER_VIEW, false, revision, playerId, Optional.empty());
+        addIfPermitted(actions, subject, GuiActionKind.VIEW_PROGRESS, m("gui.action.view_progress"), self ? AdministrationPermissions.USE
+                : AdministrationPermissions.PLAYER_VIEW, false, revision, playerId, Optional.empty());
         addIfPermitted(actions, subject, GuiActionKind.SIMULATE_PRESTIGE, m("gui.action.simulate_prestige"),
-                self ? PhaseSixPermissions.PRESTIGE : PhaseSixPermissions.SIMULATE, false, revision, playerId,
+                self ? AdministrationPermissions.PRESTIGE : AdministrationPermissions.SIMULATE, false, revision, playerId,
                 Optional.empty());
         addIfPermitted(actions, subject, GuiActionKind.PREPARE_PRESTIGE, m("gui.action.prepare_prestige"),
-                self ? PhaseSixPermissions.PRESTIGE : PhaseSixPermissions.EXECUTE, false, revision, playerId,
+                self ? AdministrationPermissions.PRESTIGE : AdministrationPermissions.EXECUTE, false, revision, playerId,
                 Optional.empty());
         return store(subject, GuiAudience.PLAYER, m("gui.title.progress"), actions);
     }
 
     public GuiSessionView openStaff(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         Optional<ConfigRevisionId> revision = activeRevision.get();
         java.util.ArrayList<GuiAction> actions = new java.util.ArrayList<>();
-        if (subject.has(PhaseSixPermissions.CONFIG_VIEW)) {
+        if (subject.has(AdministrationPermissions.CONFIG_VIEW)) {
             actions.add(action(GuiActionKind.VIEW_CONFIGURATION, m("gui.action.view_configuration"),
-                    PhaseSixPermissions.CONFIG_VIEW, false, revision, null));
+                    AdministrationPermissions.CONFIG_VIEW, false, revision, null));
         }
-        if (subject.has(PhaseSixPermissions.DOCTOR)) {
-            actions.add(action(GuiActionKind.VIEW_DOCTOR, m("gui.action.view_doctor"), PhaseSixPermissions.DOCTOR,
+        if (subject.has(AdministrationPermissions.DOCTOR)) {
+            actions.add(action(GuiActionKind.VIEW_DOCTOR, m("gui.action.view_doctor"), AdministrationPermissions.DOCTOR,
                     false, revision, null));
         }
         return store(subject, GuiAudience.STAFF, m("gui.title.control_panel"), actions);
@@ -83,12 +83,12 @@ public final class GuiSessionService implements AutoCloseable {
             UUID draftId,
             String path,
             String value) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         GuiMutationContext context = context(draftId, path, value, null);
         return mutationSession(subject, m("gui.title.edit_scalar", "path", path), GuiActionKind.EDIT_CONFIGURATION,
                 m("gui.action.set_value"),
-                PhaseSixPermissions.CONFIG_EDIT, context, null, null);
+                AdministrationPermissions.CONFIG_EDIT, context, null, null);
     }
 
     public GuiSessionView openListValueEditor(
@@ -97,12 +97,12 @@ public final class GuiSessionService implements AutoCloseable {
             String path,
             String value,
             boolean add) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
         GuiMutationContext context = context(draftId, path, value, null);
         return mutationSession(subject, m("gui.title.edit_list", "path", path),
                 add ? GuiActionKind.ADD_CONFIGURATION_VALUE : GuiActionKind.REMOVE_CONFIGURATION_VALUE,
-                m(add ? "gui.action.add_value" : "gui.action.remove_value"), PhaseSixPermissions.CONFIG_EDIT,
+                m(add ? "gui.action.add_value" : "gui.action.remove_value"), AdministrationPermissions.CONFIG_EDIT,
                 context, null, null);
     }
 
@@ -117,10 +117,10 @@ public final class GuiSessionService implements AutoCloseable {
     }
 
     public GuiSessionView openDraftPreview(PermissionSubject subject, UUID draftId) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         return mutationSession(subject, m("gui.title.preview_configuration"), GuiActionKind.PREVIEW_CONFIGURATION,
-                m("gui.action.validate_draft"), PhaseSixPermissions.CONFIG_VIEW, GuiMutationContext.draft(draftId), null,
+                m("gui.action.validate_draft"), AdministrationPermissions.CONFIG_VIEW, GuiMutationContext.draft(draftId), null,
                 null);
     }
 
@@ -128,7 +128,7 @@ public final class GuiSessionService implements AutoCloseable {
             PermissionSubject subject,
             UUID draftId,
             String reason) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
         String permission = permission(kind);
         subject.require(permission);
@@ -149,7 +149,7 @@ public final class GuiSessionService implements AutoCloseable {
     public GuiSessionView openAcknowledgement(
             PermissionSubject subject,
             UUID draftId) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         ConfigurationApplyKind kind = configurationAuthority.draftKind(subject, draftId);
         String permission = permission(kind);
         subject.require(permission);
@@ -162,7 +162,7 @@ public final class GuiSessionService implements AutoCloseable {
             PermissionSubject subject,
             UUID acknowledgementId,
             String reason) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         ConfigurationApplyKind kind = configurationAuthority.acknowledgementKind(subject, acknowledgementId);
         String permission = permission(kind);
         subject.require(permission);
@@ -177,12 +177,12 @@ public final class GuiSessionService implements AutoCloseable {
     public GuiSessionView openRollbackSelector(
             PermissionSubject subject,
             ConfigRevisionId targetRevision) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
-        subject.require(PhaseSixPermissions.CONFIG_ROLLBACK);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.CONFIG_ROLLBACK);
         GuiMutationContext context = new GuiMutationContext(Optional.empty(), Optional.empty(), Optional.empty(),
                 Optional.empty(), Optional.empty(), Optional.of(targetRevision), Optional.empty(), Optional.empty());
         return mutationSession(subject, m("gui.title.prepare_rollback"), GuiActionKind.ROLLBACK_CONFIGURATION,
-                m("gui.action.create_rollback", "revision", targetRevision.value()), PhaseSixPermissions.CONFIG_ROLLBACK,
+                m("gui.action.create_rollback", "revision", targetRevision.value()), AdministrationPermissions.CONFIG_ROLLBACK,
                 context, null, null);
     }
 
@@ -262,7 +262,7 @@ public final class GuiSessionService implements AutoCloseable {
             GuiScreenKind screen,
             int inventorySize,
             List<GuiDisplayItem> items) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         return store(subject, GuiAudience.STAFF, title, actions, screen, inventorySize, items);
     }
 
@@ -273,7 +273,7 @@ public final class GuiSessionService implements AutoCloseable {
             GuiScreenKind screen,
             List<GuiDisplayItem> items,
             GuiTextInput textInput) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         return store(subject, GuiAudience.STAFF, title, actions, screen, 9, items,
                 Optional.of(Objects.requireNonNull(textInput, "text input")));
     }
@@ -420,7 +420,7 @@ public final class GuiSessionService implements AutoCloseable {
 
     private static void requirePlayerAccess(PermissionSubject subject, UUID playerId) {
         boolean self = subject.actor().uuid().filter(playerId::equals).isPresent();
-        subject.require(self ? PhaseSixPermissions.USE : PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(self ? AdministrationPermissions.USE : AdministrationPermissions.PLAYER_VIEW);
     }
 
     private static GuiAction action(
@@ -457,9 +457,9 @@ public final class GuiSessionService implements AutoCloseable {
 
     private static String permission(ConfigurationApplyKind kind) {
         return switch (kind) {
-            case NORMAL -> PhaseSixPermissions.CONFIG_APPLY;
-            case ROLLBACK -> PhaseSixPermissions.CONFIG_ROLLBACK;
-            case SETUP -> PhaseSixPermissions.SETUP;
+            case NORMAL -> AdministrationPermissions.CONFIG_APPLY;
+            case ROLLBACK -> AdministrationPermissions.CONFIG_ROLLBACK;
+            case SETUP -> AdministrationPermissions.SETUP;
         };
     }
 

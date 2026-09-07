@@ -20,7 +20,7 @@ public final class MutableProviderHealth {
         return current.get();
     }
 
-    /** Phase 3/4 canonical usability rule: only AVAILABLE and ACTIVE are healthy. */
+    /** provider-backed progression/4 canonical usability rule: only AVAILABLE and ACTIVE are healthy. */
     public boolean isUsable() {
         ProviderHealthState state = current.get().state();
         return state == ProviderHealthState.AVAILABLE || state == ProviderHealthState.ACTIVE;

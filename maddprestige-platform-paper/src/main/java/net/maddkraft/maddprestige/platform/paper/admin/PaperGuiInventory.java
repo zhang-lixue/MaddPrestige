@@ -26,7 +26,7 @@ public final class PaperGuiInventory implements PaperGuiViewHolder {
     private final Inventory inventory;
 
     public PaperGuiInventory(GuiSessionView view, PaperMessageService messages) {
-        PaperThreadGuard.requireServerThread("Create Phase 6 GUI");
+        PaperThreadGuard.requireServerThread("Create MaddPrestige GUI");
         java.util.Objects.requireNonNull(messages, "messages");
         sessionId = view.sessionId();
         audience = view.audience();

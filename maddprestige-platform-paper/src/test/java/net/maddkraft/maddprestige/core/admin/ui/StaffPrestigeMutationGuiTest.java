@@ -34,7 +34,7 @@ import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentPolicy;
 import net.maddkraft.maddprestige.core.admin.OperationKind;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.PrestigeAdministrationStore;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressView;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
@@ -48,7 +48,7 @@ class StaffPrestigeMutationGuiTest {
     private static final UUID STAFF = UUID.fromString("11111111-1111-4111-8111-111111111111");
     private static final UUID OTHER_STAFF = UUID.fromString("22222222-2222-4222-8222-222222222222");
     private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-c1");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("prestige-administration");
     private static final Instant NOW = Instant.parse("2026-09-03T12:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
 
@@ -64,10 +64,10 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Manage Player and Set/Reset reviews are permission-filtered and first-click safe")
+    @DisplayName("Manage Player and Set/Reset reviews are permission-filtered and first-click safe")
     void rendersPermissionAwareManagementAndReviewScreens() {
-        PermissionSubject owner = staff(STAFF, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW,
-                PhaseSixPermissions.PLAYER_PRESTIGE_SET, PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        PermissionSubject owner = staff(STAFF, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW,
+                AdministrationPermissions.PLAYER_PRESTIGE_SET, AdministrationPermissions.PLAYER_PRESTIGE_RESET);
 
         GuiSessionView overview = overview(service, owner);
         assertEquals(GuiItemIcon.REFRESH, itemAt(overview, 0).icon());
@@ -104,13 +104,13 @@ class StaffPrestigeMutationGuiTest {
                 GuiActionKind.STAFF_REVIEW_PRESTIGE_RESET);
         assertReview(resetReview, ManualPrestigeAdjustmentKind.RESET, 6, 0);
 
-        PermissionSubject reader = staff(OTHER_STAFF, PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW);
+        PermissionSubject reader = staff(OTHER_STAFF, AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW);
         assertTrue(overview(service, reader).actions().stream().noneMatch(action ->
                 action.kind() == GuiActionKind.STAFF_MANAGE_PLAYER));
 
-        PermissionSubject setter = staff(UUID.randomUUID(), PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW, PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        PermissionSubject setter = staff(UUID.randomUUID(), AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW, AdministrationPermissions.PLAYER_PRESTIGE_SET);
         GuiSessionView setManagement = click(service, setter, overview(service, setter),
                 GuiActionKind.STAFF_MANAGE_PLAYER);
         assertTrue(setManagement.actions().stream().anyMatch(action ->
@@ -130,8 +130,8 @@ class StaffPrestigeMutationGuiTest {
                 submit.actionId(), "20").toCompletableFuture().join().nextView().orElseThrow();
         assertReview(largeTargetReview, ManualPrestigeAdjustmentKind.SET, 6, 20);
 
-        PermissionSubject resetter = staff(UUID.randomUUID(), PhaseSixPermissions.ADMIN_GUI,
-                PhaseSixPermissions.PLAYER_VIEW, PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        PermissionSubject resetter = staff(UUID.randomUUID(), AdministrationPermissions.ADMIN_GUI,
+                AdministrationPermissions.PLAYER_VIEW, AdministrationPermissions.PLAYER_PRESTIGE_RESET);
         GuiSessionView resetOnly = click(service, resetter, overview(service, resetter),
                 GuiActionKind.STAFF_MANAGE_PLAYER);
         assertTrue(resetOnly.actions().stream().noneMatch(action ->
@@ -141,7 +141,7 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-D] Set Prestige typed input rejects non-canonical and no-op values without consuming")
+    @DisplayName("Set Prestige typed input rejects non-canonical and no-op values without consuming")
     void setPrestigeTypedInputValidatesBeforeReviewWithoutPagination() {
         PermissionSubject owner = owner(STAFF);
         GuiSessionView management = click(service, owner, overview(service, owner),
@@ -166,7 +166,7 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-D] Reset at baseline remains visible and returns a concise no-op without review or write")
+    @DisplayName("Reset at baseline remains visible and returns a concise no-op without review or write")
     void resetAtBaselineIsFriendlyNoOpWithoutReviewOrWrite() {
         store.state.set(state(0, 9));
         PermissionSubject owner = owner(STAFF);
@@ -204,7 +204,7 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Set commits one mirrored numeric state and one server-owned authority")
+    @DisplayName("Set commits one mirrored numeric state and one server-owned authority")
     void setPrestigeCommitsExactlyOnceAndRejectsReplay() {
         PermissionSubject owner = owner(STAFF);
         GuiSessionView review = setReview(service, owner, 8);
@@ -228,7 +228,7 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Stale, forged, cross-staff, logout, and identity-loss authority fails closed")
+    @DisplayName("Stale, forged, cross-staff, logout, and identity-loss authority fails closed")
     void rejectsInvalidMutationAuthorityWithoutWriting() {
         PermissionSubject owner = owner(STAFF);
         GuiSessionView management = click(service, owner, overview(service, owner),
@@ -249,7 +249,7 @@ class StaffPrestigeMutationGuiTest {
 
         store.state.set(state(6, 4));
         GuiSessionView staleConfiguration = setReview(service, owner, 8);
-        activeRevision.set(Optional.of(new ConfigRevisionId("phase9f-c1-replaced")));
+        activeRevision.set(Optional.of(new ConfigRevisionId("prestige-administration-replaced")));
         AdministrationException stale = assertThrows(AdministrationException.class,
                 () -> clickResult(service, owner, staleConfiguration,
                         GuiActionKind.STAFF_CONFIRM_PRESTIGE_ADJUSTMENT));
@@ -290,7 +290,7 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Known offline players use the same provider-free administrative service")
+    @DisplayName("Known offline players use the same provider-free administrative service")
     void supportsKnownOfflinePlayerWithoutProviderMutation() {
         service = service(new StaffPlayerIdentity(PLAYER, "FixturePlayer", false));
         PermissionSubject owner = owner(STAFF);
@@ -306,7 +306,7 @@ class StaffPrestigeMutationGuiTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Admin Set and Reset history never presents fictional costs or rewards")
+    @DisplayName("Admin Set and Reset history never presents fictional costs or rewards")
     void rendersAdministrativeHistoryTruthfully() {
         StaffHistorySource.Entry set = adminHistory(StaffHistorySource.Kind.ADMIN_SET, 3, 8,
                 Optional.of("$5"), Optional.of("$1"));
@@ -445,8 +445,8 @@ class StaffPrestigeMutationGuiTest {
     }
 
     private static PermissionSubject owner(UUID actorId) {
-        return staff(actorId, PhaseSixPermissions.ADMIN_GUI, PhaseSixPermissions.PLAYER_VIEW,
-                PhaseSixPermissions.PLAYER_PRESTIGE_SET, PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        return staff(actorId, AdministrationPermissions.ADMIN_GUI, AdministrationPermissions.PLAYER_VIEW,
+                AdministrationPermissions.PLAYER_PRESTIGE_SET, AdministrationPermissions.PLAYER_PRESTIGE_RESET);
     }
 
     private static PermissionSubject staff(UUID actorId, String... permissions) {

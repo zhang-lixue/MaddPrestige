@@ -4,7 +4,7 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Phase 0 helper: prints schema and aggregate facts without mutating the SQLite database. */
+/** baseline helper: prints schema and aggregate facts without mutating the SQLite database. */
 public final class ReadOnlySqliteInventory {
     public static void main(String[] args) throws Exception {
         if (args.length != 1) throw new IllegalArgumentException("Expected path to maddprestige.db");

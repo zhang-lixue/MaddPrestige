@@ -25,6 +25,7 @@ import net.maddkraft.maddprestige.api.validation.ValidationFinding;
 import net.maddkraft.maddprestige.api.validation.ValidationReport;
 import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 
 /** Native exact-decimal credit provider backed by the idempotent internal ledger. */
 public final class InternalCurrencyRewardProvider implements NativeRecoverableRewardProvider {
@@ -42,7 +43,7 @@ public final class InternalCurrencyRewardProvider implements NativeRecoverableRe
             CurrencyLedgerStore store,
             Clock clock) {
         descriptor = new ProviderDescriptor(Objects.requireNonNull(id, "provider ID"),
-                Objects.requireNonNull(ownerIdentity, "owner identity"), "1", "phase4", List.of(), List.of(
+                Objects.requireNonNull(ownerIdentity, "owner identity"), "1", ProviderMetadataVersions.implementationVersion(InternalCurrencyRewardProvider.class), List.of(), List.of(
                         new CapabilityDescriptor("internal-currency-reward", "reward",
                                 "Exact internal currency credit", Map.of())));
         this.definitions = Objects.requireNonNull(definitions, "currency definitions");

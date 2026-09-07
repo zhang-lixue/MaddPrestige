@@ -38,7 +38,7 @@ import org.junit.jupiter.api.Test;
 
 class PlaceholderSnapshotPublisherTest {
     @Test
-    @DisplayName("[OR8F-A76-02] Dormant online ticks are no-ops and live activation initializes normally")
+    @DisplayName("[A76] Dormant online ticks are no-ops and live activation initializes normally")
     void dormantTicksDeferUntilLiveActivationWithoutWarningOrSnapshot() {
         Fixture fixture = new Fixture();
         try {
@@ -67,7 +67,7 @@ class PlaceholderSnapshotPublisherTest {
     }
 
     @Test
-    @DisplayName("[OR8F-A76-02] Active initialization failures remain actionable warnings")
+    @DisplayName("[A76] Active initialization failures remain actionable warnings")
     void activeInitializationFailureStillWarnsAndRemovesStaleSnapshot() {
         Fixture fixture = new Fixture();
         try {

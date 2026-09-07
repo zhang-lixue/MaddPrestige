@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -60,7 +61,8 @@ public final class PaperWorldContextMetricProvider implements MetricProvider {
                 metric(IN_WORLD_SET, MetricValueType.BOOLEAN,
                         Map.of(WORLD_IDS, new MetricDimension(WORLD_IDS, true, Set.of(),
                                 "Comma-separated canonical world UUIDs")), "In configured world set"));
-        descriptor = new ProviderDescriptor(ID, "maddprestige", "phase7", "paper-api", List.of(),
+        descriptor = new ProviderDescriptor(ID, "maddprestige", ProviderMetadataVersions.STABLE_API,
+                ProviderMetadataVersions.implementationVersion(PaperWorldContextMetricProvider.class), List.of(),
                 metrics.stream().map(metric -> new CapabilityDescriptor(metric.metricId().value(), "metric",
                         metric.description(), Map.of("thread", "server", "mutation", "none"))).toList());
     }

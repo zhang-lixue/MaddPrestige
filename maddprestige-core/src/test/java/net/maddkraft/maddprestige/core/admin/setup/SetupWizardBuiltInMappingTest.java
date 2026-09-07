@@ -12,7 +12,7 @@ class SetupWizardBuiltInMappingTest {
                 Map.entry("requirement:vault_balance:balance", "enable:vault"),
                 Map.entry("requirement:mcmmo:total_level", "enable:mcmmo"),
                 Map.entry("requirement:mcmmo:skill_level", "reject:mcmmo:skill filter"),
-                Map.entry("requirement:phase5_events:mcmmo_adjusted_xp_total", "enable:mcmmo"),
+                Map.entry("requirement:event_progress:mcmmo_adjusted_xp_total", "enable:mcmmo"),
                 Map.entry("requirement:griefprevention_claims:remaining_claim_blocks", "enable:griefprevention"),
                 Map.entry("requirement:griefprevention_claims:accrued_claim_blocks", "enable:griefprevention"),
                 Map.entry("requirement:griefprevention_claims:bonus_claim_blocks", "enable:griefprevention"),

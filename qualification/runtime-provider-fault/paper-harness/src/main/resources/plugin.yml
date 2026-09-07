@@ -1,0 +1,10 @@
+name: Runtime-Qualification-Harness
+version: '1.0.0'
+main: net.maddkraft.qualification.runtimefault.RuntimeProviderQualification
+description: Disposable real-Paper performance, provider, dependency and event qualification coordinator.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend: [MaddPrestige, Qualification-Provider-Alpha, Qualification-Provider-Beta]
+softdepend: [LuckPerms, Vault, mcMMO, PlaceholderAPI, GriefPrevention, WorldEdit, WorldGuard, CraftEngine,
+  Qualification-Controlled-Economy]

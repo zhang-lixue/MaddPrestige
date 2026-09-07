@@ -18,7 +18,7 @@ import net.maddkraft.maddprestige.core.season.SeasonDefinition;
 import net.maddkraft.maddprestige.core.season.SeasonLifecycleState;
 import net.maddkraft.maddprestige.core.season.SeasonRecord;
 import net.maddkraft.maddprestige.core.season.SeasonStore;
-import net.maddkraft.maddprestige.core.config.phase4.ResetDisposition;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetDisposition;
 import net.maddkraft.maddprestige.core.requirement.RequirementBaseline;
 import net.maddkraft.maddprestige.persistence.PersistenceException;
 import net.maddkraft.maddprestige.persistence.jdbc.ConnectionProvider;

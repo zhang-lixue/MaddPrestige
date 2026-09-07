@@ -30,7 +30,7 @@ class SqliteBackupServiceTest {
     @DisplayName("[A63] Native backup seals a populated snapshot, manifest, and restore rehearsal")
     void createsValidatedPopulatedBackup() throws Exception {
         Path database = temporaryDirectory.resolve("source.sqlite");
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 10);
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 10);
         Path backups = temporaryDirectory.resolve("backups");
 
         var result = service(source, backups).createVerifiedBackup("pre-migration qualification");
@@ -39,23 +39,23 @@ class SqliteBackupServiceTest {
         Path artifact = result.location().orElseThrow();
         assertTrue(Files.isRegularFile(artifact));
         SqliteBackupManifest manifest = SqliteBackupService.validateAcceptedBackup(
-                artifact, SqliteMigrations.phaseEightC());
+                artifact, SqliteMigrations.throughVersionEleven());
         assertEquals(10, manifest.sourceSchemaVersion());
-        assertEquals(SqlitePhase8cFixture.REVISION, manifest.activeConfigurationRevision().orElseThrow());
+        assertEquals(SqliteMigrationFixture.REVISION, manifest.activeConfigurationRevision().orElseThrow());
         assertEquals("PASS", manifest.validationResult());
         assertEquals("PASS", manifest.restoreRehearsalResult());
         SqliteFoundation restored = new SqliteFoundation(artifact);
-        assertEquals(SqlitePhase8cFixture.EXACT_DECIMAL,
-                SqlitePhase8cFixture.scalar(restored, "SELECT balance_text FROM mp_currency_accounts"));
+        assertEquals(SqliteMigrationFixture.EXACT_DECIMAL,
+                SqliteMigrationFixture.scalar(restored, "SELECT balance_text FROM mp_currency_accounts"));
         assertEquals("NEEDS_RECONCILIATION",
-                SqlitePhase8cFixture.scalar(restored, "SELECT state FROM mp_operations"));
+                SqliteMigrationFixture.scalar(restored, "SELECT state FROM mp_operations"));
     }
 
     @Test
     @DisplayName("[A63] Backup waits for an in-flight writer and includes its committed state")
     void coordinatesWithActiveWriter() throws Exception {
         Path database = temporaryDirectory.resolve("writer.sqlite");
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 10);
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 10);
         Connection writer = source.open();
         writer.createStatement().execute("BEGIN IMMEDIATE");
         writer.createStatement().execute("UPDATE mp_currency_accounts SET balance_text='17.25'");
@@ -71,7 +71,7 @@ class SqliteBackupServiceTest {
             var result = backup.get(10, TimeUnit.SECONDS);
             assertTrue(result.verified(), result.detail());
             SqliteFoundation restored = new SqliteFoundation(result.location().orElseThrow());
-            assertEquals("17.25", SqlitePhase8cFixture.scalar(
+            assertEquals("17.25", SqliteMigrationFixture.scalar(
                     restored, "SELECT balance_text FROM mp_currency_accounts"));
         } finally {
             if (!writer.isClosed()) {
@@ -85,7 +85,7 @@ class SqliteBackupServiceTest {
     @DisplayName("[A63] Backup drains a writer already queued at the snapshot boundary")
     void coordinatesWithQueuedWriter() throws Exception {
         Path database = temporaryDirectory.resolve("queued-writer.sqlite");
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 11);
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 11);
         Connection firstWriter = source.open();
         firstWriter.createStatement().execute("BEGIN IMMEDIATE");
         CountDownLatch queuedConnectionOpen = new CountDownLatch(1);
@@ -112,7 +112,7 @@ class SqliteBackupServiceTest {
 
             var result = backup.get(10, TimeUnit.SECONDS);
             assertTrue(result.verified(), result.detail());
-            assertEquals("23.75", SqlitePhase8cFixture.scalar(new SqliteFoundation(result.location().orElseThrow()),
+            assertEquals("23.75", SqliteMigrationFixture.scalar(new SqliteFoundation(result.location().orElseThrow()),
                     "SELECT balance_text FROM mp_currency_accounts"));
         } finally {
             if (!firstWriter.isClosed()) {
@@ -131,7 +131,7 @@ class SqliteBackupServiceTest {
         byte[] manifestBytes = Files.readAllBytes(manifest);
         Files.delete(manifest);
         assertThrows(PersistenceException.class,
-                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.phaseEightC()));
+                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.throughVersionEleven()));
         Files.write(manifest, manifestBytes);
 
         try (RandomAccessFile file = new RandomAccessFile(artifact.toFile(), "rw")) {
@@ -139,7 +139,7 @@ class SqliteBackupServiceTest {
             file.write(file.read() ^ 0x01);
         }
         assertThrows(PersistenceException.class,
-                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.phaseEightC()));
+                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
@@ -154,40 +154,40 @@ class SqliteBackupServiceTest {
         Files.writeString(manifestPath, original.replace(
                 "backupId=" + manifest.backupId(), "backupId=" + UUID.randomUUID()));
         assertThrows(PersistenceException.class,
-                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.phaseEightC()));
+                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.throughVersionEleven()));
 
         Files.writeString(manifestPath, original.replace(
                 "backupId=" + manifest.backupId(), "backupId=not-a-uuid"));
         assertThrows(PersistenceException.class,
-                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.phaseEightC()));
+                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.throughVersionEleven()));
 
         String differentJournal = "wal".equals(manifest.journalMode()) ? "delete" : "wal";
         Files.writeString(manifestPath, original.replace(
                 "journalMode=" + manifest.journalMode(), "journalMode=" + differentJournal));
         assertThrows(PersistenceException.class,
-                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.phaseEightC()));
+                () -> SqliteBackupService.validateAcceptedBackup(artifact, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[OR8C-01] Schema validation rejects the migration-5 actor UUID omission")
     void rejectsMissingStageHistoryActorUuid() {
         Path database = currentDatabase("missing-actor-uuid.sqlite");
-        SqlitePhase8cFixture.execute(new SqliteFoundation(database),
+        SqliteMigrationFixture.execute(new SqliteFoundation(database),
                 "ALTER TABLE mp_stage_history DROP COLUMN actor_uuid");
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[OR8C-01] Schema validation rejects a required column lost from another migration")
     void rejectsMissingManualProgressColumn() {
         Path database = currentDatabase("missing-manual-column.sqlite");
-        SqlitePhase8cFixture.execute(new SqliteFoundation(database),
+        SqliteMigrationFixture.execute(new SqliteFoundation(database),
                 "ALTER TABLE mp_manual_progress DROP COLUMN updated_at");
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
@@ -209,18 +209,18 @@ class SqliteBackupServiceTest {
                 """);
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[OR8C-01] Schema validation rejects removal of a correctness partial-UNIQUE index")
     void rejectsMissingPartialUniqueIndex() {
         Path database = currentDatabase("missing-partial-unique.sqlite");
-        SqlitePhase8cFixture.execute(new SqliteFoundation(database),
+        SqliteMigrationFixture.execute(new SqliteFoundation(database),
                 "DROP INDEX mp_schema_migrations_applied_version_uq");
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
@@ -246,7 +246,7 @@ class SqliteBackupServiceTest {
                 """);
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
@@ -254,28 +254,28 @@ class SqliteBackupServiceTest {
     void rejectsCaseChangedPartialUniquePredicate() {
         Path database = currentDatabase("lowercase-season-predicate.sqlite");
         SqliteFoundation foundation = new SqliteFoundation(database);
-        SqlitePhase8cFixture.execute(foundation, "DROP INDEX mp_seasons_one_active_idx");
-        SqlitePhase8cFixture.execute(foundation,
+        SqliteMigrationFixture.execute(foundation, "DROP INDEX mp_seasons_one_active_idx");
+        SqliteMigrationFixture.execute(foundation,
                 "CREATE UNIQUE INDEX mp_seasons_one_active_idx ON mp_seasons(lifecycle_state) "
                         + "WHERE lifecycle_state = 'active'");
         String insert = "INSERT INTO mp_seasons (season_id, display_name_snapshot, lifecycle_state, scope_id, "
                 + "season_progress_policy, config_revision_id, started_at) VALUES (?, ?, 'ACTIVE', 'global', "
                 + "'RESET', ?, '2026-08-17T20:00:00Z')";
-        SqlitePhase8cFixture.execute(foundation, insert, "season-one", "Season One", SqlitePhase8cFixture.REVISION);
-        SqlitePhase8cFixture.execute(foundation, insert, "season-two", "Season Two", SqlitePhase8cFixture.REVISION);
+        SqliteMigrationFixture.execute(foundation, insert, "season-one", "Season One", SqliteMigrationFixture.REVISION);
+        SqliteMigrationFixture.execute(foundation, insert, "season-two", "Season Two", SqliteMigrationFixture.REVISION);
 
-        assertEquals("2", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("2", SqliteMigrationFixture.scalar(foundation,
                 "SELECT COUNT(*) FROM mp_seasons WHERE lifecycle_state='ACTIVE'"),
                 "the lowercase predicate must demonstrably permit two uppercase ACTIVE rows");
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[OR8C-06] CREATE TABLE CHECK string-literal case remains correctness authority")
     void rejectsCaseChangedTableCheckLiteral() throws Exception {
         Path database = currentDatabase("lowercase-table-check.sqlite");
-        SqlitePhase8cFixture.execute(new SqliteFoundation(database), "DELETE FROM mp_operation_actions");
+        SqliteMigrationFixture.execute(new SqliteFoundation(database), "DELETE FROM mp_operation_actions");
         rebuildWithoutForeignKeys(database, """
                 ALTER TABLE mp_operation_actions RENAME TO mp_operation_actions_old;
                 CREATE TABLE mp_operation_actions (
@@ -301,7 +301,7 @@ class SqliteBackupServiceTest {
                 """);
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
@@ -331,8 +331,8 @@ class SqliteBackupServiceTest {
         }
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
-        assertEquals("1", SqlitePhase8cFixture.scalar(foundation,
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
+        assertEquals("1", SqliteMigrationFixture.scalar(foundation,
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mp_operations'"));
     }
 
@@ -347,8 +347,8 @@ class SqliteBackupServiceTest {
         }
 
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
-        assertEquals("1", SqlitePhase8cFixture.scalar(foundation,
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
+        assertEquals("1", SqliteMigrationFixture.scalar(foundation,
                 "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='mp_operations'"));
     }
 
@@ -360,7 +360,7 @@ class SqliteBackupServiceTest {
         Path invalidHeader = temporaryDirectory.resolve("invalid.sqlite");
         Files.writeString(invalidHeader, "not a database");
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(invalidHeader, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(invalidHeader, SqliteMigrations.throughVersionEleven()));
 
         Path truncated = temporaryDirectory.resolve("truncated.sqlite");
         Files.copy(valid, truncated);
@@ -368,7 +368,7 @@ class SqliteBackupServiceTest {
             file.setLength(64);
         }
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(truncated, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(truncated, SqliteMigrations.throughVersionEleven()));
 
         Path bitFlipped = temporaryDirectory.resolve("bit-flipped.sqlite");
         Files.copy(valid, bitFlipped);
@@ -379,14 +379,14 @@ class SqliteBackupServiceTest {
             file.write(original ^ 0xff);
         }
         assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(bitFlipped, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(bitFlipped, SqliteMigrations.throughVersionEleven()));
     }
 
     @Test
     @DisplayName("[A63] Validation failure preserves live source and previous known-good backup")
     void preservesSourceAndPreviousGoodBackup() throws Exception {
         Path database = temporaryDirectory.resolve("preservation-source.sqlite");
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 10);
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 10);
         Path backups = temporaryDirectory.resolve("preservation-backups");
         var first = service(source, backups).createVerifiedBackup("known good");
         assertTrue(first.verified(), first.detail());
@@ -394,7 +394,7 @@ class SqliteBackupServiceTest {
         Path good = first.location().orElseThrow();
         var goodBefore = SqliteBackupService.sha256(good);
 
-        SqlitePhase8cFixture.execute(source,
+        SqliteMigrationFixture.execute(source,
                 "UPDATE mp_configuration_revision_documents SET document_hash = ?",
                 "0".repeat(64));
         var invalidSourceBefore = SqliteBackupService.sha256(database);
@@ -414,13 +414,13 @@ class SqliteBackupServiceTest {
     @DisplayName("[A63] Failed disposable restore rehearsal rejects and cleans the candidate")
     void rejectsFailedRestoreRehearsal() throws Exception {
         Path database = temporaryDirectory.resolve("rehearsal-failure-source.sqlite");
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 10);
-        ArrayList<Migration> broken = new ArrayList<>(SqliteMigrations.phaseEightC());
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 10);
+        ArrayList<Migration> broken = new ArrayList<>(SqliteMigrations.throughVersionEleven());
         broken.set(10, Migration.of(11, "injected rehearsal failure",
                 java.util.List.of("CREATE TABLE mp_operations (duplicate TEXT)")));
         Path backups = temporaryDirectory.resolve("rehearsal-failure-backups");
 
-        var result = new SqliteBackupService(source, backups, broken, SqlitePhase8cFixture.CLOCK)
+        var result = new SqliteBackupService(source, backups, broken, SqliteMigrationFixture.CLOCK)
                 .createVerifiedBackup("rehearsal must fail");
 
         assertFalse(result.verified());
@@ -428,7 +428,7 @@ class SqliteBackupServiceTest {
         try (var files = Files.list(backups)) {
             assertEquals(0, files.count());
         }
-        assertEquals("10", SqlitePhase8cFixture.scalar(source,
+        assertEquals("10", SqliteMigrationFixture.scalar(source,
                 "SELECT MAX(version) FROM mp_schema_migrations WHERE result='APPLIED'"));
     }
 
@@ -436,7 +436,7 @@ class SqliteBackupServiceTest {
     @DisplayName("[A63] Reasons are metadata only and cannot become paths")
     void rejectsUnsafeReasonWithoutWritingArtifacts() throws Exception {
         Path database = temporaryDirectory.resolve("reason-source.sqlite");
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 10);
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 10);
         Path backups = temporaryDirectory.resolve("reason-backups");
 
         var result = service(source, backups).createVerifiedBackup("../escape\ncontrol");
@@ -449,7 +449,7 @@ class SqliteBackupServiceTest {
     private net.maddkraft.maddprestige.persistence.VerifiedBackup accepted(
             String databaseName, String backupDirectoryName) {
         Path database = temporaryDirectory.resolve(databaseName);
-        SqliteFoundation source = SqlitePhase8cFixture.historical(database, 10);
+        SqliteFoundation source = SqliteMigrationFixture.historical(database, 10);
         var result = service(source, temporaryDirectory.resolve(backupDirectoryName))
                 .createVerifiedBackup("accepted test source");
         assertTrue(result.verified(), result.detail());
@@ -458,8 +458,8 @@ class SqliteBackupServiceTest {
 
     private Path currentDatabase(String name) {
         Path database = temporaryDirectory.resolve(name);
-        SqlitePhase8cFixture.historical(database, 11);
-        SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC());
+        SqliteMigrationFixture.historical(database, 11);
+        SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven());
         return database;
     }
 
@@ -476,6 +476,6 @@ class SqliteBackupServiceTest {
     }
 
     private static SqliteBackupService service(SqliteFoundation source, Path backups) {
-        return new SqliteBackupService(source, backups, SqliteMigrations.phaseEightC(), SqlitePhase8cFixture.CLOCK);
+        return new SqliteBackupService(source, backups, SqliteMigrations.throughVersionEleven(), SqliteMigrationFixture.CLOCK);
     }
 }

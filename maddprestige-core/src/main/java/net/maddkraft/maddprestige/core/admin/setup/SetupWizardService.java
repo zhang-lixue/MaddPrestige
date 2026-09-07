@@ -27,10 +27,11 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.PreparedConfigurationAcknowledgement;
 import net.maddkraft.maddprestige.core.admin.config.StoredConfigurationRevision;
+import net.maddkraft.maddprestige.core.compatibility.LegacyProviderIdentifiers;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.core.requirement.CompletionMode;
 import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
@@ -46,7 +47,7 @@ public final class SetupWizardService {
             requirement("vault_balance", "balance", VAULT),
             requirement(MCMO, "total_level", MCMO),
             unsupportedRequirement(MCMO, "skill_level", MCMO, "skill filter"),
-            requirement("phase5_events", "mcmmo_adjusted_xp_total", MCMO),
+            requirement(LegacyProviderIdentifiers.EVENT_PROGRESS.value(), "mcmmo_adjusted_xp_total", MCMO),
             requirement(GRIEF_PREVENTION_CLAIMS, "remaining_claim_blocks", GRIEF_PREVENTION),
             requirement(GRIEF_PREVENTION_CLAIMS, "accrued_claim_blocks", GRIEF_PREVENTION),
             requirement(GRIEF_PREVENTION_CLAIMS, "bonus_claim_blocks", GRIEF_PREVENTION),
@@ -103,7 +104,7 @@ public final class SetupWizardService {
     }
 
     public SetupDiscovery discover(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.SETUP);
+        subject.require(AdministrationPermissions.SETUP);
         List<SetupProviderOption> options = providers.stream().flatMap(registry -> registry.snapshots().stream()
                 .map(snapshot -> {
                     var provider = registry.provider(snapshot.descriptor().id());
@@ -127,7 +128,7 @@ public final class SetupWizardService {
     }
 
     public UUID start(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.SETUP);
+        subject.require(AdministrationPermissions.SETUP);
         pruneExpired();
         UUID id = UUID.randomUUID();
         sessions.put(id, new Session(subject, Optional.empty(), List.of(), Optional.empty(), Optional.empty(),
@@ -139,7 +140,7 @@ public final class SetupWizardService {
 
     /** Returns the current unexpired setup session owned by the actor. */
     public UUID currentSession(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.SETUP);
+        subject.require(AdministrationPermissions.SETUP);
         pruneExpired();
         UUID sessionId = currentSessions.get(subject.actor());
         if (sessionId == null || !sessions.containsKey(sessionId)) {
@@ -153,7 +154,7 @@ public final class SetupWizardService {
 
     /** Returns an in-memory snapshot used only for contextual tab completion. */
     public Optional<SetupCompletion> currentCompletion(PermissionSubject subject) {
-        if (!subject.has(PhaseSixPermissions.SETUP)) {
+        if (!subject.has(AdministrationPermissions.SETUP)) {
             return Optional.empty();
         }
         UUID sessionId = currentSessions.get(subject.actor());
@@ -375,7 +376,7 @@ public final class SetupWizardService {
     }
 
     private Session require(PermissionSubject subject, UUID sessionId) {
-        subject.require(PhaseSixPermissions.SETUP);
+        subject.require(AdministrationPermissions.SETUP);
         pruneExpired();
         Session session = sessions.get(Objects.requireNonNull(sessionId, "session ID"));
         if (session == null) {

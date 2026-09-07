@@ -120,5 +120,4 @@ the complete stopped plugin-data directory and rehearse restoration before selec
 - A first-party Prestige Shop is intentionally deferred until player feedback defines a useful reward catalog; it is
   not a launch requirement and no placeholder UI, command, permission, configuration, or persistence surface ships.
 
-Historical development records remain available from the release tag and Git history; see the
-[development archive index](docs/archive/v2-development/README.md).
+Historical development records remain available from the release tag, merged pull requests, and Git history.

@@ -17,7 +17,7 @@ import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentKind;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdjustmentReview;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.config.GuidedConfigurationAdministration;
 import net.maddkraft.maddprestige.core.admin.config.GuidedMoneyConfigurationReview;
 import net.maddkraft.maddprestige.core.admin.config.GuidedNumericConfigurationInput;
@@ -101,7 +101,7 @@ public final class StaffGuiService {
     }
 
     public GuiSessionView open(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.ADMIN_GUI);
+        subject.require(AdministrationPermissions.ADMIN_GUI);
         requirePlayerActor(subject);
         Optional<ConfigRevisionId> revision = activeRevision.get();
         ArrayList<GuiAction> actions = new ArrayList<>();
@@ -114,9 +114,9 @@ public final class StaffGuiService {
                                 : "gui.item.staff.overview.configuration.inactive"),
                         m("gui.item.staff.overview.providers", "current", summary.availableProviders(),
                                 "total", summary.totalProviders()))));
-        if (subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
+        if (subject.has(AdministrationPermissions.PLAYER_VIEW)) {
             GuiAction playersAction = action(GuiActionKind.STAFF_OPEN_PLAYERS,
-                    "gui.action.staff.players", PhaseSixPermissions.PLAYER_VIEW, revision, null);
+                    "gui.action.staff.players", AdministrationPermissions.PLAYER_VIEW, revision, null);
             actions.add(playersAction);
             items.add(GuiDisplayItem.action(10, GuiItemIcon.PLAYERS, playersAction.label(),
                     List.of(m("gui.item.staff.players.lore")), playersAction.actionId(), false));
@@ -125,17 +125,17 @@ public final class StaffGuiService {
                     m("gui.action.staff.players"), List.of(m("gui.item.staff.players.unavailable"))));
         }
         GuiAction configurationAction = action(GuiActionKind.STAFF_VIEW_CONFIGURATION,
-                "gui.action.staff.configuration", PhaseSixPermissions.ADMIN_GUI, revision, null);
+                "gui.action.staff.configuration", AdministrationPermissions.ADMIN_GUI, revision, null);
         actions.add(configurationAction);
         items.add(GuiDisplayItem.action(12, GuiItemIcon.CONFIGURATION, configurationAction.label(),
                 List.of(m("gui.item.staff.configuration.lore")), configurationAction.actionId(), false));
         GuiAction historyAction = action(GuiActionKind.STAFF_VIEW_HISTORY,
-                "gui.action.staff.history", PhaseSixPermissions.ADMIN_GUI, revision, null);
+                "gui.action.staff.history", AdministrationPermissions.ADMIN_GUI, revision, null);
         actions.add(historyAction);
         items.add(GuiDisplayItem.action(14, GuiItemIcon.HISTORY, historyAction.label(),
                 List.of(m("gui.item.staff.history.lore")), historyAction.actionId(), false));
         GuiAction statusAction = action(GuiActionKind.STAFF_VIEW_SYSTEM_STATUS,
-                statusActionKey(summary.health()), PhaseSixPermissions.ADMIN_GUI, revision, null);
+                statusActionKey(summary.health()), AdministrationPermissions.ADMIN_GUI, revision, null);
         actions.add(statusAction);
         items.add(GuiDisplayItem.action(16, GuiItemIcon.SYSTEM_STATUS, statusAction.label(),
                 List.of(m("gui.item.staff.system_status.lore")),
@@ -334,7 +334,7 @@ public final class StaffGuiService {
 
     /** Opens actor-bound, server-owned results for a bounded known-player selector. */
     public GuiSessionView findPlayers(PermissionSubject subject, String selector) {
-        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(AdministrationPermissions.PLAYER_VIEW);
         requirePlayerActor(subject);
         return searchResults(subject, selector);
     }
@@ -362,7 +362,7 @@ public final class StaffGuiService {
                 m("gui.item.staff.configuration.detail.title"), lore));
         if (summary.active() && configurationAdministration.isPresent()) {
             GuiAction levels = configurationAction(GuiActionKind.STAFF_OPEN_PRESTIGE_LEVELS,
-                    "gui.action.staff.prestige_levels", PhaseSixPermissions.CONFIG_VIEW, false, revision,
+                    "gui.action.staff.prestige_levels", AdministrationPermissions.CONFIG_VIEW, false, revision,
                     null, null, null);
             actions.add(levels);
             ArrayList<MessageReference> levelLore = new ArrayList<>();
@@ -389,7 +389,7 @@ public final class StaffGuiService {
         for (int index = 0; index < page.levels().size(); index++) {
             long level = page.levels().get(index);
             GuiAction select = configurationAction(GuiActionKind.STAFF_SELECT_PRESTIGE_LEVEL,
-                    "gui.action.staff.prestige_level", PhaseSixPermissions.CONFIG_VIEW, false, revision,
+                    "gui.action.staff.prestige_level", AdministrationPermissions.CONFIG_VIEW, false, revision,
                     level, null, null, "level", level);
             actions.add(select);
             items.add(GuiDisplayItem.action(REQUIREMENT_CARD_SLOTS.get(index), GuiItemIcon.PRESTIGE,
@@ -397,12 +397,12 @@ public final class StaffGuiService {
         }
         if (page.hasPrevious()) {
             addConfigurationPage(actions, items, GuiActionKind.STAFF_PRESTIGE_LEVELS_PREVIOUS,
-                    "gui.action.staff.previous_page", 19, PhaseSixPermissions.CONFIG_VIEW, revision, null,
+                    "gui.action.staff.previous_page", 19, AdministrationPermissions.CONFIG_VIEW, revision, null,
                     page.pageIndex() - 1);
         }
         if (page.hasNext()) {
             addConfigurationPage(actions, items, GuiActionKind.STAFF_PRESTIGE_LEVELS_NEXT,
-                    "gui.action.staff.next_page", 25, PhaseSixPermissions.CONFIG_VIEW, revision, null,
+                    "gui.action.staff.next_page", 25, AdministrationPermissions.CONFIG_VIEW, revision, null,
                     page.pageIndex() + 1);
         }
         addBack(actions, items, GuiActionKind.STAFF_BACK_CONFIGURATION, revision, null);
@@ -421,7 +421,7 @@ public final class StaffGuiService {
                 m("gui.item.staff.level.overview", "level", prestigeLevel), List.of(
                         m(level.enabled() ? "gui.item.staff.level.enabled" : "gui.item.staff.level.disabled"))));
         GuiAction requirements = configurationAction(GuiActionKind.STAFF_VIEW_PRESTIGE_REQUIREMENTS,
-                "gui.item.staff.level.requirements", PhaseSixPermissions.CONFIG_VIEW, false, revision,
+                "gui.item.staff.level.requirements", AdministrationPermissions.CONFIG_VIEW, false, revision,
                 prestigeLevel, null, null);
         actions.add(requirements);
         items.add(GuiDisplayItem.action(10, GuiItemIcon.REQUIREMENTS, requirements.label(),
@@ -432,11 +432,11 @@ public final class StaffGuiService {
             moneyLore.add(m("gui.item.staff.level.money_cost", "amount", level.moneyCost()));
         }
         boolean canEdit = level.moneyAvailable() && level.moneyEditable()
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                && subject.has(AdministrationPermissions.CONFIG_APPLY);
         if (canEdit) {
             GuiAction money = configurationAction(GuiActionKind.STAFF_EDIT_PRESTIGE_MONEY,
-                    "gui.action.staff.level.money", PhaseSixPermissions.CONFIG_EDIT, false, revision,
+                    "gui.action.staff.level.money", AdministrationPermissions.CONFIG_EDIT, false, revision,
                     prestigeLevel, null, null);
             actions.add(money);
             moneyLore.add(m("gui.item.staff.level.money.edit"));
@@ -456,11 +456,11 @@ public final class StaffGuiService {
             rewardLore.add(m("gui.item.staff.level.reward_count", "count", level.rewards()));
         }
         boolean canEditReward = level.rewardAvailable() && level.rewardEditable()
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                && subject.has(AdministrationPermissions.CONFIG_APPLY);
         if (canEditReward) {
             GuiAction reward = configurationAction(GuiActionKind.STAFF_EDIT_PRESTIGE_REWARD,
-                    "gui.action.staff.level.rewards", PhaseSixPermissions.CONFIG_EDIT, false, revision,
+                    "gui.action.staff.level.rewards", AdministrationPermissions.CONFIG_EDIT, false, revision,
                     prestigeLevel, null, null);
             actions.add(reward);
             rewardLore.add(m("gui.item.staff.level.reward.edit"));
@@ -474,7 +474,7 @@ public final class StaffGuiService {
                     m("gui.item.staff.level.rewards"), rewardLore));
         }
         GuiAction scaling = configurationAction(GuiActionKind.STAFF_VIEW_PRESTIGE_SCALING,
-                "gui.item.staff.level.scaling", PhaseSixPermissions.CONFIG_VIEW, false, revision,
+                "gui.item.staff.level.scaling", AdministrationPermissions.CONFIG_VIEW, false, revision,
                 prestigeLevel, null, null);
         actions.add(scaling);
         items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIGURATION, scaling.label(), List.of(
@@ -537,12 +537,12 @@ public final class StaffGuiService {
         MessageReference current = m("gui.item.staff.config_requirements.money.value",
                 "value", requirement.currentTarget());
         boolean canEdit = requirement.editable()
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                && subject.has(AdministrationPermissions.CONFIG_APPLY);
         if (canEdit) {
             GuiAction edit = configurationAction(GuiActionKind.STAFF_EDIT_PRESTIGE_MONEY,
                     "gui.item.staff.config_requirements.money.title",
-                    PhaseSixPermissions.CONFIG_EDIT, false, revision, prestigeLevel, null, null);
+                    AdministrationPermissions.CONFIG_EDIT, false, revision, prestigeLevel, null, null);
             actions.add(edit);
             items.add(GuiDisplayItem.action(slot, GuiItemIcon.BALANCE, edit.label(), List.of(current),
                     edit.actionId(), false));
@@ -568,12 +568,12 @@ public final class StaffGuiService {
         lore.add(m("gui.item.staff.config_requirements.total_skill_level.current",
                 "current", requirement.currentTarget()));
         boolean canEdit = requirement.editable()
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                && subject.has(AdministrationPermissions.CONFIG_APPLY);
         if (canEdit) {
             GuiAction edit = configurationAction(GuiActionKind.STAFF_EDIT_TOTAL_SKILL_LEVEL,
                     "gui.item.staff.config_requirements.total_skill_level.title",
-                    PhaseSixPermissions.CONFIG_EDIT, false, revision, prestigeLevel, null, null);
+                    AdministrationPermissions.CONFIG_EDIT, false, revision, prestigeLevel, null, null);
             actions.add(edit);
             items.add(GuiDisplayItem.action(slot, GuiItemIcon.REQUIREMENTS, edit.label(), lore,
                     edit.actionId(), false));
@@ -630,7 +630,7 @@ public final class StaffGuiService {
                         m("gui.item.staff.total_skill_level.review.change",
                                 "before", review.currentTarget(), "after", review.newTarget()))));
         GuiAction confirm = configurationAction(GuiActionKind.STAFF_CONFIRM_TOTAL_SKILL_LEVEL,
-                "gui.action.staff.total_skill_level.confirm", PhaseSixPermissions.CONFIG_APPLY, true, revision,
+                "gui.action.staff.total_skill_level.confirm", AdministrationPermissions.CONFIG_APPLY, true, revision,
                 review.prestigeLevel(), null, review.reviewId());
         actions.add(confirm);
         items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIRM, confirm.label(), List.of(),
@@ -679,7 +679,7 @@ public final class StaffGuiService {
                         m("gui.item.staff.money.review.change", "before", review.currentAmount(),
                                 "after", review.newAmount()))));
         GuiAction confirm = configurationAction(GuiActionKind.STAFF_CONFIRM_PRESTIGE_MONEY,
-                "gui.action.staff.money.confirm", PhaseSixPermissions.CONFIG_APPLY, true, revision,
+                "gui.action.staff.money.confirm", AdministrationPermissions.CONFIG_APPLY, true, revision,
                 review.prestigeLevel(), null, review.reviewId());
         actions.add(confirm);
         items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIRM, confirm.label(), List.of(),
@@ -725,7 +725,7 @@ public final class StaffGuiService {
                         m("gui.item.staff.reward.review.change", "before", review.currentAmount(),
                                 "after", review.newAmount()))));
         GuiAction confirm = configurationAction(GuiActionKind.STAFF_CONFIRM_PRESTIGE_REWARD,
-                "gui.action.staff.reward.confirm", PhaseSixPermissions.CONFIG_APPLY, true, revision,
+                "gui.action.staff.reward.confirm", AdministrationPermissions.CONFIG_APPLY, true, revision,
                 review.prestigeLevel(), null, review.reviewId());
         actions.add(confirm);
         items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIRM, confirm.label(), List.of(),
@@ -764,11 +764,11 @@ public final class StaffGuiService {
         List<MessageReference> baseLore = new ArrayList<>();
         baseLore.add(m("gui.item.staff.scaling.value", "value", scaling.base()));
         boolean canEditBase = scaling.editable(GuidedScalingParameter.LINEAR_BASE)
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                && subject.has(AdministrationPermissions.CONFIG_APPLY);
         if (canEditBase) {
             GuiAction editBase = configurationAction(GuiActionKind.STAFF_EDIT_SCALING_LINEAR_BASE,
-                    "gui.item.staff.scaling.base.title", PhaseSixPermissions.CONFIG_EDIT,
+                    "gui.item.staff.scaling.base.title", AdministrationPermissions.CONFIG_EDIT,
                     false, revision, prestigeLevel, null, null);
             actions.add(editBase);
             baseLore.add(m("gui.item.staff.scaling.base.edit"));
@@ -784,11 +784,11 @@ public final class StaffGuiService {
             List<MessageReference> lore = new ArrayList<>();
             lore.add(m("gui.item.staff.scaling.value", "value", scaling.rate()));
             boolean canEdit = scaling.editable(GuidedScalingParameter.LINEAR_INCREMENT)
-                    && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                    && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                    && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                    && subject.has(AdministrationPermissions.CONFIG_APPLY);
             if (canEdit) {
                 GuiAction edit = configurationAction(GuiActionKind.STAFF_EDIT_SCALING_LINEAR_INCREMENT,
-                        "gui.item.staff.scaling.increment.title", PhaseSixPermissions.CONFIG_EDIT,
+                        "gui.item.staff.scaling.increment.title", AdministrationPermissions.CONFIG_EDIT,
                         false, revision, prestigeLevel, null, null);
                 actions.add(edit);
                 lore.add(m("gui.item.staff.scaling.edit"));
@@ -807,11 +807,11 @@ public final class StaffGuiService {
                     value -> lore.add(m("gui.item.staff.scaling.value", "value", value)),
                     () -> lore.add(m("gui.item.staff.scaling.override.inherited")));
             boolean canManage = scaling.overrideManageable()
-                    && subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                    && subject.has(PhaseSixPermissions.CONFIG_APPLY);
+                    && subject.has(AdministrationPermissions.CONFIG_EDIT)
+                    && subject.has(AdministrationPermissions.CONFIG_APPLY);
             if (canManage) {
                 GuiAction manage = configurationAction(GuiActionKind.STAFF_MANAGE_SCALING_OVERRIDE,
-                        "gui.item.staff.scaling.override.title", PhaseSixPermissions.CONFIG_EDIT,
+                        "gui.item.staff.scaling.override.title", AdministrationPermissions.CONFIG_EDIT,
                         false, revision, prestigeLevel, null, null);
                 actions.add(manage);
                 lore.add(m(scaling.overrideValue().isPresent()
@@ -847,20 +847,20 @@ public final class StaffGuiService {
                 m("gui.item.staff.scaling.override.current.title"), List.of(current)));
         if (scaling.overrideValue().isPresent()) {
             GuiAction edit = configurationAction(GuiActionKind.STAFF_EDIT_SCALING_OVERRIDE,
-                    "gui.action.staff.scaling.override.edit", PhaseSixPermissions.CONFIG_EDIT,
+                    "gui.action.staff.scaling.override.edit", AdministrationPermissions.CONFIG_EDIT,
                     false, revision, prestigeLevel, null, null);
             actions.add(edit);
             items.add(GuiDisplayItem.action(11, GuiItemIcon.CONFIGURATION, edit.label(), List.of(),
                     edit.actionId(), false));
             GuiAction remove = configurationAction(GuiActionKind.STAFF_REMOVE_SCALING_OVERRIDE,
-                    "gui.action.staff.scaling.override.remove", PhaseSixPermissions.CONFIG_EDIT,
+                    "gui.action.staff.scaling.override.remove", AdministrationPermissions.CONFIG_EDIT,
                     false, revision, prestigeLevel, null, null);
             actions.add(remove);
             items.add(GuiDisplayItem.action(15, GuiItemIcon.BLOCKED, remove.label(), List.of(),
                     remove.actionId(), false));
         } else {
             GuiAction add = configurationAction(GuiActionKind.STAFF_ADD_SCALING_OVERRIDE,
-                    "gui.action.staff.scaling.override.add", PhaseSixPermissions.CONFIG_EDIT,
+                    "gui.action.staff.scaling.override.add", AdministrationPermissions.CONFIG_EDIT,
                     false, revision, prestigeLevel, null, null);
             actions.add(add);
             items.add(GuiDisplayItem.action(13, GuiItemIcon.CONFIRM, add.label(), List.of(),
@@ -932,7 +932,7 @@ public final class StaffGuiService {
                 : "gui.action.staff.scaling.confirm";
         GuiItemIcon confirmIcon = review.removal() ? GuiItemIcon.BLOCKED : GuiItemIcon.CONFIRM;
         GuiAction confirm = configurationAction(confirmKind, confirmLabel,
-                PhaseSixPermissions.CONFIG_APPLY, true, revision,
+                AdministrationPermissions.CONFIG_APPLY, true, revision,
                 review.prestigeLevel(), null, review.reviewId());
         actions.add(confirm);
         items.add(GuiDisplayItem.action(22, confirmIcon, confirm.label(), List.of(),
@@ -1002,7 +1002,7 @@ public final class StaffGuiService {
         GuiActionKind confirmKind = base ? GuiActionKind.STAFF_CONFIRM_SCALING_LINEAR_BASE
                 : GuiActionKind.STAFF_CONFIRM_SCALING_LINEAR_INCREMENT;
         GuiAction confirm = configurationAction(confirmKind,
-                "gui.action.staff.scaling.confirm", PhaseSixPermissions.CONFIG_APPLY, true, revision,
+                "gui.action.staff.scaling.confirm", AdministrationPermissions.CONFIG_APPLY, true, revision,
                 review.prestigeLevel(), null, review.reviewId());
         actions.add(confirm);
         items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIRM, confirm.label(), List.of(),
@@ -1037,10 +1037,10 @@ public final class StaffGuiService {
             GuiActionKind backKind) {
         Optional<ConfigRevisionId> revision = Optional.of(input.revision());
         GuiAction back = configurationAction(backKind,
-                "gui.action.back", PhaseSixPermissions.CONFIG_VIEW, false, revision,
+                "gui.action.back", AdministrationPermissions.CONFIG_VIEW, false, revision,
                 input.prestigeLevel(), null, null, 0);
         GuiAction submit = configurationAction(submitKind, "gui.action.staff.numeric_input.review",
-                PhaseSixPermissions.CONFIG_EDIT, false, revision, input.prestigeLevel(), null, null);
+                AdministrationPermissions.CONFIG_EDIT, false, revision, input.prestigeLevel(), null, null);
         List<GuiAction> actions = List.of(back, submit);
         List<GuiDisplayItem> items = List.of(
                 GuiDisplayItem.display(0, valueIcon,
@@ -1106,12 +1106,12 @@ public final class StaffGuiService {
             }
             if (page.hasPrevious()) {
                 addPage(actions, items, GuiActionKind.STAFF_HISTORY_PREVIOUS,
-                        "gui.action.staff.previous_page", 19, PhaseSixPermissions.ADMIN_GUI,
+                        "gui.action.staff.previous_page", 19, AdministrationPermissions.ADMIN_GUI,
                         revision, null, pageIndex - 1);
             }
             if (page.hasNext()) {
                 addPage(actions, items, GuiActionKind.STAFF_HISTORY_NEXT,
-                        "gui.action.staff.next_page", 25, PhaseSixPermissions.ADMIN_GUI,
+                        "gui.action.staff.next_page", 25, AdministrationPermissions.ADMIN_GUI,
                         revision, null, pageIndex + 1);
             }
             addBack(actions, items, GuiActionKind.STAFF_BACK_DASHBOARD, revision, null);
@@ -1170,12 +1170,12 @@ public final class StaffGuiService {
             }
             if (pageIndex > 0) {
                 addPage(actions, items, GuiActionKind.STAFF_SYSTEM_STATUS_PREVIOUS,
-                        "gui.action.staff.previous_page", 19, PhaseSixPermissions.ADMIN_GUI,
+                        "gui.action.staff.previous_page", 19, AdministrationPermissions.ADMIN_GUI,
                         revision, null, pageIndex - 1);
             }
             if (pageIndex + 1 < pageCount) {
                 addPage(actions, items, GuiActionKind.STAFF_SYSTEM_STATUS_NEXT,
-                        "gui.action.staff.next_page", 25, PhaseSixPermissions.ADMIN_GUI,
+                        "gui.action.staff.next_page", 25, AdministrationPermissions.ADMIN_GUI,
                         revision, null, pageIndex + 1);
             }
             addRefresh(actions, items, GuiActionKind.STAFF_REFRESH_SYSTEM_STATUS,
@@ -1190,17 +1190,17 @@ public final class StaffGuiService {
     }
 
     private GuiSessionView playerManagement(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(AdministrationPermissions.PLAYER_VIEW);
         Optional<ConfigRevisionId> revision = activeRevision.get();
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = new ArrayList<>();
         GuiAction online = action(GuiActionKind.STAFF_OPEN_ONLINE_PLAYERS,
-                "gui.action.staff.online_players", PhaseSixPermissions.PLAYER_VIEW, revision, null);
+                "gui.action.staff.online_players", AdministrationPermissions.PLAYER_VIEW, revision, null);
         actions.add(online);
         items.add(GuiDisplayItem.action(11, GuiItemIcon.PLAYERS, online.label(),
                 List.of(m("gui.item.staff.online_players.lore")), online.actionId(), false));
         GuiAction find = action(GuiActionKind.STAFF_FIND_PLAYER,
-                "gui.action.staff.find_player", PhaseSixPermissions.PLAYER_VIEW, revision, null);
+                "gui.action.staff.find_player", AdministrationPermissions.PLAYER_VIEW, revision, null);
         actions.add(find);
         items.add(GuiDisplayItem.action(15, GuiItemIcon.PLAYER_INFORMATION, find.label(),
                 List.of(m("gui.item.staff.find_player.lore")), find.actionId(), false));
@@ -1212,7 +1212,7 @@ public final class StaffGuiService {
     }
 
     private GuiSessionView onlinePlayerSelection(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(AdministrationPermissions.PLAYER_VIEW);
         Optional<ConfigRevisionId> revision = activeRevision.get();
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = new ArrayList<>();
@@ -1229,7 +1229,7 @@ public final class StaffGuiService {
             for (int index = 0; index < online.size(); index++) {
                 StaffPlayerIdentity player = online.get(index);
                 GuiAction select = action(GuiActionKind.STAFF_SELECT_PLAYER,
-                        "gui.action.staff.select_player", PhaseSixPermissions.PLAYER_VIEW,
+                        "gui.action.staff.select_player", AdministrationPermissions.PLAYER_VIEW,
                         revision, player.playerId());
                 actions.add(select);
                 items.add(GuiDisplayItem.profiledAction(firstSlot + index, GuiItemIcon.PLAYERS,
@@ -1247,7 +1247,7 @@ public final class StaffGuiService {
     }
 
     private GuiSessionView searchResults(PermissionSubject subject, String selector) {
-        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(AdministrationPermissions.PLAYER_VIEW);
         Optional<ConfigRevisionId> revision = activeRevision.get();
         List<StaffPlayerIdentity> matches = players.searchPlayers(selector).stream().limit(7).toList();
         ArrayList<GuiAction> actions = new ArrayList<>();
@@ -1261,7 +1261,7 @@ public final class StaffGuiService {
             for (int index = 0; index < matches.size(); index++) {
                 StaffPlayerIdentity player = matches.get(index);
                 GuiAction select = action(GuiActionKind.STAFF_SELECT_SEARCH_RESULT,
-                        "gui.action.staff.select_player", PhaseSixPermissions.PLAYER_VIEW,
+                        "gui.action.staff.select_player", AdministrationPermissions.PLAYER_VIEW,
                         revision, player.playerId());
                 actions.add(select);
                 ArrayList<MessageReference> lore = new ArrayList<>();
@@ -1341,7 +1341,7 @@ public final class StaffGuiService {
                         m("gui.item.staff.prestige_preview.unavailable"))));
         addOverviewUtilities(actions, items, revision, identity, fromSearch);
         GuiAction playerHistory = action(GuiActionKind.STAFF_VIEW_PLAYER_HISTORY,
-                "gui.action.staff.player_history", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.player_history", AdministrationPermissions.PLAYER_VIEW,
                 revision, identity.playerId());
         actions.add(playerHistory);
         items.add(GuiDisplayItem.action(24, GuiItemIcon.HISTORY, playerHistory.label(),
@@ -1375,20 +1375,20 @@ public final class StaffGuiService {
                 .findFirst().orElseThrow();
         items.remove(requirements);
         GuiAction inspect = action(GuiActionKind.STAFF_VIEW_REQUIREMENTS,
-                "gui.action.staff.requirements", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.requirements", AdministrationPermissions.PLAYER_VIEW,
                 Optional.of(revision), identity.playerId());
         actions.add(inspect);
         items.add(GuiDisplayItem.action(requirements.slot(), requirements.icon(), requirements.title(),
                 requirements.lore(), inspect.actionId(), requirements.highlighted()));
         addOverviewUtilities(actions, items, Optional.of(revision), identity, fromSearch);
         GuiAction playerPreview = action(GuiActionKind.STAFF_VIEW_PRESTIGE_PREVIEW,
-                "gui.action.staff.prestige_preview", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.prestige_preview", AdministrationPermissions.PLAYER_VIEW,
                 Optional.of(revision), identity.playerId());
         actions.add(playerPreview);
         items.add(GuiDisplayItem.action(20, GuiItemIcon.PRESTIGE, playerPreview.label(),
                 List.of(m("gui.item.staff.prestige_preview.lore")), playerPreview.actionId(), false));
         GuiAction playerHistory = action(GuiActionKind.STAFF_VIEW_PLAYER_HISTORY,
-                "gui.action.staff.player_history", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.player_history", AdministrationPermissions.PLAYER_VIEW,
                 Optional.of(revision), identity.playerId());
         actions.add(playerHistory);
         items.add(GuiDisplayItem.action(24, GuiItemIcon.HISTORY, playerHistory.label(),
@@ -1422,7 +1422,7 @@ public final class StaffGuiService {
         GuiAction refresh = action(fromSearch
                         ? GuiActionKind.STAFF_REFRESH_SEARCH_PLAYER_OVERVIEW
                         : GuiActionKind.STAFF_REFRESH_PLAYER_OVERVIEW,
-                "gui.action.staff.refresh", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.refresh", AdministrationPermissions.PLAYER_VIEW,
                 revision, identity.playerId());
         actions.add(refresh);
         items.add(GuiDisplayItem.action(0, GuiItemIcon.REFRESH, refresh.label(),
@@ -1430,7 +1430,7 @@ public final class StaffGuiService {
         GuiAction copy = action(fromSearch
                         ? GuiActionKind.STAFF_COPY_SEARCH_PLAYER_UUID
                         : GuiActionKind.STAFF_COPY_PLAYER_UUID,
-                "gui.action.staff.copy_uuid", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.copy_uuid", AdministrationPermissions.PLAYER_VIEW,
                 revision, identity.playerId());
         actions.add(copy);
         items.add(GuiDisplayItem.profiledAction(8, GuiItemIcon.PLAYER_INFORMATION,
@@ -1452,9 +1452,9 @@ public final class StaffGuiService {
         if (prestigeAdministration.isEmpty() || !canManagePrestige(subject)) {
             return;
         }
-        String permission = subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_SET)
-                ? PhaseSixPermissions.PLAYER_PRESTIGE_SET
-                : PhaseSixPermissions.PLAYER_PRESTIGE_RESET;
+        String permission = subject.has(AdministrationPermissions.PLAYER_PRESTIGE_SET)
+                ? AdministrationPermissions.PLAYER_PRESTIGE_SET
+                : AdministrationPermissions.PLAYER_PRESTIGE_RESET;
         GuiAction manage = action(GuiActionKind.STAFF_MANAGE_PLAYER,
                 "gui.action.staff.manage_player", permission, revision, playerId);
         actions.add(manage);
@@ -1466,7 +1466,7 @@ public final class StaffGuiService {
             PermissionSubject subject,
             UUID playerId) {
         if (!canManagePrestige(subject)) {
-            subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+            subject.require(AdministrationPermissions.PLAYER_PRESTIGE_SET);
         }
         StaffPlayerIdentity identity = known(playerId);
         return prestigeAdministration().inspect(subject, playerId).thenApply(state -> {
@@ -1477,17 +1477,17 @@ public final class StaffGuiService {
                     m("gui.item.staff.manage_player.summary.title", "player", identity.name()),
                     List.of(m("gui.item.staff.manage_player.current", "current", state.currentPrestige())),
                     identity.playerId()));
-            if (subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_SET)) {
+            if (subject.has(AdministrationPermissions.PLAYER_PRESTIGE_SET)) {
                 GuiAction set = action(GuiActionKind.STAFF_SET_PRESTIGE,
-                        "gui.action.staff.set_prestige", PhaseSixPermissions.PLAYER_PRESTIGE_SET,
+                        "gui.action.staff.set_prestige", AdministrationPermissions.PLAYER_PRESTIGE_SET,
                         revision, playerId);
                 actions.add(set);
                 items.add(GuiDisplayItem.action(11, GuiItemIcon.INCREASE, set.label(),
                         List.of(m("gui.item.staff.set_prestige.lore")), set.actionId(), false));
             }
-            if (subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_RESET)) {
+            if (subject.has(AdministrationPermissions.PLAYER_PRESTIGE_RESET)) {
                 GuiAction reset = action(GuiActionKind.STAFF_REVIEW_PRESTIGE_RESET,
-                        "gui.action.staff.reset_prestige", PhaseSixPermissions.PLAYER_PRESTIGE_RESET,
+                        "gui.action.staff.reset_prestige", AdministrationPermissions.PLAYER_PRESTIGE_RESET,
                         revision, playerId);
                 actions.add(reset);
                 items.add(GuiDisplayItem.action(15, GuiItemIcon.DECREASE, reset.label(),
@@ -1513,9 +1513,9 @@ public final class StaffGuiService {
             ConfigRevisionId expectedRevision = revision.orElseThrow(() ->
                     new IllegalStateException("Set Prestige input requires an active configuration revision"));
             GuiAction back = action(GuiActionKind.STAFF_BACK_MANAGE_PLAYER, "gui.action.back",
-                    PhaseSixPermissions.PLAYER_PRESTIGE_SET, revision, playerId);
+                    AdministrationPermissions.PLAYER_PRESTIGE_SET, revision, playerId);
             GuiAction submit = prestigeInputAction(GuiActionKind.STAFF_REVIEW_PRESTIGE_SET,
-                    "gui.action.staff.numeric_input.review", PhaseSixPermissions.PLAYER_PRESTIGE_SET,
+                    "gui.action.staff.numeric_input.review", AdministrationPermissions.PLAYER_PRESTIGE_SET,
                     expectedRevision, playerId, state.currentPrestige(), state.stateRevision());
             List<GuiAction> actions = List.of(back, submit);
             List<GuiDisplayItem> items = List.of(
@@ -1632,7 +1632,7 @@ public final class StaffGuiService {
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = PlayerGuiService.staffPreviewItems(preview);
         GuiAction refresh = action(GuiActionKind.STAFF_REFRESH_PRESTIGE_PREVIEW,
-                "gui.action.staff.refresh", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.refresh", AdministrationPermissions.PLAYER_VIEW,
                 revision, identity.playerId());
         actions.add(refresh);
         items.add(GuiDisplayItem.action(20, GuiItemIcon.REFRESH, refresh.label(),
@@ -1644,7 +1644,7 @@ public final class StaffGuiService {
                         : "gui.item.staff.player.offline")),
                 identity.playerId()));
         GuiAction playerHistory = action(GuiActionKind.STAFF_VIEW_PLAYER_HISTORY,
-                "gui.action.staff.player_history", PhaseSixPermissions.PLAYER_VIEW,
+                "gui.action.staff.player_history", AdministrationPermissions.PLAYER_VIEW,
                 revision, identity.playerId());
         actions.add(playerHistory);
         items.add(GuiDisplayItem.action(24, GuiItemIcon.HISTORY, playerHistory.label(),
@@ -1722,12 +1722,12 @@ public final class StaffGuiService {
             }
             if (page.hasPrevious()) {
                 addPage(actions, items, GuiActionKind.STAFF_PLAYER_HISTORY_PREVIOUS,
-                        "gui.action.staff.previous_page", 19, PhaseSixPermissions.PLAYER_VIEW,
+                        "gui.action.staff.previous_page", 19, AdministrationPermissions.PLAYER_VIEW,
                         revision, identity.playerId(), pageIndex - 1);
             }
             if (page.hasNext()) {
                 addPage(actions, items, GuiActionKind.STAFF_PLAYER_HISTORY_NEXT,
-                        "gui.action.staff.next_page", 25, PhaseSixPermissions.PLAYER_VIEW,
+                        "gui.action.staff.next_page", 25, AdministrationPermissions.PLAYER_VIEW,
                         revision, identity.playerId(), pageIndex + 1);
             }
             addBack(actions, items, GuiActionKind.STAFF_BACK_PLAYER_OVERVIEW,
@@ -1792,12 +1792,12 @@ public final class StaffGuiService {
             }
             if (pageIndex > 0) {
                 addPage(actions, items, GuiActionKind.STAFF_REQUIREMENTS_PREVIOUS,
-                        "gui.action.staff.previous_page", 19, PhaseSixPermissions.PLAYER_VIEW,
+                        "gui.action.staff.previous_page", 19, AdministrationPermissions.PLAYER_VIEW,
                         revision, identity.playerId(), pageIndex - 1);
             }
             if (pageIndex + 1 < pageCount) {
                 addPage(actions, items, GuiActionKind.STAFF_REQUIREMENTS_NEXT,
-                        "gui.action.staff.next_page", 25, PhaseSixPermissions.PLAYER_VIEW,
+                        "gui.action.staff.next_page", 25, AdministrationPermissions.PLAYER_VIEW,
                         revision, identity.playerId(), pageIndex + 1);
             }
             addBack(actions, items, GuiActionKind.STAFF_BACK_PLAYER_OVERVIEW,
@@ -2005,8 +2005,8 @@ public final class StaffGuiService {
     }
 
     private static boolean canManagePrestige(PermissionSubject subject) {
-        return subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_SET)
-                || subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        return subject.has(AdministrationPermissions.PLAYER_PRESTIGE_SET)
+                || subject.has(AdministrationPermissions.PLAYER_PRESTIGE_RESET);
     }
 
     private static void addPage(
@@ -2051,7 +2051,7 @@ public final class StaffGuiService {
             Optional<ConfigRevisionId> revision,
             long prestigeLevel,
             int pageIndex) {
-        GuiAction back = configurationAction(kind, "gui.action.back", PhaseSixPermissions.CONFIG_VIEW,
+        GuiAction back = configurationAction(kind, "gui.action.back", AdministrationPermissions.CONFIG_VIEW,
                 false, revision, prestigeLevel, null, null, pageIndex);
         actions.add(back);
         items.add(GuiDisplayItem.action(18, GuiItemIcon.BACK, back.label(), List.of(), back.actionId(), false));
@@ -2065,7 +2065,7 @@ public final class StaffGuiService {
             UUID playerId,
             int pageIndex) {
         GuiAction refresh = new GuiAction(UUID.randomUUID(), kind, m("gui.action.staff.refresh"),
-                PhaseSixPermissions.ADMIN_GUI, false, revision, Optional.ofNullable(playerId),
+                AdministrationPermissions.ADMIN_GUI, false, revision, Optional.ofNullable(playerId),
                 Optional.empty(), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(pageIndex));
         actions.add(refresh);
         items.add(GuiDisplayItem.action(23, GuiItemIcon.REFRESH, refresh.label(), List.of(),
@@ -2078,7 +2078,7 @@ public final class StaffGuiService {
             GuiActionKind kind,
             Optional<ConfigRevisionId> revision,
             UUID playerId) {
-        GuiAction back = action(kind, "gui.action.back", PhaseSixPermissions.ADMIN_GUI, revision, playerId);
+        GuiAction back = action(kind, "gui.action.back", AdministrationPermissions.ADMIN_GUI, revision, playerId);
         actions.add(back);
         items.add(GuiDisplayItem.action(18, GuiItemIcon.BACK, back.label(), List.of(), back.actionId(), false));
     }
@@ -2088,7 +2088,7 @@ public final class StaffGuiService {
             List<GuiDisplayItem> items,
             Optional<ConfigRevisionId> revision) {
         GuiAction close = action(GuiActionKind.STAFF_CLOSE, "gui.action.close",
-                PhaseSixPermissions.ADMIN_GUI, revision, null);
+                AdministrationPermissions.ADMIN_GUI, revision, null);
         actions.add(close);
         items.add(GuiDisplayItem.action(26, GuiItemIcon.CLOSE, close.label(), List.of(), close.actionId(), false));
     }

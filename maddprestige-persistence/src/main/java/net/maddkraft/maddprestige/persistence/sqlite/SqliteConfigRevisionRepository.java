@@ -25,7 +25,7 @@ public final class SqliteConfigRevisionRepository {
             statement.setString(2, hash.value());
             statement.setString(3, Instant.now().toString());
             statement.setString(4, "testkit");
-            statement.setString(5, "phase1-foundation");
+            statement.setString(5, "configuration-initialization");
             statement.setString(6, "valid");
             statement.setString(7, "initial");
             statement.executeUpdate();

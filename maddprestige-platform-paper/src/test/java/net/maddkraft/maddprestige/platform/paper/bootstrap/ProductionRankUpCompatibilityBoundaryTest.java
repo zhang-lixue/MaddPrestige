@@ -54,17 +54,17 @@ class ProductionRankUpCompatibilityBoundaryTest {
     Path temporaryDirectory;
 
     @Test
-    @DisplayName("[Phase 9B] Production /rankup is blocked before confirmation, persistence, or projection")
+    @DisplayName("Production /rankup is blocked before confirmation, persistence, or projection")
     void productionRankUpCannotConfirmMutateOrProject() throws Exception {
         SqliteFoundation foundation = new SqliteFoundation(temporaryDirectory.resolve("rankup.sqlite"));
         new MigrationRunner(foundation, ignored -> new VerifiedBackup("fixture",
                 Optional.of(foundation.databaseFile()), Optional.of(RevisionHasher.hashText("fixture")),
-                NOW, true, "controlled production-boundary fixture"), CLOCK).migrate(SqliteMigrations.phaseNineB());
+                NOW, true, "controlled production-boundary fixture"), CLOCK).migrate(SqliteMigrations.current());
         CountingRankAdapter rankAdapter = new CountingRankAdapter();
         ProviderRegistry providers = new ProviderRegistry();
         providers.activate(providers.register("rank-compatibility-test", rankAdapter));
         Plugin plugin = mock(Plugin.class, RETURNS_DEEP_STUBS);
-        when(plugin.getLogger()).thenReturn(Logger.getLogger("phase9b-rankup-boundary"));
+        when(plugin.getLogger()).thenReturn(Logger.getLogger("numeric-prestige-rankup-boundary"));
         PaperTaskScheduler scheduler = new PaperTaskScheduler() {
             @Override
             public <T> CompletionStage<T> submit(ExecutionThread thread, Supplier<T> task) {

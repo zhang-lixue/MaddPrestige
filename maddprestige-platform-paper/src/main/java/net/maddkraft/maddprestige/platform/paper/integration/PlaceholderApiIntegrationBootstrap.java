@@ -9,7 +9,7 @@ import net.maddkraft.maddprestige.integrations.IntegrationProviderLifecycle.Mana
 import net.maddkraft.maddprestige.integrations.IntegrationTaskScheduler;
 import net.maddkraft.maddprestige.integrations.MutableProviderHealth;
 import net.maddkraft.maddprestige.integrations.ProviderRegistrationGate;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration.PlaceholderInput;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfiguration.PlaceholderInput;
 import net.maddkraft.maddprestige.integrations.placeholder.OfficialPlaceholderResolver;
 import net.maddkraft.maddprestige.integrations.placeholder.PlaceholderInputMetricProvider;
 import net.maddkraft.maddprestige.platform.paper.placeholder.MaddPrestigePlaceholderCache;

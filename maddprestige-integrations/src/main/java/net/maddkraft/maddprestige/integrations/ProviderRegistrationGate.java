@@ -7,7 +7,7 @@ import net.maddkraft.maddprestige.core.provider.ProviderRegistration;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 
 /**
- * Exact-registration authority for Phase 5 external calls and persistent event mutation. The gate accepts only its
+ * Exact-registration authority for integration external calls and persistent event mutation. The gate accepts only its
  * one bound generation while that registration is active and its operational health is usable.
  */
 public final class ProviderRegistrationGate {

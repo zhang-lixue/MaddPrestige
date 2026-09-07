@@ -12,7 +12,7 @@ class OperationStateMachineTest {
     private final OperationStateMachine stateMachine = new OperationStateMachine();
 
     @Test
-    @DisplayName("[A59][Phase1-hard-7] Operation and action state machines reject illegal transitions")
+    @DisplayName("[A59]Operation and action state machines reject illegal transitions")
     void rejectsIllegalTransitions() {
         assertEquals(OperationState.PREPARED,
                 stateMachine.transition(OperationState.PLANNED, OperationState.PREPARED));

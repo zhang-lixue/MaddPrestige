@@ -35,12 +35,12 @@ import net.maddkraft.maddprestige.core.admin.OperationKind;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
 import net.maddkraft.maddprestige.core.admin.OperationPreviewService;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.PreparedConfirmation;
 import net.maddkraft.maddprestige.core.admin.ManualPrestigeAdministrationService;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
 import net.maddkraft.maddprestige.core.admin.command.ContextualHelpService;
-import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.command.AdministrationCommandService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationIntrospectionService;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DoctorService;
@@ -58,7 +58,7 @@ import org.junit.jupiter.api.Test;
 class PlayerGuiServiceTest {
     private static final UUID PLAYER = UUID.fromString("22222222-2222-4222-8222-222222222222");
     private static final UUID CONFIRMATION = UUID.fromString("33333333-3333-4333-8333-333333333333");
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-player-gui");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("gui-player-gui");
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-31T12:00:00Z"), ZoneOffset.UTC);
     private final AtomicReference<Optional<ConfigRevisionId>> revision =
             new AtomicReference<>(Optional.of(REVISION));
@@ -81,7 +81,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Player GUI opening is self-only, permission-checked, compact, and canonical")
+    @DisplayName("Player GUI opening is self-only, permission-checked, compact, and canonical")
     void opensCompactAuthorizedPlayerView() {
         OperationPreview preview = ready("ALL", "2", "2", true);
         when(progress.view(any(), eq(PLAYER)))
@@ -127,14 +127,14 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] No arguments and explicit gui both open Player GUI for an authorized non-OP player")
+    @DisplayName("No arguments and explicit gui both open Player GUI for an authorized non-OP player")
     void routesBothPlayerGuiEntryPoints() {
         PlayerGuiService route = mock(PlayerGuiService.class);
         GuiSessionView view = new GuiSessionView(UUID.randomUUID(), GuiAudience.PLAYER,
                 MessageReference.of("gui.title.player"), List.of(), CLOCK.instant().plus(Duration.ofMinutes(5)),
                 GuiScreenKind.PLAYER, 27, List.of());
         when(route.open(any(), eq(PLAYER))).thenReturn(CompletableFuture.completedFuture(view));
-        PhaseSixCommandService commands = new PhaseSixCommandService(
+        AdministrationCommandService commands = new AdministrationCommandService(
                 mock(ContextualHelpService.class), mock(ConfigurationIntrospectionService.class),
                 mock(ConfigurationAdministrationService.class), mock(DoctorService.class), mock(WhyService.class),
                 previews, confirmations, progress, mock(SetupWizardService.class),
@@ -154,16 +154,16 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Explicit admin route opens only the actor-bound Staff Dashboard")
+    @DisplayName("Explicit admin route opens only the actor-bound Staff Dashboard")
     void routesExplicitStaffDashboard() {
         StaffGuiService staffRoute = mock(StaffGuiService.class);
         GuiSessionView view = new GuiSessionView(UUID.randomUUID(), GuiAudience.STAFF,
                 MessageReference.of("gui.title.staff.dashboard"), List.of(),
                 CLOCK.instant().plus(Duration.ofMinutes(5)), GuiScreenKind.STAFF_DASHBOARD, 27, List.of());
         PermissionSubject staff = new PermissionSubject(new Actor("player", Optional.of(PLAYER), "Staff"),
-                Set.of(PhaseSixPermissions.ADMIN_GUI));
+                Set.of(AdministrationPermissions.ADMIN_GUI));
         when(staffRoute.open(staff)).thenReturn(view);
-        PhaseSixCommandService commands = new PhaseSixCommandService(
+        AdministrationCommandService commands = new AdministrationCommandService(
                 mock(ContextualHelpService.class), mock(ConfigurationIntrospectionService.class),
                 mock(ConfigurationAdministrationService.class), mock(DoctorService.class), mock(WhyService.class),
                 previews, confirmations, progress, mock(SetupWizardService.class),
@@ -180,7 +180,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Player requirements hide modes and use concise gameplay labels")
+    @DisplayName("Player requirements hide modes and use concise gameplay labels")
     void rendersConcisePlayerRequirements() {
         for (String mode : List.of("ALL", "ANY", "X_OF_N")) {
             OperationPreview preview = ready(mode, "1", mode.equals("ALL") ? "2" : "1", false);
@@ -220,7 +220,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Stable information slots render current balance and no rewards truthfully")
+    @DisplayName("Stable information slots render current balance and no rewards truthfully")
     void rendersStableEmptyInformationSections() {
         OperationPreview preview = preview("ALL", "2", "2", true, List.of(), List.of(), List.of());
         when(progress.view(any(), eq(PLAYER)))
@@ -237,7 +237,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] A canonical zero balance remains visible rather than disappearing")
+    @DisplayName("A canonical zero balance remains visible rather than disappearing")
     void rendersZeroBalanceTruthfully() {
         OperationPreview preview = preview("ALL", "2", "2", true, List.of("$0"), List.of("$0"), List.of());
         preview = withBalanceProjection(preview, "0", "0");
@@ -255,7 +255,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Ready Preview Confirm uses canonical prepare and consume without another GUI")
+    @DisplayName("Ready Preview Confirm uses canonical prepare and consume without another GUI")
     void readyPreviewConfirmExecutesCanonicallyWithoutAnotherGui() {
         OperationPreview preview = ready("ALL", "2", "2", true);
         when(progress.view(any(), eq(PLAYER)))
@@ -293,7 +293,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-D] Blocked Preview shows truthful shortfall without a redundant status item")
+    @DisplayName("Blocked Preview shows truthful shortfall without a redundant status item")
     void blockedPreviewCannotCreateConfirmation() {
         OperationPreview blocked = blockedCostPreview();
         when(progress.view(any(), eq(PLAYER)))
@@ -334,7 +334,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Main and Preview information topology is stable across consecutive Prestige levels")
+    @DisplayName("Main and Preview information topology is stable across consecutive Prestige levels")
     void keepsInformationTopologyAcrossPrestigeLevels() {
         for (int current : List.of(3, 4)) {
             OperationPreview preview = transition(current, current + 1);
@@ -356,7 +356,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Preview execution action is single-use and cannot replay")
+    @DisplayName("Preview execution action is single-use and cannot replay")
     void previewExecutionClickCannotReplay() {
         OperationPreview preview = ready("ALL", "2", "2", true);
         when(progress.view(any(), eq(PLAYER)))
@@ -379,7 +379,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Confirm delegates exact canonical ID and refreshes backend state")
+    @DisplayName("Confirm delegates exact canonical ID and refreshes backend state")
     void confirmsAndRefreshesCanonicalState() {
         OperationPreview before = ready("ALL", "2", "2", true);
         OperationPreview after = withBalanceProjection(transition(3, 4), "8", "4");
@@ -408,7 +408,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Final-state revalidation failure refreshes truthfully without mutation success")
+    @DisplayName("Final-state revalidation failure refreshes truthfully without mutation success")
     void staleReadyPreviewRefreshesFailClosed() {
         OperationPreview ready = ready("ALL", "2", "2", true);
         OperationPreview blocked = blockedCostPreview();
@@ -436,7 +436,7 @@ class PlayerGuiServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Logout, replacement, revision change, and permission loss fail closed")
+    @DisplayName("Logout, replacement, revision change, and permission loss fail closed")
     void invalidatesUnsafeSessions() {
         OperationPreview preview = ready("ALL", "2", "2", true);
         when(progress.view(any(), eq(PLAYER)))
@@ -460,12 +460,12 @@ class PlayerGuiServiceTest {
 
         revision.set(Optional.of(REVISION));
         GuiSessionView permission = service.open(player(), PLAYER).toCompletableFuture().join();
-        assertEquals("permission.denied", failure(permission, subject(Set.of(PhaseSixPermissions.USE))).code());
+        assertEquals("permission.denied", failure(permission, subject(Set.of(AdministrationPermissions.USE))).code());
         verify(previews, never()).simulatePrestige(any(), any());
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Fresh Main opens Preview on the first click and retires only the old view")
+    @DisplayName("Fresh Main opens Preview on the first click and retires only the old view")
     void freshMainHandsOffToPreviewOnFirstClick() {
         OperationPreview preview = ready("ALL", "2", "2", true);
         when(progress.view(any(), eq(PLAYER)))
@@ -518,7 +518,7 @@ class PlayerGuiServiceTest {
     }
 
     private static PermissionSubject player() {
-        return subject(Set.of(PhaseSixPermissions.USE, PhaseSixPermissions.PRESTIGE));
+        return subject(Set.of(AdministrationPermissions.USE, AdministrationPermissions.PRESTIGE));
     }
 
     private static PermissionSubject subject(Set<String> permissions) {

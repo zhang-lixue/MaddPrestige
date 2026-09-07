@@ -62,12 +62,12 @@ public final class RankUpAuthorizationService {
         Optional<ActiveStageConfiguration> active = activeConfiguration.get();
         if (active.isEmpty()) {
             return rejected(AuthorizationBlockerKind.NO_ACTIVE_STAGE_SNAPSHOT,
-                    "No canonical Stage + Phase 3 snapshot is active", "operation", "rank_up");
+                    "No canonical stage and requirement snapshot is active", "operation", "rank_up");
         }
         ActiveStageConfiguration snapshot = active.orElseThrow();
-        if (!bindingsMatch(snapshot.phaseThree().providerGenerations())) {
-            String provider = snapshot.phaseThree().providerGenerations().keySet().stream()
-                    .filter(id -> !bindingMatches(snapshot.phaseThree().providerGenerations(), id))
+        if (!bindingsMatch(snapshot.progression().providerGenerations())) {
+            String provider = snapshot.progression().providerGenerations().keySet().stream()
+                    .filter(id -> !bindingMatches(snapshot.progression().providerGenerations(), id))
                     .map(ProviderId::value).sorted().findFirst().orElse("unknown");
             return rejected(AuthorizationBlockerKind.STALE_PROVIDER_BINDING,
                     "The active snapshot has a stale provider-generation binding", "operation", "rank_up",
@@ -120,24 +120,24 @@ public final class RankUpAuthorizationService {
             return rejected(AuthorizationBlockerKind.TARGET_STAGE_UNKNOWN_OR_DISABLED,
                     "Canonical next stage is unknown or disabled", "target_stage", legalTargetId.value());
         }
-        var phaseThree = snapshot.phaseThree().configuration();
-        List<CostDefinition> costs = exactCosts(target, phaseThree.costs());
+        var progression = snapshot.progression().configuration();
+        List<CostDefinition> costs = exactCosts(target, progression.costs());
         if (costs.size() != target.costIds().size()) {
-            String missing = target.costIds().stream().filter(id -> !phaseThree.costs().containsKey(id))
+            String missing = target.costIds().stream().filter(id -> !progression.costs().containsKey(id))
                     .map(value -> value.value()).sorted().collect(java.util.stream.Collectors.joining(","));
             return rejected(AuthorizationBlockerKind.UNKNOWN_CONFIGURED_COST,
                     "Canonical target references an unknown configured cost", "configured_cost", missing,
                     "target_stage", target.id().value());
         }
-        List<RewardDefinition> rewards = exactRewards(target, phaseThree.rewards());
+        List<RewardDefinition> rewards = exactRewards(target, progression.rewards());
         if (rewards.size() != target.rewardIds().size()) {
-            String missing = target.rewardIds().stream().filter(id -> !phaseThree.rewards().containsKey(id))
+            String missing = target.rewardIds().stream().filter(id -> !progression.rewards().containsKey(id))
                     .map(value -> value.value()).sorted().collect(java.util.stream.Collectors.joining(","));
             return rejected(AuthorizationBlockerKind.UNKNOWN_CONFIGURED_REWARD,
                     "Canonical target references an unknown configured reward", "configured_reward", missing,
                     "target_stage", target.id().value());
         }
-        Optional<RequirementNode> tree = target.requirementTreeId().map(phaseThree.trees()::get);
+        Optional<RequirementNode> tree = target.requirementTreeId().map(progression.trees()::get);
         if (target.requirementTreeId().isPresent() && tree.isEmpty()) {
             return rejected(AuthorizationBlockerKind.UNKNOWN_REQUIREMENT_TREE,
                     "Canonical target references an unknown requirement tree", "requirement",
@@ -158,14 +158,14 @@ public final class RankUpAuthorizationService {
                     "Trusted progression context does not match the player and active configuration",
                     "player", intent.playerId(), "revision", snapshot.stages().revisionId().value());
         }
-        Map<MetricBinding, MetricDescriptor> descriptors = descriptors(snapshot.phaseThree().providerGenerations());
+        Map<MetricBinding, MetricDescriptor> descriptors = descriptors(snapshot.progression().providerGenerations());
         RequirementEvaluationContext context = new RequirementEvaluationContext(intent.playerId(),
-                snapshot.stages().revisionId(), snapshot.phaseThree().providerGenerations(), progress.scalingIndex(),
+                snapshot.stages().revisionId(), snapshot.progression().providerGenerations(), progress.scalingIndex(),
                 progress.catchUpPosition(), progress.scopes(), Map.of(), requirementStates);
         CompletionStage<Map<net.maddkraft.maddprestige.api.id.RequirementId,
                 net.maddkraft.maddprestige.api.metric.MetricSample>> samples = tree.isPresent()
                 ? new RequirementMetricCollector(providers, clock).collect(intent.playerId(), tree.orElseThrow(),
-                        snapshot.phaseThree().providerGenerations())
+                        snapshot.progression().providerGenerations())
                 : CompletableFuture.completedFuture(Map.of());
         return samples.thenCompose(collected -> {
             RequirementEvaluationContext populated = new RequirementEvaluationContext(context.playerId(),
@@ -176,7 +176,7 @@ public final class RankUpAuthorizationService {
             var evaluation = tree.isPresent() ? authorizer.evaluate(tree.orElseThrow(), populated)
                     : authorizer.noRequirements(populated);
             RankUpPlanningRequest request = RankUpPlanningRequest.canonical(intent.actor(), intent.playerId(), state,
-                    target, snapshot.stages().revisionId(), snapshot.phaseThree().providerGenerations(), evaluation,
+                    target, snapshot.stages().revisionId(), snapshot.progression().providerGenerations(), evaluation,
                     costs, rewards, intent.idempotencyKey(), stages, intent.requestId());
             return planner.plan(request).thenApply(plan -> new RankUpAuthorizationResult(
                     Optional.of(plan), List.of(), List.of()));

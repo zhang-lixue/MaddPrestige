@@ -1,9 +1,0 @@
-name: Phase8B-Harness
-version: '8C-1.0.0'
-main: net.maddkraft.qualification.phase8c.Phase8CQualificationHarness
-description: First-party disposable Phase 8C SQLite migration and recovery qualification harness.
-author: MaddKraft
-api-version: '26.1.2'
-load: POSTWORLD
-depend:
-  - MaddPrestige

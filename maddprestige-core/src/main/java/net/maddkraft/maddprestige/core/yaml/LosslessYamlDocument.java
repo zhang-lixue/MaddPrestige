@@ -564,19 +564,19 @@ public final class LosslessYamlDocument {
     private void requireSurgicallyEditable(ScalarNode node, int start, int end) {
         if (node.getScalarStyle() == ScalarStyle.LITERAL || node.getScalarStyle() == ScalarStyle.FOLDED) {
             throw new IllegalArgumentException(
-                    "Phase 1 lossless edits intentionally reject block scalars; their original text still round-trips unchanged");
+                    "Lossless edits intentionally reject block scalars; their original text still round-trips unchanged");
         }
         if (node.getAnchor().isPresent()) {
             throw new IllegalArgumentException(
-                    "Phase 1 lossless edits reject anchored scalars to avoid changing alias semantics");
+                    "Lossless edits reject anchored scalars to avoid changing alias semantics");
         }
         if (!node.getTag().getValue().startsWith(Tag.PREFIX)) {
             throw new IllegalArgumentException(
-                    "Phase 1 lossless edits reject custom-tagged scalars to avoid changing tag semantics");
+                    "Lossless edits reject custom-tagged scalars to avoid changing tag semantics");
         }
         if (source.substring(start, end).stripLeading().startsWith("!")) {
             throw new IllegalArgumentException(
-                    "Phase 1 lossless edits reject explicitly tagged scalars to preserve tag presentation");
+                    "Lossless edits reject explicitly tagged scalars to preserve tag presentation");
         }
     }
 
@@ -689,7 +689,7 @@ public final class LosslessYamlDocument {
             case DOUBLE_QUOTED, JSON_SCALAR_STYLE -> doubleQuote(replacement);
             case PLAIN -> isUnambiguousPlainString(replacement) ? replacement : doubleQuote(replacement);
             case LITERAL, FOLDED -> throw new IllegalArgumentException(
-                    "Phase 1 lossless edits intentionally reject block scalars; their original text still round-trips unchanged");
+                    "Lossless edits intentionally reject block scalars; their original text still round-trips unchanged");
         };
     }
 
