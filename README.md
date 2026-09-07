@@ -81,6 +81,9 @@ If you need more control, edit the YAML files directly. The GUI leaves complex s
 Start with the [Configuration guide](docs/configuration.md) or the
 [numeric Prestige example](examples/numeric-prestige).
 
+If you're upgrading from an older setup, there's also a
+[compatibility example](examples/compatibility/member-adventurer-veteran).
+
 MaddPrestige works with Vault for economy features, mcMMO for Total Skill Level, LuckPerms for permission and group
 rewards, and PlaceholderAPI for Prestige placeholders. Other plugins can add their own features through the provider
 SDK. See [Integrations](docs/integrations.md) for details.
@@ -122,5 +125,7 @@ production.
 ## Known Limitations
 
 - SQLite is the only storage option for now.
+- External resource-world resets are handled outside MaddPrestige, so make sure that behavior is tested separately for your
+  server setup.
 - The built-in Prestige Shop is being saved for later, once player feedback gives us a better idea of what should
   actually go in it.
