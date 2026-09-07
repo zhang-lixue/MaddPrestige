@@ -13,7 +13,7 @@
     <url>https://github.com/MaddKraft/MaddPrestige</url>
 
     <licenses>
-        <license><name>All rights reserved</name><distribution>manual</distribution></license>
+        <license><name>MIT License</name><url>https://opensource.org/license/mit</url><distribution>repo</distribution></license>
     </licenses>
 
     <modules>
