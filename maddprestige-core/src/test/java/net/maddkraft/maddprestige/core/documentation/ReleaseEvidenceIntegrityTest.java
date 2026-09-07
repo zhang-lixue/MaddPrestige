@@ -96,7 +96,8 @@ class ReleaseEvidenceIntegrityTest {
         assertTrue(architecture.contains("maddprestige-distribution"));
         assertTrue(architecture.contains("legacy V1 source remains frozen"));
         String readme = read(root.resolve("README.md"));
-        assertTrue(readme.contains("MaddPrestige-2.0.0-rc.1.jar"));
+        assertTrue(readme.contains("plugins/MaddPrestige.jar"));
+        assertTrue(read(root.resolve("docs/acceptance.md")).contains("MaddPrestige-2.0.0-rc.1.jar"));
         assertTrue(readme.contains("examples/compatibility/member-adventurer-veteran"));
 
         ArrayList<String> findings = new ArrayList<>();

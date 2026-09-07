@@ -70,6 +70,7 @@ class ReleasePackageIT {
         String candidateProperty = System.getProperty("release-package.distribution");
         assertNotNull(candidateProperty, "Failsafe must supply the final distribution path");
         Path candidate = Path.of(candidateProperty).toAbsolutePath().normalize();
+        assertEquals("MaddPrestige.jar", candidate.getFileName().toString());
         assertTrue(Files.isRegularFile(candidate), candidate.toString());
 
         try (ZipFile archive = new ZipFile(candidate.toFile())) {
