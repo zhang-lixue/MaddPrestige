@@ -121,7 +121,7 @@
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-enforcer-plugin</artifactId><version>3.6.2</version>
-                <executions><execution><id>phase1-build-invariants</id><goals><goal>enforce</goal></goals><configuration><rules><requireJavaVersion><version>[25,26)</version></requireJavaVersion><requireMavenVersion><version>[3.9.9,)</version></requireMavenVersion><dependencyConvergence/><banDuplicatePomDependencyVersions/></rules></configuration></execution></executions>
+                <executions><execution><id>build-invariants</id><goals><goal>enforce</goal></goals><configuration><rules><requireJavaVersion><version>[25,26)</version></requireJavaVersion><requireMavenVersion><version>[3.9.9,)</version></requireMavenVersion><dependencyConvergence/><banDuplicatePomDependencyVersions/></rules></configuration></execution></executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId><artifactId>maven-checkstyle-plugin</artifactId><version>3.6.0</version>
@@ -133,7 +133,7 @@
             </plugin>
             <plugin>
                 <groupId>org.cyclonedx</groupId><artifactId>cyclonedx-maven-plugin</artifactId><version>2.9.1</version>
-                <executions><execution><id>phase1-sbom</id><phase>verify</phase><goals><goal>makeAggregateBom</goal></goals><configuration><outputFormat>json</outputFormat><includeBomSerialNumber>false</includeBomSerialNumber></configuration></execution></executions>
+                <executions><execution><id>aggregate-sbom</id><phase>verify</phase><goals><goal>makeAggregateBom</goal></goals><configuration><outputFormat>json</outputFormat><includeBomSerialNumber>false</includeBomSerialNumber></configuration></execution></executions>
             </plugin>
         </plugins>
     </build>

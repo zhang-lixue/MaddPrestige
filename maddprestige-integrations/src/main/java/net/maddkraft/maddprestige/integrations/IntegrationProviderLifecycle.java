@@ -12,7 +12,7 @@ import net.maddkraft.maddprestige.api.provider.Provider;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistration;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationPlan;
+import net.maddkraft.maddprestige.integrations.config.IntegrationPlan;
 
 /** Owns one optional dependency's registry bindings without making dormant providers critical. */
 public final class IntegrationProviderLifecycle {
@@ -45,7 +45,7 @@ public final class IntegrationProviderLifecycle {
     }
 
     /** Applies one validated configuration plan as the exact desired active-provider set. */
-    public synchronized void reconcile(PhaseFiveIntegrationPlan plan) {
+    public synchronized void reconcile(IntegrationPlan plan) {
         Objects.requireNonNull(plan, "integration plan");
         reconcileActiveProviders(plan.reachableProviders());
     }

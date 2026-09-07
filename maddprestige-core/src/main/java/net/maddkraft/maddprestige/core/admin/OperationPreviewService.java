@@ -29,18 +29,18 @@ public final class OperationPreviewService {
     }
 
     public CompletionStage<OperationPreview> simulateRankUp(PermissionSubject subject, UUID playerId) {
-        requireSimulation(subject, playerId, PhaseSixPermissions.RANK_UP);
+        requireSimulation(subject, playerId, AdministrationPermissions.RANK_UP);
         return CompletableFuture.failedFuture(rankUpCompatibilityOnly());
     }
 
     public CompletionStage<OperationPreview> simulatePrestige(PermissionSubject subject, UUID playerId) {
-        requireSimulation(subject, playerId, PhaseSixPermissions.PRESTIGE);
+        requireSimulation(subject, playerId, AdministrationPermissions.PRESTIGE);
         return prestigePreview(subject, playerId, "simulate-prestige-");
     }
 
     /** Read-only staff inspection through the same authorization and projection pipeline as simulation. */
     public CompletionStage<OperationPreview> inspectPrestige(PermissionSubject subject, UUID playerId) {
-        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(AdministrationPermissions.PLAYER_VIEW);
         return prestigePreview(subject, playerId, "inspect-prestige-");
     }
 
@@ -55,12 +55,12 @@ public final class OperationPreviewService {
     }
 
     public CompletionStage<RankUpPlan> authorizeRankUp(PermissionSubject subject, UUID playerId) {
-        requireExecution(subject, playerId, PhaseSixPermissions.RANK_UP);
+        requireExecution(subject, playerId, AdministrationPermissions.RANK_UP);
         return CompletableFuture.failedFuture(rankUpCompatibilityOnly());
     }
 
     public CompletionStage<PrestigePlan> authorizePrestige(PermissionSubject subject, UUID playerId) {
-        requireExecution(subject, playerId, PhaseSixPermissions.PRESTIGE);
+        requireExecution(subject, playerId, AdministrationPermissions.PRESTIGE);
         return prestige.apply(new PrestigeIntent(subject.actor(), playerId,
                 "confirm-prestige-" + UUID.randomUUID())).thenApply(result -> {
                     Optional<PrestigePlan> plan = result.plan();
@@ -154,7 +154,7 @@ public final class OperationPreviewService {
         if (subject.actor().uuid().filter(playerId::equals).isPresent()) {
             subject.require(selfPermission);
         } else {
-            subject.require(PhaseSixPermissions.SIMULATE);
+            subject.require(AdministrationPermissions.SIMULATE);
         }
     }
 
@@ -162,7 +162,7 @@ public final class OperationPreviewService {
         if (subject.actor().uuid().filter(playerId::equals).isPresent()) {
             subject.require(selfPermission);
         } else {
-            subject.require(PhaseSixPermissions.EXECUTE);
+            subject.require(AdministrationPermissions.EXECUTE);
         }
     }
 

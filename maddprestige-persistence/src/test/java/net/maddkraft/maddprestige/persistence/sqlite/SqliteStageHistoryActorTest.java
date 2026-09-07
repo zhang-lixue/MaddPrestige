@@ -24,7 +24,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class SqliteStageHistoryActorTest {
     private static final Instant NOW = Instant.parse("2026-08-15T00:00:00Z");
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase4-stage-history");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("prestige-lifecycle-stage-history");
     @TempDir
     Path temporaryDirectory;
     private SqliteFoundation sqlite;
@@ -36,7 +36,7 @@ class SqliteStageHistoryActorTest {
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite,
                 new FileBackupService(database, temporaryDirectory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseSix());
+                Clock.systemUTC()).migrate(SqliteMigrations.throughVersionTen());
         new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("stage history actor"));
         repository = new SqlitePlayerStageRepository(sqlite);
     }

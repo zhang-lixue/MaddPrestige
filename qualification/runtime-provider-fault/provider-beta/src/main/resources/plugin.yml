@@ -1,0 +1,15 @@
+name: Qualification-Provider-Beta
+version: '1.0.0'
+main: net.maddkraft.qualification.runtimefault.beta.BetaProviderPlugin
+description: Independently owned Stable Beta provider for disposable runtime provider/fault qualification.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend: [MaddPrestige]
+commands:
+  qualificationbeta:
+    description: Controls the disposable runtime provider/fault Beta provider.
+    permission: maddprestige.qualification.provider.beta
+permissions:
+  maddprestige.qualification.provider.beta:
+    default: op

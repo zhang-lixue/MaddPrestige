@@ -165,7 +165,7 @@ class StartupPersistenceCompatibilityTest {
         boolean[] servicePublished = {false};
 
         assertThrows(PersistenceException.class, () -> {
-            SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseNineB());
+            SqliteDatabaseValidator.validate(database, SqliteMigrations.current());
             servicePublished[0] = true;
         });
 
@@ -173,12 +173,12 @@ class StartupPersistenceCompatibilityTest {
     }
 
     @Test
-    @DisplayName("[A63][P9B] Populated Phase 8 stage state archives and starts under empty numeric config at P0")
+    @DisplayName("[A63][P9B] Populated release-candidate stage state archives and starts under empty numeric config at P0")
     void acceptsReconstructiblePopulatedState() {
-        SqliteFoundation foundation = phaseEight("compatible.sqlite");
+        SqliteFoundation foundation = release("compatible.sqlite");
         StoredConfigurationRevision stored = revision(foundation, "revision-current", validDocuments(), NOW);
         UUID player = insertPlayer(foundation, stored.id(), "veteran", true);
-        migrate(foundation, SqliteMigrations.phaseNineB());
+        migrate(foundation, SqliteMigrations.current());
 
         assertDoesNotThrow(() -> StartupPersistenceCompatibility.assess(foundation, Optional.of(stored)));
         assertEquals("0", scalar(foundation,
@@ -229,14 +229,14 @@ class StartupPersistenceCompatibilityTest {
     private SqliteFoundation current(String name) {
         Path database = temporaryDirectory.resolve(name);
         SqliteFoundation foundation = new SqliteFoundation(database);
-        migrate(foundation, SqliteMigrations.phaseNineB());
+        migrate(foundation, SqliteMigrations.current());
         return foundation;
     }
 
-    private SqliteFoundation phaseEight(String name) {
+    private SqliteFoundation release(String name) {
         Path database = temporaryDirectory.resolve(name);
         SqliteFoundation foundation = new SqliteFoundation(database);
-        migrate(foundation, SqliteMigrations.phaseEightC());
+        migrate(foundation, SqliteMigrations.throughVersionEleven());
         return foundation;
     }
 
@@ -255,18 +255,18 @@ class StartupPersistenceCompatibilityTest {
         String legacyHash = RevisionHasher.hashText(compiled.contentHash().value() + "\0" + rawId).value();
         execute(foundation, "INSERT INTO mp_config_revisions (revision_id, content_hash, created_at, applied_at, "
                 + "actor, source_surface, validation_summary, diff_summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                rawId, legacyHash, appliedAt.toString(), appliedAt.toString(), "Owner", "phase8c-test", "valid", "test");
+                rawId, legacyHash, appliedAt.toString(), appliedAt.toString(), "Owner", "migration-recovery-test", "valid", "test");
         execute(foundation, "INSERT INTO mp_configuration_revisions_v2 (revision_id, canonical_content_hash, "
                 + "actor_type, actor_name, source_surface, reason, validation_summary, diff_summary, "
                 + "application_status, created_at, applied_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                rawId, compiled.contentHash().value(), "console", "Owner", "phase8c-test", "test", "valid", "test",
+                rawId, compiled.contentHash().value(), "console", "Owner", "migration-recovery-test", "test", "valid", "test",
                 "APPLIED", appliedAt.toString(), appliedAt.toString());
         documents.forEach((name, content) -> execute(foundation,
                 "INSERT INTO mp_configuration_revision_documents (revision_id, document_name, document_hash, "
                         + "document_content) VALUES (?, ?, ?, ?)",
                 rawId, name, RevisionHasher.hashText(content).value(), content));
         return new StoredConfigurationRevision(id, Optional.empty(), Optional.empty(), compiled,
-                new Actor("console", Optional.empty(), "Owner"), "phase8c-test", "test", ValidationReport.VALID,
+                new Actor("console", Optional.empty(), "Owner"), "migration-recovery-test", "test", ValidationReport.VALID,
                 "test", ConfigurationApplicationStatus.APPLIED, appliedAt, Optional.of(appliedAt), Optional.empty());
     }
 
@@ -309,12 +309,12 @@ class StartupPersistenceCompatibilityTest {
         String canonicalHash = RevisionHasher.hashDocuments(documents).value();
         execute(foundation, "INSERT INTO mp_config_revisions (revision_id, content_hash, created_at, actor, "
                 + "source_surface, validation_summary, diff_summary) VALUES (?, ?, ?, ?, ?, ?, ?)", rawId,
-                RevisionHasher.hashText("dormant-" + rawId).value(), NOW.toString(), "Owner", "phase8c-test",
+                RevisionHasher.hashText("dormant-" + rawId).value(), NOW.toString(), "Owner", "migration-recovery-test",
                 "valid", "test");
         execute(foundation, "INSERT INTO mp_configuration_revisions_v2 (revision_id, canonical_content_hash, "
                 + "actor_type, actor_name, source_surface, reason, validation_summary, diff_summary, "
                 + "application_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rawId, canonicalHash,
-                "console", "Owner", "phase8c-test", "test", "valid", "test", "ATTEMPTED", NOW.toString());
+                "console", "Owner", "migration-recovery-test", "test", "valid", "test", "ATTEMPTED", NOW.toString());
         documents.forEach((name, content) -> execute(foundation,
                 "INSERT INTO mp_configuration_revision_documents (revision_id, document_name, document_hash, "
                         + "document_content) VALUES (?, ?, ?, ?)",

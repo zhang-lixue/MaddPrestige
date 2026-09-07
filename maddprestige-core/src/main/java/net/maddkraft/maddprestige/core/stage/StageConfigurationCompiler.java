@@ -312,7 +312,7 @@ public final class StageConfigurationCompiler {
                 .collect(java.util.stream.Collectors.toSet());
         if (providers.size() > 1) {
             findings.add(error("stage.projection.multiple_providers", "progression.stages",
-                    "Phase 2 supports one rank adapter per ordered ladder, but found " + providers.size() + ".",
+                    "The stage compatibility model supports one rank adapter per ordered ladder, but found " + providers.size() + ".",
                     "Use one rank provider for projected stages; projection: none remains available for baseline stages."));
         }
         Map<String, Long> groupUse = configuration.stages().values().stream()
@@ -401,9 +401,9 @@ public final class StageConfigurationCompiler {
                 findings.add(error("stage.field.key.type", "progression.stages." + stageId,
                         "Stage field keys must be scalar text.", "Use documented stage field names."));
             } else if (DEFERRED_STAGE_KEYS.contains(key)) {
-                findings.add(error("stage.feature.unsupported_phase2", path(stageId, key),
-                        "The configured '" + key + "' feature is not active in Phase 2.",
-                        "Remove it from an active draft and configure it only after its owning phase is implemented."));
+                findings.add(error("stage.feature.unsupported", path(stageId, key),
+                        "The configured '" + key + "' feature is not active in the current runtime.",
+                        "Remove it from an active draft until the feature is supported."));
             } else if (!STAGE_KEYS.contains(key)) {
                 findings.add(warning("stage.field.unknown", path(stageId, key),
                         "Unknown stage field '" + key + "' is preserved but not activated.",

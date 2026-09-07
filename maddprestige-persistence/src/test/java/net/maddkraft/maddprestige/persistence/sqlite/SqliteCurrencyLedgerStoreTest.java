@@ -48,7 +48,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 class SqliteCurrencyLedgerStoreTest {
     private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-08-15T12:00:00Z"), ZoneOffset.UTC);
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase4-currency");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("prestige-lifecycle-currency");
     private static final CurrencyId CURRENCY = new CurrencyId("generic_credit");
     @TempDir
     Path temporaryDirectory;
@@ -62,8 +62,8 @@ class SqliteCurrencyLedgerStoreTest {
         Path database = temporaryDirectory.resolve("currency.db");
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite, new FileBackupService(database, temporaryDirectory.resolve("backups"), CLOCK),
-                CLOCK).migrate(SqliteMigrations.phaseFour());
-        new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("phase four currency"));
+                CLOCK).migrate(SqliteMigrations.throughVersionFive());
+        new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("Prestige lifecycle currency"));
         store = new SqliteCurrencyLedgerStore(sqlite);
         definitions = new AtomicReference<>(Map.of(CURRENCY, definition("Credits", "¤")));
         service = new InternalCurrencyService(definitions::get, store, CLOCK);
@@ -182,8 +182,8 @@ class SqliteCurrencyLedgerStoreTest {
                 costs.characteristics(costDefinition), "entry");
         PlannedReward reward = new PlannedReward(operation, "reward-0", player, rewardDefinition, REVISION, 1,
                 rewards.characteristics(rewardDefinition), "bonus");
-        ConfigRevisionId activeR2 = new ConfigRevisionId("phase4-currency-r2");
-        new SqliteConfigRevisionRepository(sqlite).insert(activeR2, RevisionHasher.hashText("phase four R2"));
+        ConfigRevisionId activeR2 = new ConfigRevisionId("prestige-lifecycle-currency-r2");
+        new SqliteConfigRevisionRepository(sqlite).insert(activeR2, RevisionHasher.hashText("Prestige lifecycle R2"));
         AtomicReference<ConfigRevisionId> activeRevision = new AtomicReference<>(REVISION);
         activeRevision.set(activeR2);
 

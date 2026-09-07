@@ -12,7 +12,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import net.maddkraft.maddprestige.api.metric.MetricProvider;
 import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationAdministrationService;
 import net.maddkraft.maddprestige.core.admin.setup.SetupWizardService;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
@@ -153,19 +153,19 @@ public final class CommandCompletionService {
         if (root.equals("config")) {
             return configCandidates(subject, tokens);
         }
-        if (root.equals("simulate") && subject.has(PhaseSixPermissions.SIMULATE)) {
+        if (root.equals("simulate") && subject.has(AdministrationPermissions.SIMULATE)) {
             return prestigeDetailsCandidates(tokens);
         }
-        if (root.equals("why") && (subject.has(PhaseSixPermissions.USE)
-                || subject.has(PhaseSixPermissions.PLAYER_VIEW))) {
+        if (root.equals("why") && (subject.has(AdministrationPermissions.USE)
+                || subject.has(AdministrationPermissions.PLAYER_VIEW))) {
             return prestigeDetailsCandidates(tokens);
         }
         if (root.equals(CONFIRM) && tokens.size() == 2 && confirmations != null
-                && subject.has(PhaseSixPermissions.PRESTIGE)) {
+                && subject.has(AdministrationPermissions.PRESTIGE)) {
             return confirmations.validConfirmationIds(subject).stream().map(UUID::toString).toList();
         }
         if (root.equals("history") && staffHistory != null
-                && subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
+                && subject.has(AdministrationPermissions.PLAYER_VIEW)) {
             if (tokens.size() == 2) {
                 ArrayList<String> suggestions = new ArrayList<>();
                 suggestions.add(DETAILS);
@@ -181,25 +181,25 @@ public final class CommandCompletionService {
             }
         }
         if (root.equals("admin") && staffHistory != null
-                && subject.has(PhaseSixPermissions.ADMIN_GUI)) {
+                && subject.has(AdministrationPermissions.ADMIN_GUI)) {
             if (tokens.size() == 2) {
-                return subject.has(PhaseSixPermissions.PLAYER_VIEW) ? List.of("find") : List.of();
+                return subject.has(AdministrationPermissions.PLAYER_VIEW) ? List.of("find") : List.of();
             }
             if (tokens.size() == 3 && tokens.get(1).equalsIgnoreCase("find")
-                    && subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
+                    && subject.has(AdministrationPermissions.PLAYER_VIEW)) {
                 return staffHistory.playerSuggestions();
             }
         }
         if (root.equals("help")) {
             return List.of("overview", SETUP_COMMAND, "measurement", "requirements", "scaling", "providers");
         }
-        if (root.equals("doctor") && subject.has(PhaseSixPermissions.DOCTOR)) {
+        if (root.equals("doctor") && subject.has(AdministrationPermissions.DOCTOR)) {
             return tokens.size() == 2 ? List.of(DETAILS) : List.of();
         }
-        if (root.equals(SETUP_COMMAND) && subject.has(PhaseSixPermissions.SETUP)) {
+        if (root.equals(SETUP_COMMAND) && subject.has(AdministrationPermissions.SETUP)) {
             return setupCandidates(tokens);
         }
-        if (root.equals("staff") && subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT)) {
+        if (root.equals("staff") && subject.has(AdministrationPermissions.PLAYER_PRESTIGE_EDIT)) {
             if (tokens.size() == 2) {
                 return List.of(PRESTIGE);
             }
@@ -223,17 +223,17 @@ public final class CommandCompletionService {
     private List<String> configCandidates(PermissionSubject subject, List<String> tokens) {
         if (tokens.size() == 2) {
             ArrayList<String> subcommands = new ArrayList<>();
-            if (subject.has(PhaseSixPermissions.CONFIG_VIEW)) {
+            if (subject.has(AdministrationPermissions.CONFIG_VIEW)) {
                 subcommands.addAll(List.of("get", "list", "search", "explain", "history", "validate", "diff"));
             }
-            if (subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
+            if (subject.has(AdministrationPermissions.CONFIG_EDIT)) {
                 subcommands.addAll(List.of("draft", "set", "add", "remove", "segment-add", "segment-edit",
                         "segment-remove", CANCEL));
             }
-            if (subject.has(PhaseSixPermissions.CONFIG_APPLY)) {
+            if (subject.has(AdministrationPermissions.CONFIG_APPLY)) {
                 subcommands.addAll(List.of(APPLY, ACKNOWLEDGE, CONFIRM));
             }
-            if (subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)) {
+            if (subject.has(AdministrationPermissions.CONFIG_ROLLBACK)) {
                 subcommands.addAll(List.of("rollback", "rollback-apply", ACKNOWLEDGE, CONFIRM,
                         "validate", "diff", CANCEL));
             }
@@ -241,15 +241,15 @@ public final class CommandCompletionService {
         }
         String operation = tokens.get(1).toLowerCase(Locale.ROOT);
         if (tokens.size() == 3 && Set.of("get", "explain").contains(operation)
-                && subject.has(PhaseSixPermissions.CONFIG_VIEW)) {
+                && subject.has(AdministrationPermissions.CONFIG_VIEW)) {
             return catalog.get().schemaPaths();
         }
-        if (operation.equals("list") && subject.has(PhaseSixPermissions.CONFIG_VIEW)) {
+        if (operation.equals("list") && subject.has(AdministrationPermissions.CONFIG_VIEW)) {
             return tokens.size() == 3 ? draftIds(subject)
                     : tokens.size() == 4 ? catalog.get().structuralPaths() : List.of();
         }
         if (Set.of("set", "add", "remove").contains(operation)
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT)) {
+                && subject.has(AdministrationPermissions.CONFIG_EDIT)) {
             if (tokens.size() == 3) {
                 return draftIds(subject);
             }
@@ -266,27 +266,27 @@ public final class CommandCompletionService {
             }
         }
         if (Set.of("segment-add", "segment-edit", "segment-remove").contains(operation)
-                && subject.has(PhaseSixPermissions.CONFIG_EDIT) && tokens.size() == 3) {
+                && subject.has(AdministrationPermissions.CONFIG_EDIT) && tokens.size() == 3) {
             return draftIds(subject);
         }
         if (Set.of("validate", "diff").contains(operation) && tokens.size() == 3
-                && (subject.has(PhaseSixPermissions.CONFIG_VIEW)
-                || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+                && (subject.has(AdministrationPermissions.CONFIG_VIEW)
+                || subject.has(AdministrationPermissions.CONFIG_ROLLBACK))) {
             return draftIds(subject);
         }
         if (operation.equals(CANCEL) && tokens.size() == 3
-                && (subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+                && (subject.has(AdministrationPermissions.CONFIG_EDIT)
+                || subject.has(AdministrationPermissions.CONFIG_ROLLBACK))) {
             return draftIds(subject);
         }
         if (operation.equals(ACKNOWLEDGE) && tokens.size() == 3
-                && (subject.has(PhaseSixPermissions.CONFIG_APPLY)
-                || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+                && (subject.has(AdministrationPermissions.CONFIG_APPLY)
+                || subject.has(AdministrationPermissions.CONFIG_ROLLBACK))) {
             return draftIds(subject);
         }
-        if ((operation.equals(APPLY) && subject.has(PhaseSixPermissions.CONFIG_APPLY))
+        if ((operation.equals(APPLY) && subject.has(AdministrationPermissions.CONFIG_APPLY))
                 || (operation.equals("rollback-apply")
-                && subject.has(PhaseSixPermissions.CONFIG_ROLLBACK))) {
+                && subject.has(AdministrationPermissions.CONFIG_ROLLBACK))) {
             if (tokens.size() == 3) {
                 return draftIds(subject);
             }
@@ -385,39 +385,39 @@ public final class CommandCompletionService {
     private List<String> rootCommands(PermissionSubject subject) {
         ArrayList<String> commands = new ArrayList<>();
         boolean player = subject.actor().uuid().isPresent();
-        if (subject.has(PhaseSixPermissions.USE)) {
+        if (subject.has(AdministrationPermissions.USE)) {
             commands.addAll(List.of("help", "status", "why"));
         }
-        if (player && subject.has(PhaseSixPermissions.PRESTIGE)) {
+        if (player && subject.has(AdministrationPermissions.PRESTIGE)) {
             commands.add(PRESTIGE);
             commands.add(CONFIRM);
         }
-        if (subject.has(PhaseSixPermissions.CONFIG_VIEW) || subject.has(PhaseSixPermissions.CONFIG_EDIT)
-                || subject.has(PhaseSixPermissions.CONFIG_APPLY) || subject.has(PhaseSixPermissions.CONFIG_ROLLBACK)) {
+        if (subject.has(AdministrationPermissions.CONFIG_VIEW) || subject.has(AdministrationPermissions.CONFIG_EDIT)
+                || subject.has(AdministrationPermissions.CONFIG_APPLY) || subject.has(AdministrationPermissions.CONFIG_ROLLBACK)) {
             commands.add("config");
         }
-        if (subject.has(PhaseSixPermissions.DOCTOR)) {
+        if (subject.has(AdministrationPermissions.DOCTOR)) {
             commands.add("doctor");
         }
-        if (subject.has(PhaseSixPermissions.SIMULATE)) {
+        if (subject.has(AdministrationPermissions.SIMULATE)) {
             commands.add("simulate");
         }
-        if (subject.has(PhaseSixPermissions.SETUP)) {
+        if (subject.has(AdministrationPermissions.SETUP)) {
             commands.add(SETUP_COMMAND);
         }
-        if (player && (subject.has(PhaseSixPermissions.ADMIN_GUI) || subject.has(PhaseSixPermissions.USE))) {
+        if (player && (subject.has(AdministrationPermissions.ADMIN_GUI) || subject.has(AdministrationPermissions.USE))) {
             commands.add("gui");
         }
-        if (player && subject.has(PhaseSixPermissions.ADMIN_GUI)) {
+        if (player && subject.has(AdministrationPermissions.ADMIN_GUI)) {
             commands.add("admin");
         }
-        if (subject.has(PhaseSixPermissions.PLAYER_VIEW)) {
+        if (subject.has(AdministrationPermissions.PLAYER_VIEW)) {
             commands.add("player");
             if (staffHistory != null) {
                 commands.add("history");
             }
         }
-        if (subject.has(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT)) {
+        if (subject.has(AdministrationPermissions.PLAYER_PRESTIGE_EDIT)) {
             commands.add("staff");
         }
         return commands;

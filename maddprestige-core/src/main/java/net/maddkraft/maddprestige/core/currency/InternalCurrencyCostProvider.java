@@ -26,6 +26,7 @@ import net.maddkraft.maddprestige.api.validation.ValidationFinding;
 import net.maddkraft.maddprestige.api.validation.ValidationReport;
 import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 
 /** Native exact-decimal debit provider backed by the idempotent internal ledger. */
 public final class InternalCurrencyCostProvider implements NativeRecoverableCostProvider {
@@ -46,7 +47,7 @@ public final class InternalCurrencyCostProvider implements NativeRecoverableCost
             CurrencyLedgerStore store,
             Clock clock) {
         descriptor = new ProviderDescriptor(Objects.requireNonNull(id, "provider ID"),
-                Objects.requireNonNull(ownerIdentity, "owner identity"), "1", "phase4", List.of(), List.of(
+                Objects.requireNonNull(ownerIdentity, "owner identity"), "1", ProviderMetadataVersions.implementationVersion(InternalCurrencyCostProvider.class), List.of(), List.of(
                         new CapabilityDescriptor("internal-currency-cost", "cost",
                                 "Exact internal currency debit", Map.of())));
         this.definitions = Objects.requireNonNull(definitions, "currency definitions");

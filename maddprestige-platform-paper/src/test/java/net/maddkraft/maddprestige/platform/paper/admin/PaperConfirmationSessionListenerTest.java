@@ -16,7 +16,7 @@ import org.junit.jupiter.api.Test;
 
 final class PaperConfirmationSessionListenerTest {
     @Test
-    @DisplayName("[Phase 9D UX] Paper join, quit, and kick route exact confirmation-session lifecycle")
+    @DisplayName("Paper join, quit, and kick route exact confirmation-session lifecycle")
     void routesPlayerSessionLifecycle() {
         UUID playerId = UUID.fromString("11111111-1111-1111-1111-111111111111");
         Player player = mock(Player.class);

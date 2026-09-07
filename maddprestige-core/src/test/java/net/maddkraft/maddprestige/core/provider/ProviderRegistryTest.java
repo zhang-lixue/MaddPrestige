@@ -41,7 +41,7 @@ class ProviderRegistryTest {
     }
 
     @Test
-    @DisplayName("[A65][8B] Blocking metadata callbacks never hold the registry monitor and snapshots are cached")
+    @DisplayName("[A65] Blocking metadata callbacks never hold the registry monitor and snapshots are cached")
     void callbacksNeverRunUnderRegistryMonitor() throws Exception {
         ProviderRegistry registry = new ProviderRegistry();
         CountDownLatch entered = new CountDownLatch(1);
@@ -78,7 +78,7 @@ class ProviderRegistryTest {
     }
 
     @Test
-    @DisplayName("[A65][8B] Health callback failures are isolated and observer callbacks run outside the monitor")
+    @DisplayName("[A65] Health callback failures are isolated and observer callbacks run outside the monitor")
     void healthFailuresAndObserversAreIsolated() throws Exception {
         ProviderRegistry registry = new ProviderRegistry();
         AtomicInteger calls = new AtomicInteger();
@@ -110,7 +110,7 @@ class ProviderRegistryTest {
     }
 
     @Test
-    @DisplayName("[8B] Health observations with only a newer timestamp are coalesced")
+    @DisplayName("Health observations with only a newer timestamp are coalesced")
     void unchangedHealthMeaningDoesNotPublishAnotherTransition() throws Exception {
         ProviderRegistry registry = new ProviderRegistry();
         AtomicInteger observations = new AtomicInteger();
@@ -136,7 +136,7 @@ class ProviderRegistryTest {
     }
 
     @Test
-    @DisplayName("[8B] Provider lifecycle observations are ordered and execute outside the registry monitor")
+    @DisplayName("Provider lifecycle observations are ordered and execute outside the registry monitor")
     void lifecycleObserversRunOutsideRegistryMonitor() throws Exception {
         ProviderRegistry registry = new ProviderRegistry();
         AtomicInteger observations = new AtomicInteger();

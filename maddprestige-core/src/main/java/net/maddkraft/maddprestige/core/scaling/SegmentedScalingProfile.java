@@ -78,7 +78,7 @@ public final class SegmentedScalingProfile {
     }
 
     /** True when the profile covers every target level permitted by the configured Prestige limit. */
-    public boolean covers(net.maddkraft.maddprestige.core.config.phase4.PrestigeLimit limit) {
+    public boolean covers(net.maddkraft.maddprestige.core.config.lifecycle.PrestigeLimit limit) {
         Objects.requireNonNull(limit, "Prestige limit");
         PrestigeScalingSegment last = segments.getLast();
         return last.endLevel().isEmpty() || limit.maximum().isPresent()

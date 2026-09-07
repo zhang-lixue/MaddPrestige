@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -50,7 +51,7 @@ public final class WorldGuardRegionMetricProvider implements MetricProvider {
         this.scheduler = java.util.Objects.requireNonNull(scheduler, "scheduler");
         this.health = java.util.Objects.requireNonNull(health, "health");
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
-        descriptor = new ProviderDescriptor(ID, "maddprestige", "phase7", detectedVersion,
+        descriptor = new ProviderDescriptor(ID, "maddprestige", ProviderMetadataVersions.STABLE_API, detectedVersion,
                 List.of(new DependencyDescriptor("WorldGuard", "[7.0.18,7.0.19)",
                         Optional.of(detectedVersion))),
                 List.of(new CapabilityDescriptor(ID.value(), "metric", "Read-only exact region membership",

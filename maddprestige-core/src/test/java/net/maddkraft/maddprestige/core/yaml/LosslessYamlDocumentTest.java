@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 
 class LosslessYamlDocumentTest {
     @Test
-    @DisplayName("[A38][Phase1-hard-3] Golden edit preserves comments/order/dotted keys/unknown keys/UTF-8/multiple docs")
+    @DisplayName("[A38]Golden edit preserves comments/order/dotted keys/unknown keys/UTF-8/multiple docs")
     void performsLosslessGoldenRoundTrip() throws IOException, URISyntaxException {
         String input = resource("roundtrip-input.yml");
         String expected = resource("roundtrip-expected.yml");
@@ -112,7 +112,7 @@ class LosslessYamlDocumentTest {
         String source = """
                 anchored: &shared original
                 alias: *shared
-                custom: !phase1 original
+                custom: !foundation original
                 standard: !!str original
                 """;
         LosslessYamlDocument document = LosslessYamlDocument.parse(source);
@@ -165,7 +165,7 @@ class LosslessYamlDocumentTest {
     }
 
     @Test
-    @DisplayName("[Phase 9C] Omitted safe defaults materialize as canonical nested scalars and lists")
+    @DisplayName("Omitted safe defaults materialize as canonical nested scalars and lists")
     void materializesOmittedConfigurationPaths() {
         LosslessYamlDocument edited = LosslessYamlDocument.parse("schema-version: 4\n")
                 .setBoolean(YamlPath.document(0).key("prestige").key("enabled"), true)
@@ -185,7 +185,7 @@ class LosslessYamlDocumentTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Missing mapping scalars materialize below an existing sequence item")
+    @DisplayName("Missing mapping scalars materialize below an existing sequence item")
     void materializesMappingScalarBelowExistingSequenceItem() {
         String source = """
                 scaling:
@@ -208,7 +208,7 @@ class LosslessYamlDocumentTest {
     }
 
     @Test
-    @DisplayName("[Phase 9C correction] Structured map and sequence edits preserve surrounding YAML")
+    @DisplayName("Structured map and sequence edits preserve surrounding YAML")
     void createsEditsAndRemovesStructuredValuesLosslessly() {
         String source = "# owner\r\nschema-version: 4\r\nprestige:\r\n  enabled: true\r\ntail: keep\r\n";
         YamlPath segments = YamlPath.document(0).key("prestige").key("cost-scaling")
@@ -246,12 +246,12 @@ class LosslessYamlDocumentTest {
     }
 
     @Test
-    @DisplayName("[Phase 9D] Two scaling segments append before an existing sibling requirement")
+    @DisplayName("Two scaling segments append before an existing sibling requirement")
     void appendsTwoScalingSegmentsBeforeExistingSiblingRequirement() {
         String source = """
                 schema-version: 3
                 requirements:
-                  phase9d_vault_balance:
+                  vault_balance:
                     completion: LIVE
                     metric: balance
                     provider: vault_balance
@@ -262,7 +262,7 @@ class LosslessYamlDocumentTest {
                       mode: MANUAL
                       base: 1
                       rate: 0
-                  phase9d_mcmmo_total_level:
+                  mcmmo_total_level:
                     completion: LIVE
                     metric: total_level
                     provider: mcmmo
@@ -270,7 +270,7 @@ class LosslessYamlDocumentTest {
                     target: "1"
                     value-type: INTEGER_COUNT
                 """;
-        YamlPath segments = YamlPath.document(0).key("requirements").key("phase9d_vault_balance")
+        YamlPath segments = YamlPath.document(0).key("requirements").key("vault_balance")
                 .key("scaling").key("segments");
 
         LosslessYamlDocument first = LosslessYamlDocument.parse(source).appendSequenceStructure(segments,
@@ -297,7 +297,7 @@ class LosslessYamlDocumentTest {
         assertEquals("4", second.scalar(segments.index(1).key("start-prestige")));
         assertEquals("CONTINUE", second.scalar(segments.index(1).key("transition")));
         assertEquals("mcmmo", second.scalar(YamlPath.document(0).key("requirements")
-                .key("phase9d_mcmmo_total_level").key("provider")));
+                .key("mcmmo_total_level").key("provider")));
 
         LosslessYamlDocument firstReplaced = second.replaceSequenceStructure(segments, 0, Map.of(
                 "start-prestige", 1L,
@@ -318,7 +318,7 @@ class LosslessYamlDocumentTest {
         assertEquals("3", bothReplaced.scalar(segments.index(1).key("start-prestige")));
         assertEquals("CONTINUE", bothReplaced.scalar(segments.index(1).key("transition")));
         assertEquals("mcmmo", bothReplaced.scalar(YamlPath.document(0).key("requirements")
-                .key("phase9d_mcmmo_total_level").key("provider")));
+                .key("mcmmo_total_level").key("provider")));
     }
 
     @Test

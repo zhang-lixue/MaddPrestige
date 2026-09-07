@@ -44,13 +44,13 @@ class SqliteRepositoryTest {
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite,
                 new FileBackupService(database, temporaryDirectory.resolve("backups"), Clock.systemUTC()),
-                Clock.systemUTC()).migrate(SqliteMigrations.phaseOne());
+                Clock.systemUTC()).migrate(SqliteMigrations.throughVersionOne());
         revisionId = new ConfigRevisionId("revision_1");
         new SqliteConfigRevisionRepository(sqlite).insert(revisionId, RevisionHasher.hashText("revision one"));
     }
 
     @Test
-    @DisplayName("[Phase1-hard-8] Persistence uniqueness prevents duplicate operation idempotency keys")
+    @DisplayName("Persistence uniqueness prevents duplicate operation idempotency keys")
     void preventsDuplicateOperations() {
         UUID target = UUID.randomUUID();
         SqliteOperationRepository repository = new SqliteOperationRepository(sqlite);
@@ -65,7 +65,7 @@ class SqliteRepositoryTest {
     }
 
     @Test
-    @DisplayName("[A30][Phase1-hard-9] SQLite exact decimals round-trip without floating-point conversion")
+    @DisplayName("[A30]SQLite exact decimals round-trip without floating-point conversion")
     void roundTripsExactDecimal() {
         SqliteCurrencyAccountRepository repository = new SqliteCurrencyAccountRepository(sqlite);
         UUID player = UUID.randomUUID();
@@ -77,13 +77,13 @@ class SqliteRepositoryTest {
     }
 
     @Test
-    @DisplayName("[A57][Phase1-hard-11] SQLite audit persistence redacts sensitive values before storage")
+    @DisplayName("[A57]SQLite audit persistence redacts sensitive values before storage")
     void persistsRedactedAuditValues() throws Exception {
         UUID auditId = UUID.randomUUID();
         AuditRecord record = new AuditRecord(auditId, new Actor("console", Optional.empty(), "Console"),
                 Optional.empty(), Optional.empty(), Optional.of(revisionId), "config.apply",
                 Optional.of(new AuditValue("old-secret", true)), Optional.of(new AuditValue("new-secret", true)),
-                "command", "Phase 1 redaction test", AuditOutcome.SUCCEEDED, Optional.empty(), UUID.randomUUID(),
+                "command", "foundation redaction test", AuditOutcome.SUCCEEDED, Optional.empty(), UUID.randomUUID(),
                 Instant.now());
         new SqliteAuditRepository(sqlite).append(record);
         try (var connection = sqlite.open();

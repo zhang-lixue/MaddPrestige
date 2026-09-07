@@ -49,7 +49,7 @@ import net.maddkraft.maddprestige.core.admin.PermissionSubject;
 import net.maddkraft.maddprestige.core.admin.command.CommandCompletionService;
 import net.maddkraft.maddprestige.core.admin.command.CommandInvocation;
 import net.maddkraft.maddprestige.core.admin.command.CommandResponse;
-import net.maddkraft.maddprestige.core.admin.command.PhaseSixCommandService;
+import net.maddkraft.maddprestige.core.admin.command.AdministrationCommandService;
 import net.maddkraft.maddprestige.core.admin.config.GuidedConfigurationAdministration;
 import net.maddkraft.maddprestige.core.admin.config.GuidedMoneyConfigurationResult;
 import net.maddkraft.maddprestige.core.admin.config.GuidedMoneyConfigurationReview;
@@ -133,7 +133,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase6-security] Every drag is cancelled while an authoritative GUI is open")
+    @DisplayName("Every drag is cancelled while an authoritative GUI is open")
     void blocksDragInjectionAndTransfer() {
         var topDrag = guard.drag(Set.of(1, 2), 9);
         var bottomDrag = guard.drag(Set.of(10, 11), 9);
@@ -145,7 +145,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Semantic GUI icons map only to inert server-rendered inventory materials")
+    @DisplayName("Semantic GUI icons map only to inert server-rendered inventory materials")
     void mapsServerOwnedDisplayMaterials() {
         assertEquals(Material.CLOCK, PaperGuiInventory.material(GuiItemIcon.PROGRESS));
         assertEquals(Material.COMPASS, PaperGuiInventory.material(GuiItemIcon.REFRESH));
@@ -173,7 +173,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff inventory actions route only to the Staff GUI service")
+    @DisplayName("Staff inventory actions route only to the Staff GUI service")
     void routesStaffInventoryToStaffAuthority(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -192,7 +192,7 @@ class PaperGuiInventoryGuardTest {
                 .thenReturn(CompletableFuture.completedFuture(PlayerGuiInteractionResult.closed()));
         DeferredScheduler deferred = new DeferredScheduler();
         InventoryClickEvent event = click(holder, player);
-        PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+        PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                 playerGui, staffGui, guard, deferred, messages);
 
         controller.onClick(event);
@@ -205,7 +205,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Outside click is cancelled without consuming the Staff GUI session")
+    @DisplayName("Outside click is cancelled without consuming the Staff GUI session")
     void outsideClickLeavesTrackedSessionUsable(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -223,7 +223,7 @@ class PaperGuiInventoryGuardTest {
                 org.mockito.ArgumentMatchers.eq(closeActionId)))
                 .thenReturn(CompletableFuture.completedFuture(PlayerGuiInteractionResult.closed()));
         DeferredScheduler deferred = new DeferredScheduler();
-        PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+        PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                 playerGui, staffGui, guard, deferred, messages);
         InventoryClickEvent outside = click(holder, player, InventoryView.OUTSIDE);
 
@@ -245,7 +245,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Copy UUID uses a safe client clipboard action and refreshed Staff view")
+    @DisplayName("Copy UUID uses a safe client clipboard action and refreshed Staff view")
     void copiesSelectedPlayerUuidThroughClickableFallback(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -277,7 +277,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(rendered);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
 
             controller.onClick(click(holder, player, 8));
@@ -295,12 +295,12 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B correction] First Staff clicks open Player Management and Player Overview")
+    @DisplayName("First Staff clicks open Player Management and Player Overview")
     void firstStaffClicksOpenPlayerManagementAndOverview(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         UUID staffId = UUID.fromString("11111111-1111-4111-8111-111111111111");
         UUID playerId = UUID.fromString("00000000-0000-3000-8000-000000000001");
-        ConfigRevisionId revision = new ConfigRevisionId("phase9f-b-first-click");
+        ConfigRevisionId revision = new ConfigRevisionId("staff-gui-first-click");
         assertDoesNotThrow(() -> messages.render(
                 MessageReference.of("gui.item.staff.player.uuid", "uuid", playerId)));
         PlayerProgressViewService progress = mock(PlayerProgressViewService.class);
@@ -341,7 +341,7 @@ class PaperGuiInventoryGuardTest {
         Player staff = mock(Player.class);
         preparePlayer(staff);
         when(staff.getUniqueId()).thenReturn(staffId);
-        when(staff.getName()).thenReturn("phase9f-staff");
+        when(staff.getName()).thenReturn("gui-staff");
         when(staff.isOnline()).thenReturn(true);
         ArrayList<Component> sent = new ArrayList<>();
         doAnswer(invocation -> sent.add(invocation.getArgument(0)))
@@ -374,7 +374,7 @@ class PaperGuiInventoryGuardTest {
                         titles.add(invocation.getArgument(2));
                         return inventory;
                     });
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
             var subject = PaperPermissionSubjects.from(staff);
             GuiSessionView dashboard = staffGui.open(subject);
@@ -494,10 +494,10 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 correction] Every guided Money screen opens on the first Paper click")
+    @DisplayName("Every guided Money screen opens on the first Paper click")
     void guidedMoneyPathOpensEveryDestinationOnFirstClick(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
-        ConfigRevisionId revision = new ConfigRevisionId("phase9f-c2-first-click");
+        ConfigRevisionId revision = new ConfigRevisionId("configuration-administration-first-click");
         PaperGuidedConfigurationStub guided = new PaperGuidedConfigurationStub(revision);
         GuiSessionService sessions = new GuiSessionService(() -> Optional.of(revision),
                 (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
@@ -544,7 +544,7 @@ class PaperGuiInventoryGuardTest {
                         titles.add(invocation.getArgument(2));
                         return inventory;
                     });
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
             PermissionSubject subject = PaperPermissionSubjects.from(staff);
             GuiSessionView dashboard = staffGui.open(subject);
@@ -599,10 +599,10 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Every guided Reward screen opens on the first Paper click")
+    @DisplayName("Every guided Reward screen opens on the first Paper click")
     void guidedRewardPathOpensEveryDestinationOnFirstClick(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
-        ConfigRevisionId revision = new ConfigRevisionId("phase9f-c2-reward-first-click");
+        ConfigRevisionId revision = new ConfigRevisionId("configuration-administration-reward-first-click");
         PaperGuidedConfigurationStub guided = new PaperGuidedConfigurationStub(revision);
         GuiSessionService sessions = new GuiSessionService(() -> Optional.of(revision),
                 (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
@@ -641,7 +641,7 @@ class PaperGuiInventoryGuardTest {
                         titles.add(invocation.getArgument(2));
                         return inventory;
                     });
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
             PermissionSubject subject = PaperPermissionSubjects.from(staff);
             controller.open(staff, staffGui.open(subject));
@@ -692,10 +692,10 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 correction] Linear increment opens the Paper input on the first click")
+    @DisplayName("Linear increment opens the Paper input on the first click")
     void guidedScalingPathOpensInputOnFirstClick(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
-        ConfigRevisionId revision = new ConfigRevisionId("phase9f-c2-scaling-first-click");
+        ConfigRevisionId revision = new ConfigRevisionId("configuration-administration-scaling-first-click");
         PaperGuidedConfigurationStub guided = new PaperGuidedConfigurationStub(revision);
         GuiSessionService sessions = new GuiSessionService(() -> Optional.of(revision),
                 (subject, action) -> CompletableFuture.completedFuture(MessageReference.of("unused")),
@@ -734,7 +734,7 @@ class PaperGuiInventoryGuardTest {
                         titles.add(invocation.getArgument(2));
                         return inventory;
                     });
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
             controller.open(staff, staffGui.open(PaperPermissionSubjects.from(staff)));
 
@@ -783,7 +783,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 correction] Typed input uses a real Paper anvil view without casting")
+    @DisplayName("Typed input uses a real Paper anvil view without casting")
     void typedInputUsesRealAnvilView(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         Player player = mock(Player.class);
@@ -811,7 +811,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 security] All guided numeric anvil items are cleared before vanilla return")
+    @DisplayName("All guided numeric anvil items are cleared before vanilla return")
     void nativeAnvilPresentationItemsNeverEnterPlayerInventory(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         Player player = mock(Player.class);
@@ -874,7 +874,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 security] Close, replacement, logout, kick, and disable retire native input ownership")
+    @DisplayName("Close, replacement, logout, kick, and disable retire native input ownership")
     void everyNativeInputExitClearsOwnedSlots(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -901,7 +901,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(ordinary);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
 
             controller.open(player, numericInputView());
@@ -946,7 +946,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 security] Native result follows canonical valid, invalid, valid input state")
+    @DisplayName("Native result follows canonical valid, invalid, valid input state")
     void nativeAnvilResultRefreshesWithInputValidity(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         Player player = mock(Player.class);
@@ -979,7 +979,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 coexistence] Post-event refresh synchronizes valid-to-valid exact decimals")
+    @DisplayName("Post-event refresh synchronizes valid-to-valid exact decimals")
     void nativeAnvilResultReconcilesAfterCoexistingListenerOverwrite(@TempDir Path temporaryDirectory)
             throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
@@ -1016,7 +1016,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 security] Deferred result refresh is coalesced and cannot revive a retired input")
+    @DisplayName("Deferred result refresh is coalesced and cannot revive a retired input")
     void controllerReconcilesOnlyTheStillOwnedOpenInput(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -1040,7 +1040,7 @@ class PaperGuiInventoryGuardTest {
                             when(input.queueRefresh()).thenReturn(true, false);
                         })) {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
             controller.open(player, numericInputView());
             PaperNumericInputInventory input = constructed.constructed().getFirst();
@@ -1071,9 +1071,9 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 coexistence] Native input owns the final high-priority anvil result")
+    @DisplayName("Native input owns the final high-priority anvil result")
     void nativeAnvilResultRunsAfterOrdinaryCoexistingHandlers() throws Exception {
-        EventHandler handler = PaperPhaseSixGuiController.class
+        EventHandler handler = PaperAdministrationGuiController.class
                 .getDeclaredMethod("onPrepareAnvil", PrepareAnvilEvent.class)
                 .getAnnotation(EventHandler.class);
 
@@ -1083,7 +1083,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 security] Unexpected numeric-input failure clears ownership before forced close")
+    @DisplayName("Unexpected numeric-input failure clears ownership before forced close")
     void nativeInputFailureClearsBeforeClose(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -1102,7 +1102,7 @@ class PaperGuiInventoryGuardTest {
                 MockedConstruction<PaperNumericInputInventory> inputs =
                         paperNumericInputs(holders, titles, messages)) {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, staffGui, guard, deferred, messages);
             controller.open(player, numericInputView());
             PaperNumericInputInventory input = (PaperNumericInputInventory) holders.getFirst();
@@ -1116,7 +1116,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Online player heads use live profiles and degrade to ordinary heads")
+    @DisplayName("Online player heads use live profiles and degrade to ordinary heads")
     void appliesLivePlayerProfileWithoutMakingItAuthority(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         UUID playerId = UUID.fromString("00000000-0000-3000-8000-000000000001");
@@ -1156,7 +1156,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff identity and requirement cards retain concise semantic styling")
+    @DisplayName("Staff identity and requirement cards retain concise semantic styling")
     void rendersStaffIdentityAndRequirementCardStyles(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         Component player = messages.render(MessageReference.of(
@@ -1201,15 +1201,15 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Player roots open silently while advanced GUI routing remains available")
+    @DisplayName("Player roots open silently while advanced GUI routing remains available")
     void routesBothPlayerCommandsToInventoryOpen(@TempDir Path temporaryDirectory) throws Exception {
-        PhaseSixCommandService commands = mock(PhaseSixCommandService.class);
-        PaperPhaseSixGuiController controller = mock(PaperPhaseSixGuiController.class);
+        AdministrationCommandService commands = mock(AdministrationCommandService.class);
+        PaperAdministrationGuiController controller = mock(PaperAdministrationGuiController.class);
         PaperMessageService messages = messages(temporaryDirectory);
         GuiSessionView view = blockedView();
         when(commands.execute(any(CommandInvocation.class))).thenReturn(CompletableFuture.completedFuture(
                 CommandResponse.gui("gui.open", List.of(), view)));
-        PaperPhaseSixCommandAdapter adapter = new PaperPhaseSixCommandAdapter(commands,
+        PaperAdministrationCommandAdapter adapter = new PaperAdministrationCommandAdapter(commands,
                 mock(CommandCompletionService.class), immediateScheduler(), controller, messages);
         PaperPlayerGuiCommandAdapter playerAdapter = new PaperPlayerGuiCommandAdapter(adapter);
         Player player = mock(Player.class);
@@ -1232,7 +1232,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Blocked state with optional sections absent constructs and opens")
+    @DisplayName("Blocked state with optional sections absent constructs and opens")
     @SuppressWarnings("unchecked")
     void constructsAndOpensBlockedInventory(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
@@ -1261,7 +1261,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(inventory);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(mock(PlayerGuiService.class),
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(mock(PlayerGuiService.class),
                     guard, immediateScheduler(), messages);
 
             assertDoesNotThrow(() -> controller.open(player, blockedView()));
@@ -1305,7 +1305,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Staff Dashboard renders only useful bold navigation without revision leakage")
+    @DisplayName("Staff Dashboard renders only useful bold navigation without revision leakage")
     @SuppressWarnings("unchecked")
     void rendersCleanStaffDashboard(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
@@ -1334,7 +1334,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(inventory);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(mock(PlayerGuiService.class),
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(mock(PlayerGuiService.class),
                     guard, immediateScheduler(), messages);
 
             assertDoesNotThrow(() -> controller.open(player, staffDashboardView()));
@@ -1360,7 +1360,7 @@ class PaperGuiInventoryGuardTest {
         assertFalse(visible.contains("Original"));
         assertFalse(visible.contains("Read-Only"));
         assertFalse(visible.contains("Revision:"));
-        assertFalse(visible.contains("phase9f-b-read-only"));
+        assertFalse(visible.contains("staff-gui-read-only"));
         assertTrue(renderedLore.stream().flatMap(List::stream).allMatch(component ->
                 component.decoration(TextDecoration.ITALIC) == TextDecoration.State.FALSE));
         assertTrue(renderedLore.stream().flatMap(List::stream)
@@ -1368,10 +1368,10 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Inventory construction or open failure remains visibly fail-closed")
+    @DisplayName("Inventory construction or open failure remains visibly fail-closed")
     void inventoryFailureProducesVisibleCommandFailure(@TempDir Path temporaryDirectory) throws Exception {
-        PhaseSixCommandService commands = mock(PhaseSixCommandService.class);
-        PaperPhaseSixGuiController controller = mock(PaperPhaseSixGuiController.class);
+        AdministrationCommandService commands = mock(AdministrationCommandService.class);
+        PaperAdministrationGuiController controller = mock(PaperAdministrationGuiController.class);
         PaperMessageService messages = messages(temporaryDirectory);
         GuiSessionView view = blockedView();
         when(commands.execute(any(CommandInvocation.class))).thenReturn(CompletableFuture.completedFuture(
@@ -1381,7 +1381,7 @@ class PaperGuiInventoryGuardTest {
         ArrayList<Component> sent = new ArrayList<>();
         doAnswer(invocation -> sent.add(invocation.getArgument(0))).when(player).sendMessage(any(Component.class));
         doThrow(new IllegalStateException("qualification construction failure")).when(controller).open(player, view);
-        PaperPhaseSixCommandAdapter adapter = new PaperPhaseSixCommandAdapter(commands,
+        PaperAdministrationCommandAdapter adapter = new PaperAdministrationCommandAdapter(commands,
                 mock(CommandCompletionService.class), immediateScheduler(), controller, messages);
 
         assertTrue(adapter.onCommand(player, mock(Command.class), "maddprestige", new String[0]));
@@ -1392,7 +1392,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] First Main click defers and opens the Preview with valid ownership")
+    @DisplayName("First Main click defers and opens the Preview with valid ownership")
     void firstMainClickDefersPreviewHandoff(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -1417,7 +1417,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(rendered);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, guard, deferred, messages);
 
             assertDoesNotThrow(() -> new PaperGuiInventory(destination, messages));
@@ -1445,7 +1445,7 @@ class PaperGuiInventoryGuardTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Failed Preview open retires its authority and reports visibly")
+    @DisplayName("Failed Preview open retires its authority and reports visibly")
     void failedPreviewOpenIsVisibleAndRecoverable(@TempDir Path temporaryDirectory) throws Exception {
         PaperMessageService messages = messages(temporaryDirectory);
         PlayerGuiService playerGui = mock(PlayerGuiService.class);
@@ -1476,7 +1476,7 @@ class PaperGuiInventoryGuardTest {
             bukkit.when(Bukkit::isPrimaryThread).thenReturn(true);
             bukkit.when(() -> Bukkit.createInventory(any(InventoryHolder.class),
                     org.mockito.ArgumentMatchers.eq(27), any(Component.class))).thenReturn(rendered);
-            PaperPhaseSixGuiController controller = new PaperPhaseSixGuiController(
+            PaperAdministrationGuiController controller = new PaperAdministrationGuiController(
                     playerGui, null, guard, deferred, messages, diagnostics::add);
 
             controller.onClick(click);
@@ -1746,7 +1746,7 @@ class PaperGuiInventoryGuardTest {
 
     private static void preparePlayer(Player player) {
         when(player.getUniqueId()).thenReturn(UUID.fromString("22222222-2222-4222-8222-222222222222"));
-        when(player.getName()).thenReturn("phase9f-player");
+        when(player.getName()).thenReturn("gui-player");
         when(player.hasPermission(anyString())).thenReturn(true);
     }
 

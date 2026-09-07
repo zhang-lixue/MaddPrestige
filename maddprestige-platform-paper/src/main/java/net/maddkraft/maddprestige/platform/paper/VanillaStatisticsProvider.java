@@ -15,6 +15,7 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -104,7 +105,8 @@ public final class VanillaStatisticsProvider implements MetricProvider {
                                 "value-type", entry.getValue().descriptor.valueType().name(),
                                 "statistic", entry.getValue().statistic.name())))
                 .toList();
-        return new ProviderDescriptor(providerId, ownerIdentity, "phase3-foundation", "paper-api", List.of(),
+        return new ProviderDescriptor(providerId, ownerIdentity, ProviderMetadataVersions.STABLE_API,
+                ProviderMetadataVersions.implementationVersion(VanillaStatisticsProvider.class), List.of(),
                 capabilities);
     }
 

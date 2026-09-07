@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
 
 class ConfigurationServiceTest {
     @Test
-    @DisplayName("[A39][A40][Phase1-hard-5/6] Draft revisions are immutable, hashed, and invalid candidates stay inactive")
+    @DisplayName("[A39][A40][foundation-hard-5/6] Draft revisions are immutable, hashed, and invalid candidates stay inactive")
     void guardsActiveReference() {
         Actor actor = new Actor("console", Optional.empty(), "Console");
         Map<String, String> documents = Map.of("config.yml", "enabled: false\n", "progression.yml", "stages: []\n");

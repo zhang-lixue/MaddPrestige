@@ -22,9 +22,9 @@ import net.maddkraft.maddprestige.core.config.ConfigDraft;
 import net.maddkraft.maddprestige.core.config.ConfigurationService;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 import net.maddkraft.maddprestige.api.metric.MetricProvider;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationCompiler;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationValidator;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationCompiler;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationValidator;
 import net.maddkraft.maddprestige.core.requirement.MetricBinding;
 
 public final class StageConfigurationWorkflow {
@@ -33,8 +33,8 @@ public final class StageConfigurationWorkflow {
     private final StageConfigurationCompiler stageCompiler;
     private final StageConfigurationValidator validator;
     private final StageChangeImpactAnalyzer impactAnalyzer;
-    private final PhaseThreeConfigurationCompiler phaseThreeCompiler;
-    private final PhaseThreeConfigurationValidator phaseThreeValidator;
+    private final ProgressionConfigurationCompiler progressionCompiler;
+    private final ProgressionConfigurationValidator progressionValidator;
     private final AtomicReference<ActiveStageConfiguration> activeSnapshots = new AtomicReference<>();
 
     public StageConfigurationWorkflow(ConfigurationService canonicalService) {
@@ -43,12 +43,12 @@ public final class StageConfigurationWorkflow {
         this.stageCompiler = new StageConfigurationCompiler();
         this.validator = new StageConfigurationValidator();
         this.impactAnalyzer = new StageChangeImpactAnalyzer();
-        this.phaseThreeCompiler = new PhaseThreeConfigurationCompiler();
-        this.phaseThreeValidator = new PhaseThreeConfigurationValidator();
+        this.progressionCompiler = new ProgressionConfigurationCompiler();
+        this.progressionValidator = new ProgressionConfigurationValidator();
     }
 
-    public Optional<PhaseThreeConfigurationSnapshot> activePhaseThree() {
-        return Optional.ofNullable(activeSnapshots.get()).map(ActiveStageConfiguration::phaseThree);
+    public Optional<ProgressionConfigurationSnapshot> activeProgression() {
+        return Optional.ofNullable(activeSnapshots.get()).map(ActiveStageConfiguration::progression);
     }
 
     public Optional<StageConfigurationSnapshot> active() {
@@ -82,21 +82,21 @@ public final class StageConfigurationWorkflow {
                         // A broken capability boundary becomes an unknown/unavailable metric finding below.
                     }
                 }));
-        var phaseThreeCompilation = phaseThreeCompiler.compile(compiled, descriptors);
+        var progressionCompilation = progressionCompiler.compile(compiled, descriptors);
         StageConfiguration configuration = stageCompilation.configuration().orElse(StageConfiguration.inactive());
         StageConfiguration prior = active().map(StageConfigurationSnapshot::configuration)
                 .orElse(StageConfiguration.inactive());
         StageChangeImpact impact = impactAnalyzer.analyze(prior, configuration, playerReferences, remapPlan);
         ValidationReport remapCapability = impact.explicitRemapRequired()
                 ? ValidationReport.of(java.util.List.of(remapExecutionFinding())) : ValidationReport.VALID;
-        var phaseThreeProviderValidation = phaseThreeValidator.validate(
-                phaseThreeCompilation.configuration(), configuration, providers);
+        var progressionProviderValidation = progressionValidator.validate(
+                progressionCompilation.configuration(), configuration, providers);
         var localValidation = stageCompilation.validation().combine(impact.validation()).combine(remapCapability)
-                .combine(phaseThreeCompilation.validation()).combine(phaseThreeProviderValidation.report());
+                .combine(progressionCompilation.validation()).combine(progressionProviderValidation.report());
         if (stageCompilation.configuration().isEmpty() || localValidation.hasErrors()) {
             return CompletableFuture.completedFuture(new StageConfigurationCandidate(
-                    compiled, configuration, phaseThreeCompilation.configuration(), impact, localValidation,
-                    phaseThreeProviderValidation.providerGenerations()));
+                    compiled, configuration, progressionCompilation.configuration(), impact, localValidation,
+                    progressionProviderValidation.providerGenerations()));
         }
         Optional<ProviderId> requiredProvider = configuration.active()
                 ? configuration.rankProvider() : Optional.empty();
@@ -105,7 +105,7 @@ public final class StageConfigurationWorkflow {
         return validator.validateExternalTargets(configuration, providers)
                 .thenApply(external -> {
                     ValidationReport combined = localValidation.combine(external);
-                    Map<ProviderId, Long> generations = phaseThreeProviderValidation.providerGenerations();
+                    Map<ProviderId, Long> generations = progressionProviderValidation.providerGenerations();
                     if (requiredProvider.isPresent() && beforeGeneration.isPresent()) {
                         ProviderId providerId = requiredProvider.orElseThrow();
                         var after = providers.find(providerId);
@@ -123,7 +123,7 @@ public final class StageConfigurationWorkflow {
                         }
                     }
                     return new StageConfigurationCandidate(
-                            compiled, configuration, phaseThreeCompilation.configuration(), impact, combined,
+                            compiled, configuration, progressionCompilation.configuration(), impact, combined,
                             generations);
                 });
     }
@@ -138,8 +138,8 @@ public final class StageConfigurationWorkflow {
         canonicalService.apply(revisionId, candidate.compiled(), candidate.validation(), acknowledgements, backup);
         StageConfigurationSnapshot replacement = new StageConfigurationSnapshot(
                 revisionId, candidate.stageConfiguration());
-        activeSnapshots.set(new ActiveStageConfiguration(replacement, new PhaseThreeConfigurationSnapshot(revisionId,
-                candidate.phaseThreeConfiguration(), candidate.providerGenerations())));
+        activeSnapshots.set(new ActiveStageConfiguration(replacement, new ProgressionConfigurationSnapshot(revisionId,
+                candidate.progressionConfiguration(), candidate.providerGenerations())));
         return replacement;
     }
 
@@ -172,6 +172,6 @@ public final class StageConfigurationWorkflow {
                 "progression.stages",
                 "This legacy configuration workflow cannot execute a persisted player-stage remap.",
                 "No referenced stage deletion or disablement can activate through a read-only workflow.",
-                "Use the Phase 6 administration workflow backed by StageReferenceMigrationStore.");
+                "Use the configuration administration workflow backed by StageReferenceMigrationStore.");
     }
 }

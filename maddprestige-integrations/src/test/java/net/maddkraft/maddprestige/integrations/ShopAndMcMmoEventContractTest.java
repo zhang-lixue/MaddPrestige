@@ -192,7 +192,7 @@ class ShopAndMcMmoEventContractTest {
         return new Provider() {
             @Override
             public ProviderDescriptor descriptor() {
-                return new ProviderDescriptor(id, "maddprestige", "phase5", "test", List.of(), List.of());
+                return new ProviderDescriptor(id, "maddprestige", "2-stable", "test", List.of(), List.of());
             }
 
             @Override
@@ -208,7 +208,7 @@ class ShopAndMcMmoEventContractTest {
     }
 
     private static ManualHarness manual(String metricId, MetricValueType type) {
-        ManualProgressBootstrap bootstrap = ManualProgressProvider.bootstrap(new ProviderId("phase5_events"),
+        ManualProgressBootstrap bootstrap = ManualProgressProvider.bootstrap(new ProviderId("event_progress"),
                 "maddprestige", new EmptyRepository(), Runnable::run, CLOCK, 10, 100);
         MetricId id = new MetricId(metricId);
         ManualMetricHandle handle = bootstrap.owner().registerMetric(new ManualCounterDefinition(id, type, true,

@@ -11,6 +11,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletionStage;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.MetricId;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.metric.MetricDescriptor;
@@ -30,7 +31,7 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import net.maddkraft.maddprestige.integrations.IntegrationTaskScheduler;
 import net.maddkraft.maddprestige.integrations.MutableProviderHealth;
 import net.maddkraft.maddprestige.integrations.ProviderRegistrationGate;
-import net.maddkraft.maddprestige.integrations.config.PhaseFiveIntegrationConfiguration.PlaceholderInput;
+import net.maddkraft.maddprestige.integrations.config.IntegrationConfiguration.PlaceholderInput;
 
 /** Typed, bounded, freshness-checked input cache; requirement reads never invoke PlaceholderAPI. */
 public final class PlaceholderInputMetricProvider implements MetricProvider {
@@ -69,7 +70,7 @@ public final class PlaceholderInputMetricProvider implements MetricProvider {
         }
         this.clock = java.util.Objects.requireNonNull(clock, "clock");
         this.maximumEntries = maximumEntries;
-        descriptor = new ProviderDescriptor(PROVIDER_ID, "maddprestige", "phase5", implementationVersion,
+        descriptor = new ProviderDescriptor(PROVIDER_ID, "maddprestige", ProviderMetadataVersions.STABLE_API, implementationVersion,
                 List.of(new DependencyDescriptor("PlaceholderAPI", "[2.12,3)",
                         Optional.of(implementationVersion))),
                 List.of(new CapabilityDescriptor("placeholder_inputs", "metric",

@@ -57,8 +57,8 @@ import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.command.CommandActionPolicy;
 import net.maddkraft.maddprestige.core.admin.config.ConfigurationStageReservationKind;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfiguration;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.event.OperationLifecycleListener;
 import net.maddkraft.maddprestige.core.plan.RankUpAuthorizationService;
 import net.maddkraft.maddprestige.core.plan.RankUpExecutionStatus;
@@ -168,22 +168,22 @@ class RankUpEngineTest {
         assertEquals(0, rewardProvider.executionCount());
 
         RankUpPlanningRequest fabricated = new RankUpPlanningRequest(actor(), player, fixture.state(),
-                fixture.target(), REVISION, fixture.snapshot().phaseThree().providerGenerations(),
+                fixture.target(), REVISION, fixture.snapshot().progression().providerGenerations(),
                 plan.requirements(), List.of(), List.of(reward("substitute")), "attacker");
         assertThrows(CompletionException.class,
                 () -> new RankUpPlanner(providers).plan(fabricated).toCompletableFuture().join());
         for (RankUpPlanningRequest substituted : List.of(
                 new RankUpPlanningRequest(actor(), player, fixture.state(), fixture.target(), REVISION,
-                        fixture.snapshot().phaseThree().providerGenerations(), plan.requirements(), List.of(),
+                        fixture.snapshot().progression().providerGenerations(), plan.requirements(), List.of(),
                         configuredRewards, "omitted-cost"),
                 new RankUpPlanningRequest(actor(), player, fixture.state(), fixture.target(), REVISION,
-                        fixture.snapshot().phaseThree().providerGenerations(), plan.requirements(),
+                        fixture.snapshot().progression().providerGenerations(), plan.requirements(),
                         List.of(cost("substitute", "1")), configuredRewards, "substituted-cost"),
                 new RankUpPlanningRequest(actor(), player, fixture.state(), fixture.target(), REVISION,
-                        fixture.snapshot().phaseThree().providerGenerations(), plan.requirements(), configuredCosts,
+                        fixture.snapshot().progression().providerGenerations(), plan.requirements(), configuredCosts,
                         List.of(), "omitted-required-reward"),
                 new RankUpPlanningRequest(actor(), player, fixture.state(), fixture.target(), REVISION,
-                        fixture.snapshot().phaseThree().providerGenerations(), plan.requirements(), configuredCosts,
+                        fixture.snapshot().progression().providerGenerations(), plan.requirements(), configuredCosts,
                         List.of(reward("substitute")), "substituted-reward"))) {
             assertThrows(CompletionException.class,
                     () -> new RankUpPlanner(providers).plan(substituted).toCompletableFuture().join());
@@ -191,7 +191,7 @@ class RankUpEngineTest {
     }
 
     @Test
-    @DisplayName("[8B] PRE cancellation happens before journal insertion and every consequential effect")
+    @DisplayName("PRE cancellation happens before journal insertion and every consequential effect")
     void preEventCancellationHasZeroEffects() throws Exception {
         MutableRankAdapter rank = new MutableRankAdapter();
         providers.activate(providers.register("maddprestige-testkit", rank));
@@ -314,7 +314,7 @@ class RankUpEngineTest {
     }
 
     @Test
-    @DisplayName("[8B] POST observes the durable terminal journal before the caller future completes")
+    @DisplayName("POST observes the durable terminal journal before the caller future completes")
     void postEventFollowsDurableTerminalCommit() throws Exception {
         RankUpPlan plan = plan(List.of(), List.of(), StageProjection.none());
         try (DisposableSqliteFixture fixture = DisposableSqliteFixture.create()) {
@@ -948,7 +948,7 @@ class RankUpEngineTest {
     }
 
     @Test
-    @DisplayName("[A25] Concrete Phase 2 repository commit runs cost -> internal commit -> reward and suppresses duplicate")
+    @DisplayName("[A25] Concrete stage progression repository commit runs cost -> internal commit -> reward and suppresses duplicate")
     void concreteCommitAndDuplicateSuppression() throws Exception {
         AuthorizationFixture authorization = authorization(List.of(cost("payment", "25")), List.of(reward()),
                 StageProjection.none());
@@ -1048,7 +1048,7 @@ class RankUpEngineTest {
     }
 
     @Test
-    @DisplayName("[A05-A07][A25] Journaled Phase 3 projection preserves unrelated membership and never replays")
+    @DisplayName("[A05-A07][A25] Journaled provider-backed progression projection preserves unrelated membership and never replays")
     void projectedRankUpSuccessPreservesMembershipAndDoesNotReplay() throws Exception {
         MutableRankAdapter adapter = registerRankAdapter();
         RankUpPlan plan = plan(List.of(cost("payment", "25")), List.of(reward()),
@@ -1275,7 +1275,7 @@ class RankUpEngineTest {
                 Optional.of(requirement.id()), List.of(), List.of());
         StageConfiguration stages = new StageConfiguration(3, true, Map.of(FIRST, first, SECOND, second),
                 List.of(FIRST, SECOND), Optional.of(FIRST), ReconciliationPolicy.WARN_ONLY);
-        PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16,
+        ProgressionConfiguration progression = new ProgressionConfiguration(3, 16,
                 Map.of(requirement.id(), requirement.definition()), Map.of(requirement.id(), requirement),
                 Map.of(), Map.of(), CommandActionPolicy.safeDefaults());
         ProviderId providerId = requirement.definition().providerId();
@@ -1283,7 +1283,7 @@ class RankUpEngineTest {
                 providers.find(providerId).orElseThrow().generation());
         ActiveStageConfiguration active = new ActiveStageConfiguration(
                 new StageConfigurationSnapshot(REVISION, stages),
-                new PhaseThreeConfigurationSnapshot(REVISION, phaseThree, generations));
+                new ProgressionConfigurationSnapshot(REVISION, progression, generations));
         PlayerStageState state = state(REVISION);
         return new AuthorizationFixture(active, service(active, state, progressContexts, requirementStates),
                 state, second);
@@ -1294,7 +1294,7 @@ class RankUpEngineTest {
             PlayerStageState state) {
         ActiveStageConfiguration active = new ActiveStageConfiguration(
                 new StageConfigurationSnapshot(REVISION, stages),
-                new PhaseThreeConfigurationSnapshot(REVISION, PhaseThreeConfiguration.empty(), Map.of()));
+                new ProgressionConfigurationSnapshot(REVISION, ProgressionConfiguration.empty(), Map.of()));
         return service(active, state, defaultProgressContext(), EMPTY_REQUIREMENT_STATE);
     }
 
@@ -1350,7 +1350,7 @@ class RankUpEngineTest {
         costs.forEach(value -> costMap.put(value.id(), value));
         Map<RewardId, RewardDefinition> rewardMap = new LinkedHashMap<>();
         rewards.forEach(value -> rewardMap.put(value.id(), value));
-        PhaseThreeConfiguration phaseThree = new PhaseThreeConfiguration(3, 16, Map.of(), Map.of(), costMap,
+        ProgressionConfiguration progression = new ProgressionConfiguration(3, 16, Map.of(), Map.of(), costMap,
                 rewardMap, CommandActionPolicy.safeDefaults());
         LinkedHashMap<ProviderId, Long> generations = new LinkedHashMap<>();
         if (!costs.isEmpty()) {
@@ -1364,7 +1364,7 @@ class RankUpEngineTest {
         }
         ActiveStageConfiguration active = new ActiveStageConfiguration(
                 new StageConfigurationSnapshot(REVISION, stageConfiguration),
-                new PhaseThreeConfigurationSnapshot(REVISION, phaseThree, generations));
+                new ProgressionConfigurationSnapshot(REVISION, progression, generations));
         RankUpAuthorizationService service = service(active, state, defaultProgressContext(),
                 EMPTY_REQUIREMENT_STATE);
         return new AuthorizationFixture(active, service, state, second);

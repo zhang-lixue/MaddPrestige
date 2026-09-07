@@ -14,7 +14,7 @@ import net.maddkraft.maddprestige.core.admin.OperationConfirmationService;
 import net.maddkraft.maddprestige.core.admin.OperationPreview;
 import net.maddkraft.maddprestige.core.admin.OperationPreviewService;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.admin.player.PlayerProgressViewService;
 import net.maddkraft.maddprestige.core.admin.presentation.MessageReference;
 import net.maddkraft.maddprestige.core.admin.presentation.SemanticPresentation;
@@ -48,7 +48,7 @@ public final class PlayerGuiService {
 
     public CompletionStage<GuiSessionView> open(PermissionSubject subject, UUID playerId) {
         requireSelf(subject, playerId);
-        subject.require(PhaseSixPermissions.USE);
+        subject.require(AdministrationPermissions.USE);
         return progress.view(subject, playerId).thenApply(view -> playerView(subject, playerId, view.prestige()));
     }
 
@@ -145,9 +145,9 @@ public final class PlayerGuiService {
         PrestigeTransition transition = transition(preview);
         ArrayList<GuiAction> actions = new ArrayList<>();
         ArrayList<GuiDisplayItem> items = commonItems(preview, false);
-        if (subject.has(PhaseSixPermissions.PRESTIGE)) {
+        if (subject.has(AdministrationPermissions.PRESTIGE)) {
             GuiAction prestige = action(GuiActionKind.SIMULATE_PRESTIGE, "gui.action.prestige",
-                    PhaseSixPermissions.PRESTIGE, false, revision, playerId, null);
+                    AdministrationPermissions.PRESTIGE, false, revision, playerId, null);
             actions.add(prestige);
             items.add(GuiDisplayItem.action(22, GuiItemIcon.PRESTIGE, prestige.label(),
                     List.of(m("gui.item.prestige.open_preview", "current", transition.current(),
@@ -170,7 +170,7 @@ public final class PlayerGuiService {
         ArrayList<GuiDisplayItem> items = commonItems(preview, true);
         if (preview.executable()) {
             GuiAction proceed = action(GuiActionKind.PREPARE_PRESTIGE, "gui.action.confirm",
-                    PhaseSixPermissions.PRESTIGE, true, revision, playerId, null);
+                    AdministrationPermissions.PRESTIGE, true, revision, playerId, null);
             actions.add(proceed);
             items.add(GuiDisplayItem.action(22, GuiItemIcon.CONFIRM, proceed.label(),
                     List.of(), proceed.actionId(), true));
@@ -419,7 +419,7 @@ public final class PlayerGuiService {
             List<GuiDisplayItem> items,
             ConfigRevisionId revision,
             UUID playerId) {
-        GuiAction back = action(GuiActionKind.BACK_PLAYER, "gui.action.back", PhaseSixPermissions.USE,
+        GuiAction back = action(GuiActionKind.BACK_PLAYER, "gui.action.back", AdministrationPermissions.USE,
                 false, revision, playerId, null);
         actions.add(back);
         items.add(GuiDisplayItem.action(18, GuiItemIcon.BACK, back.label(), List.of(), back.actionId(), false));
@@ -430,7 +430,7 @@ public final class PlayerGuiService {
             List<GuiDisplayItem> items,
             ConfigRevisionId revision,
             UUID playerId) {
-        GuiAction close = action(GuiActionKind.CLOSE_PLAYER, "gui.action.close", PhaseSixPermissions.USE,
+        GuiAction close = action(GuiActionKind.CLOSE_PLAYER, "gui.action.close", AdministrationPermissions.USE,
                 false, revision, playerId, null);
         actions.add(close);
         items.add(GuiDisplayItem.action(26, GuiItemIcon.CLOSE, close.label(), List.of(), close.actionId(), false));

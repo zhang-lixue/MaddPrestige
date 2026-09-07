@@ -1,0 +1,9 @@
+name: Migration-Recovery-Harness
+version: '1.0.0'
+main: net.maddkraft.qualification.migrationrecovery.MigrationRecoveryQualification
+description: First-party disposable migration/recovery SQLite migration and recovery qualification harness.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend:
+  - MaddPrestige

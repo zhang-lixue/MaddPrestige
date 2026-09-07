@@ -25,39 +25,39 @@ class SqliteMigrationQualificationTest {
     Path temporaryDirectory;
 
     @Test
-    @DisplayName("[Phase 9B] Numeric authority migration preserves accepted history and restarts idempotently")
+    @DisplayName("Numeric authority migration preserves accepted history and restarts idempotently")
     void upgradesPhaseEightCToNumericAuthority() {
-        Path database = temporaryDirectory.resolve("phase9b.sqlite");
-        SqliteFoundation foundation = SqlitePhase8cFixture.historical(database, 11);
-        List<Migration> current = SqliteMigrations.phaseNineB();
+        Path database = temporaryDirectory.resolve("numeric-prestige.sqlite");
+        SqliteFoundation foundation = SqliteMigrationFixture.historical(database, 11);
+        List<Migration> current = SqliteMigrations.current();
         var runner = new MigrationRunner(foundation,
-                new SqliteBackupService(foundation, temporaryDirectory.resolve("phase9b-backups"), current,
-                        SqlitePhase8cFixture.CLOCK), SqlitePhase8cFixture.CLOCK);
+                new SqliteBackupService(foundation, temporaryDirectory.resolve("numeric-prestige-backups"), current,
+                        SqliteMigrationFixture.CLOCK), SqliteMigrationFixture.CLOCK);
 
         var report = runner.migrate(current);
 
         assertTrue(report.changed());
-        assertEquals("12", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("12", SqliteMigrationFixture.scalar(foundation,
                 "SELECT MAX(version) FROM mp_schema_migrations WHERE result='APPLIED'"));
-        assertEquals("'NUMERIC_LEVEL'", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("'NUMERIC_LEVEL'", SqliteMigrationFixture.scalar(foundation,
                 "SELECT dflt_value FROM pragma_table_info('mp_prestige_operation_details') "
                         + "WHERE name='progression_model'"));
-        assertEquals("'NUMERIC_LEVEL'", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("'NUMERIC_LEVEL'", SqliteMigrationFixture.scalar(foundation,
                 "SELECT dflt_value FROM pragma_table_info('mp_prestige_history') "
                         + "WHERE name='progression_model'"));
-        assertEquals("0:0:0:numeric-p0", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("0:0:0:numeric-p0", SqliteMigrationFixture.scalar(foundation,
                 "SELECT current_prestige || ':' || lifetime_prestige || ':' || state_revision "
                         + "|| ':' || prestige_scope_id FROM mp_player_prestige_state"));
-        assertEquals("3:5:9", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("3:5:9", SqliteMigrationFixture.scalar(foundation,
                 "SELECT current_prestige || ':' || lifetime_prestige || ':' || state_revision "
                         + "FROM mp_legacy_stage_prestige_state"));
-        assertEquals("veteran", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("veteran", SqliteMigrationFixture.scalar(foundation,
                 "SELECT stage_id FROM mp_legacy_stage_player_state"));
-        assertEquals("0", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("0", SqliteMigrationFixture.scalar(foundation,
                 "SELECT COUNT(*) FROM mp_player_stage_state"));
-        assertEquals("LEGACY_STAGE", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("LEGACY_STAGE", SqliteMigrationFixture.scalar(foundation,
                 "SELECT DISTINCT progression_model FROM mp_prestige_operation_details"));
-        assertEquals("LEGACY_STAGE", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("LEGACY_STAGE", SqliteMigrationFixture.scalar(foundation,
                 "SELECT DISTINCT progression_model FROM mp_prestige_history"));
         assertFalse(runner.migrate(current).changed());
     }
@@ -65,24 +65,24 @@ class SqliteMigrationQualificationTest {
     @Test
     @DisplayName("[A63] Fresh and every historical schema prefix upgrade through a verified populated rehearsal")
     void upgradesEverySupportedPrefixAndRestartsIdempotently() throws Exception {
-        List<Migration> current = SqliteMigrations.phaseEightC();
+        List<Migration> current = SqliteMigrations.throughVersionEleven();
         for (int prefix = 0; prefix <= current.size(); prefix++) {
             Path caseDirectory = temporaryDirectory.resolve("prefix-" + prefix);
             Files.createDirectories(caseDirectory);
             Path database = caseDirectory.resolve("maddprestige.sqlite");
             SqliteFoundation foundation = prefix == 0
                     ? new SqliteFoundation(database)
-                    : SqlitePhase8cFixture.historical(database, prefix);
+                    : SqliteMigrationFixture.historical(database, prefix);
             Path backups = caseDirectory.resolve("backups");
             MigrationRunner runner = new MigrationRunner(foundation,
-                    new SqliteBackupService(foundation, backups, current, SqlitePhase8cFixture.CLOCK),
-                    SqlitePhase8cFixture.CLOCK);
+                    new SqliteBackupService(foundation, backups, current, SqliteMigrationFixture.CLOCK),
+                    SqliteMigrationFixture.CLOCK);
 
             var report = runner.migrate(current);
             assertEquals(current.size(), report.records().size(), "prefix " + prefix);
-            assertEquals("11", SqlitePhase8cFixture.scalar(foundation,
+            assertEquals("11", SqliteMigrationFixture.scalar(foundation,
                     "SELECT MAX(version) FROM mp_schema_migrations WHERE result='APPLIED'"));
-            assertEquals("ok", SqlitePhase8cFixture.scalar(foundation, "PRAGMA integrity_check"));
+            assertEquals("ok", SqliteMigrationFixture.scalar(foundation, "PRAGMA integrity_check"));
             if (prefix < current.size()) {
                 assertTrue(report.changed(), "prefix " + prefix);
                 try (var artifacts = Files.list(backups)) {
@@ -94,42 +94,42 @@ class SqliteMigrationQualificationTest {
             }
 
             if (prefix >= 1) {
-                assertEquals("request-uuid-is-distinct", SqlitePhase8cFixture.scalar(foundation,
+                assertEquals("request-uuid-is-distinct", SqliteMigrationFixture.scalar(foundation,
                         "SELECT idempotency_key FROM mp_operations"));
-                assertEquals("NEEDS_RECONCILIATION", SqlitePhase8cFixture.scalar(foundation,
+                assertEquals("NEEDS_RECONCILIATION", SqliteMigrationFixture.scalar(foundation,
                         "SELECT state FROM mp_operations"));
-                assertEquals(SqlitePhase8cFixture.EXACT_DECIMAL, SqlitePhase8cFixture.scalar(foundation,
+                assertEquals(SqliteMigrationFixture.EXACT_DECIMAL, SqliteMigrationFixture.scalar(foundation,
                         "SELECT balance_text FROM mp_currency_accounts"));
             }
             if (prefix >= 2) {
-                assertEquals("7", SqlitePhase8cFixture.scalar(foundation,
+                assertEquals("7", SqliteMigrationFixture.scalar(foundation,
                         "SELECT state_revision FROM mp_player_stage_state"));
             }
             if (prefix >= 3) {
-                assertEquals(SqlitePhase8cFixture.EXACT_DECIMAL, SqlitePhase8cFixture.scalar(foundation,
+                assertEquals(SqliteMigrationFixture.EXACT_DECIMAL, SqliteMigrationFixture.scalar(foundation,
                         "SELECT value_text FROM mp_requirement_baselines"));
             }
             if (prefix >= 4) {
-                assertEquals("3:5:9", SqlitePhase8cFixture.scalar(foundation,
+                assertEquals("3:5:9", SqliteMigrationFixture.scalar(foundation,
                         "SELECT current_prestige || ':' || lifetime_prestige || ':' || state_revision "
                                 + "FROM mp_player_prestige_state"));
-                assertEquals("PRESERVE_UNCERTAINTY", SqlitePhase8cFixture.scalar(foundation,
+                assertEquals("PRESERVE_UNCERTAINTY", SqliteMigrationFixture.scalar(foundation,
                         "SELECT decision FROM mp_recovery_events"));
             }
             if (prefix >= 6) {
-                assertEquals(SqlitePhase8cFixture.REVISION, SqlitePhase8cFixture.scalar(foundation,
+                assertEquals(SqliteMigrationFixture.REVISION, SqliteMigrationFixture.scalar(foundation,
                         "SELECT revision_id FROM mp_configuration_revisions_v2 WHERE application_status='APPLIED'"));
             }
             if (prefix >= 7) {
-                assertEquals(SqlitePhase8cFixture.REMAP.toString(), SqlitePhase8cFixture.scalar(foundation,
+                assertEquals(SqliteMigrationFixture.REMAP.toString(), SqliteMigrationFixture.scalar(foundation,
                         "SELECT operation_id FROM mp_stage_remap_operations"));
             }
             if (prefix >= 8) {
-                assertEquals(SqlitePhase8cFixture.OPERATION.toString(), SqlitePhase8cFixture.scalar(foundation,
+                assertEquals(SqliteMigrationFixture.OPERATION.toString(), SqliteMigrationFixture.scalar(foundation,
                         "SELECT lease_token FROM mp_stage_transition_leases"));
             }
             if (prefix >= 10) {
-                assertEquals("NEEDS_RECONCILIATION:legacy", SqlitePhase8cFixture.scalar(foundation,
+                assertEquals("NEEDS_RECONCILIATION:legacy", SqliteMigrationFixture.scalar(foundation,
                         "SELECT transition.status || ':' || reservation.stage_id "
                                 + "FROM mp_configuration_stage_transitions transition "
                                 + "JOIN mp_configuration_stage_reservations reservation "
@@ -139,21 +139,21 @@ class SqliteMigrationQualificationTest {
             if (prefix == 2) {
                 SqliteFoundation restarted = new SqliteFoundation(database);
                 SqlitePlayerStageRepository stages = new SqlitePlayerStageRepository(restarted);
-                var priorStage = stages.find(SqlitePhase8cFixture.PLAYER).orElseThrow();
+                var priorStage = stages.find(SqliteMigrationFixture.PLAYER).orElseThrow();
                 stages.update(priorStage.advanceTo(new StageId("elite"),
-                        new ConfigRevisionId(SqlitePhase8cFixture.REVISION), 8, SqlitePhase8cFixture.CLOCK.instant()),
+                        new ConfigRevisionId(SqliteMigrationFixture.REVISION), 8, SqliteMigrationFixture.CLOCK.instant()),
                         priorStage.stateRevision());
                 SqlitePlayerPrestigeRepository prestiges = new SqlitePlayerPrestigeRepository(restarted);
-                var priorPrestige = prestiges.find(SqlitePhase8cFixture.PLAYER).orElseThrow();
+                var priorPrestige = prestiges.find(SqliteMigrationFixture.PLAYER).orElseThrow();
                 prestiges.update(priorPrestige.advance(1, 1,
-                        new ConfigRevisionId(SqlitePhase8cFixture.REVISION), new ScopeId("global"),
-                        SqlitePhase8cFixture.CLOCK.instant()), priorPrestige.stateRevision());
+                        new ConfigRevisionId(SqliteMigrationFixture.REVISION), new ScopeId("global"),
+                        SqliteMigrationFixture.CLOCK.instant()), priorPrestige.stateRevision());
                 UUID unknown = UUID.fromString("50000000-0000-0000-0000-000000000005");
                 new SqlitePlayerInitializationStore(restarted).initialize(unknown, new StageId("veteran"),
-                        new ConfigRevisionId(SqlitePhase8cFixture.REVISION), new ScopeId("global"),
-                        SqlitePhase8cFixture.CLOCK.instant());
-                assertEquals("elite", stages.find(SqlitePhase8cFixture.PLAYER).orElseThrow().stageId().value());
-                assertEquals(1, prestiges.find(SqlitePhase8cFixture.PLAYER).orElseThrow().currentPrestige());
+                        new ConfigRevisionId(SqliteMigrationFixture.REVISION), new ScopeId("global"),
+                        SqliteMigrationFixture.CLOCK.instant());
+                assertEquals("elite", stages.find(SqliteMigrationFixture.PLAYER).orElseThrow().stageId().value());
+                assertEquals(1, prestiges.find(SqliteMigrationFixture.PLAYER).orElseThrow().currentPrestige());
                 assertTrue(stages.find(unknown).isPresent());
                 assertTrue(prestiges.find(unknown).isPresent());
             }
@@ -169,12 +169,12 @@ class SqliteMigrationQualificationTest {
     void rejectsMissingMigrationInRequestedChain() {
         Path database = temporaryDirectory.resolve("chain-gap.sqlite");
         SqliteFoundation foundation = new SqliteFoundation(database);
-        List<Migration> current = SqliteMigrations.phaseEightC();
+        List<Migration> current = SqliteMigrations.throughVersionEleven();
         ArrayList<Migration> gap = new ArrayList<>(current);
         gap.remove(4);
         var runner = new MigrationRunner(foundation,
                 new SqliteBackupService(foundation, temporaryDirectory.resolve("gap-backups"), current,
-                        SqlitePhase8cFixture.CLOCK), SqlitePhase8cFixture.CLOCK);
+                        SqliteMigrationFixture.CLOCK), SqliteMigrationFixture.CLOCK);
 
         IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () -> runner.migrate(gap));
 
@@ -196,17 +196,17 @@ class SqliteMigrationQualificationTest {
                 ignored -> new net.maddkraft.maddprestige.persistence.VerifiedBackup(
                         "qualified", java.util.Optional.of(database),
                         java.util.Optional.of(net.maddkraft.maddprestige.core.config.RevisionHasher.hashText("fixture")),
-                        SqlitePhase8cFixture.CLOCK.instant(), true, "injected verified fixture"),
-                SqlitePhase8cFixture.CLOCK);
+                        SqliteMigrationFixture.CLOCK.instant(), true, "injected verified fixture"),
+                SqliteMigrationFixture.CLOCK);
         runner.migrate(List.of(first));
 
         assertThrows(PersistenceException.class, () -> runner.migrate(chain));
-        assertEquals("0", SqlitePhase8cFixture.scalar(foundation, "SELECT COUNT(*) FROM stable_data"));
-        assertEquals("1", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("0", SqliteMigrationFixture.scalar(foundation, "SELECT COUNT(*) FROM stable_data"));
+        assertEquals("1", SqliteMigrationFixture.scalar(foundation,
                 "SELECT COUNT(*) FROM mp_schema_migrations WHERE version=2 AND result='FAILED'"));
         assertThrows(PersistenceException.class, () -> runner.migrate(chain));
-        assertEquals("0", SqlitePhase8cFixture.scalar(foundation, "SELECT COUNT(*) FROM stable_data"));
-        assertEquals("2", SqlitePhase8cFixture.scalar(foundation,
+        assertEquals("0", SqliteMigrationFixture.scalar(foundation, "SELECT COUNT(*) FROM stable_data"));
+        assertEquals("2", SqliteMigrationFixture.scalar(foundation,
                 "SELECT COUNT(*) FROM mp_schema_migrations WHERE version=2 AND result='FAILED'"));
     }
 
@@ -214,11 +214,11 @@ class SqliteMigrationQualificationTest {
     @DisplayName("[A63] Current history with a missing critical table is structurally invalid")
     void rejectsStructurallyIncompleteCurrentDatabase() {
         Path database = temporaryDirectory.resolve("missing-critical-table.sqlite");
-        SqliteFoundation foundation = SqlitePhase8cFixture.historical(database, 11);
-        SqlitePhase8cFixture.execute(foundation, "DROP TABLE mp_recovery_events");
+        SqliteFoundation foundation = SqliteMigrationFixture.historical(database, 11);
+        SqliteMigrationFixture.execute(foundation, "DROP TABLE mp_recovery_events");
 
         PersistenceException failure = assertThrows(PersistenceException.class,
-                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.phaseEightC()));
+                () -> SqliteDatabaseValidator.validate(database, SqliteMigrations.throughVersionEleven()));
 
         assertTrue(failure.getMessage().contains("missing required table"));
     }

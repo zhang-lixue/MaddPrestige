@@ -1,8 +1,8 @@
 package net.maddkraft.maddprestige.core.prestige;
 
 import java.util.Objects;
-import net.maddkraft.maddprestige.core.config.phase4.ResetComponent;
-import net.maddkraft.maddprestige.core.config.phase4.ResetDisposition;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetComponent;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetDisposition;
 
 public record ComponentConsequence(
         ResetComponent component,

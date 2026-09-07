@@ -1,0 +1,9 @@
+name: Qualification-Controlled-Economy
+version: '1.0.0'
+main: net.maddkraft.qualification.runtimefault.economy.ControlledEconomyPlugin
+description: Disposable controlled Vault Economy service for runtime provider/fault fault qualification.
+author: MaddKraft
+api-version: '26.1.2'
+load: POSTWORLD
+depend: [Vault]
+loadbefore: [MaddPrestige]

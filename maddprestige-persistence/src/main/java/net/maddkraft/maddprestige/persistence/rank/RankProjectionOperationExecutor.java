@@ -236,7 +236,7 @@ public final class RankProjectionOperationExecutor {
                 Optional.of(operation.plan().target()), Optional.of(operation.plan().id()),
                 Optional.of(operation.plan().configRevision()), "rank.projection",
                 Optional.of(new AuditValue(operation.expectedPlayerState().stageId().value(), false)),
-                Optional.of(new AuditValue(operation.targetStage().value(), false)), "phase2-rank-operation",
+                Optional.of(new AuditValue(operation.targetStage().value(), false)), "rank-projection-operation",
                 operation.plan().operationType(), outcome,
                 outcome == AuditOutcome.SUCCEEDED ? Optional.empty() : Optional.of(detail),
                 operation.plan().id().value(), now));

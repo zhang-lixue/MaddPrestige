@@ -35,6 +35,16 @@ V1 player/configuration data is not automatically imported. A fresh V2 player st
 V2 administrative action establishes another value.
 
 See [Upgrading](operations/upgrading.md) and [Recovery](operations/recovery.md).
+## Pre-GA identifier normalization
+
+Before the 2.0 general-availability release, active provider IDs, locale keys, diagnostic codes, and provider metadata
+were normalized to purpose-based names. New configuration, discovery, reports, and bundled messages emit only those
+canonical names. Exact legacy aliases are accepted only at documented compatibility boundaries; arbitrary prefix
+rewriting is not supported.
+
+Historical migration versions 1 through 12 retain their original persisted descriptions, SQL, and checksums. Current
+operational displays use a separate description catalog so wording changes cannot alter migration identity. The same
+separation is required for future migrations.
 
 ## Stable extension surface
 

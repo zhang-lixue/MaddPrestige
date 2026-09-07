@@ -29,7 +29,7 @@ import net.maddkraft.maddprestige.api.metric.MetricSample;
 import net.maddkraft.maddprestige.api.metric.MetricValue;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.config.RevisionHasher;
-import net.maddkraft.maddprestige.core.config.phase4.ResetDisposition;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetDisposition;
 import net.maddkraft.maddprestige.core.requirement.BaselineInitializationService;
 import net.maddkraft.maddprestige.core.requirement.BaselineKey;
 import net.maddkraft.maddprestige.core.requirement.CatchUpProfile;
@@ -52,7 +52,7 @@ import org.junit.jupiter.api.io.TempDir;
 class SqliteSeasonLifecycleTest {
     private static final Instant NOW = Instant.parse("2026-08-15T12:00:00Z");
     private static final Clock CLOCK = Clock.fixed(NOW, ZoneOffset.UTC);
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase4-season");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("prestige-lifecycle-season");
     private static final ProviderId PROVIDER = new ProviderId("progress_source");
     private static final RequirementId REQUIREMENT = new RequirementId("season_activity");
     @TempDir
@@ -65,8 +65,8 @@ class SqliteSeasonLifecycleTest {
         Path database = temporaryDirectory.resolve("season.db");
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite, new FileBackupService(database, temporaryDirectory.resolve("backups"), CLOCK),
-                CLOCK).migrate(SqliteMigrations.phaseFour());
-        new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("phase four season"));
+                CLOCK).migrate(SqliteMigrations.throughVersionFive());
+        new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("Prestige lifecycle season"));
         requirementStates = new SqliteRequirementStateRepository(sqlite);
     }
 

@@ -102,8 +102,8 @@ ambiguous profile. `CONTINUE` anchors at the preceding resolved value. MANUAL re
 for every covered level. Floors/caps apply before rounding and are rechecked after rounding. Preview uses the exact same
 resolver as execution.
 
-Use the compact form unless behavior actually changes by range. Fully explicit segments remain valid and retain Phase
-9B semantics. The older strategy syntax remains compatibility input, not a second product model and not the normal
+Use the compact form unless behavior actually changes by range. Fully explicit segments remain valid and retain the accepted numeric-scaling
+semantics. The older strategy syntax remains compatibility input, not a second product model and not the normal
 authoring path.
 
 ## Draft workflow

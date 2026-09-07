@@ -19,7 +19,7 @@ not capability.
 | `craftengine_item_reward` | — | — | bounded item grant | — | Additive reward. |
 | `paper_statistics` | typed vanilla statistics | — | — | — | Includes play-time guidance. |
 | `paper_world_context` | world name/UUID/environment/in-set | — | — | world context | Read-only; not a world-reset listener. |
-| `phase5_events` | durable explicitly configured event counters | — | — | — | Includes adjusted mcMMO XP event metric; not `total_level`. |
+| `event_progress` | durable explicitly configured event counters | — | — | — | Includes adjusted mcMMO XP event metric; not `total_level`. |
 | Stable external `ProviderDeclaration` | as declared and attested | as declared | as declared | as declared | Owner plugin, namespace, generation, health, and capabilities are validated. |
 | EconomyShopGUI / QuickShop-Hikari | — | — | — | — | Coexistence/diagnostics only; zero progression credit. |
 | UltimateMobCoins / other MobCoins plugin | — | — | — | — | No native MaddPrestige balance/cost/reward adapter. Use only a real configured PAPI/external SDK capability. |

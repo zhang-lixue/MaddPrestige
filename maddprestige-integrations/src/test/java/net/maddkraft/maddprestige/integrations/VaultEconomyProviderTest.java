@@ -177,7 +177,7 @@ class VaultEconomyProviderTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Frozen Vault cost and reward contracts reject zero without provider calls")
+    @DisplayName("Frozen Vault cost and reward contracts reject zero without provider calls")
     void zeroCostAndRewardAreInvalidForVaultContracts() {
         EconomyHarness economy = new EconomyHarness();
         VaultEconomyBinding binding = binding(economy);

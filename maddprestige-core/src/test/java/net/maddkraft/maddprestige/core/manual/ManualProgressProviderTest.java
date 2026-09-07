@@ -106,7 +106,7 @@ class ManualProgressProviderTest {
     }
 
     @Test
-    @DisplayName("[A65][8B] Repeated flush ticks coalesce behind one drain and include updates made while queued")
+    @DisplayName("[A65] Repeated flush ticks coalesce behind one drain and include updates made while queued")
     void flushIsSingleFlightAndCoalescesQueuedUpdates() {
         QueueExecutor executor = new QueueExecutor();
         CountingRepository repository = new CountingRepository();
@@ -130,7 +130,7 @@ class ManualProgressProviderTest {
     }
 
     @Test
-    @DisplayName("[A65][8B] A failed flush retains dirty state and a later single-flight drain retries it")
+    @DisplayName("[A65] A failed flush retains dirty state and a later single-flight drain retries it")
     void failedFlushRetainsDirtyState() {
         AtomicBoolean fail = new AtomicBoolean(true);
         CountingRepository repository = new CountingRepository() {
@@ -157,7 +157,7 @@ class ManualProgressProviderTest {
     }
 
     @Test
-    @DisplayName("[A65][8B] Large dirty sets are drained in bounded batches without losing entries")
+    @DisplayName("[A65] Large dirty sets are drained in bounded batches without losing entries")
     void flushBatchesAreBounded() {
         CountingRepository repository = new CountingRepository();
         ManualProgressBootstrap bootstrap = bootstrap(repository, Runnable::run, 2, 3_000);

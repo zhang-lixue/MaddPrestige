@@ -39,7 +39,7 @@ class SqlitePlayerInitializationStoreTest {
         Path database = temporaryDirectory.resolve("initialization.db");
         SqliteFoundation sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite, new FileBackupService(database, temporaryDirectory.resolve("backups"), CLOCK),
-                CLOCK).migrate(SqliteMigrations.phaseSix());
+                CLOCK).migrate(SqliteMigrations.throughVersionTen());
         ConfigRevisionId revision = new ConfigRevisionId("initialization_revision");
         new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("initialization"));
         UUID playerId = UUID.randomUUID();
@@ -68,7 +68,7 @@ class SqlitePlayerInitializationStoreTest {
     }
 
     @Test
-    @DisplayName("[Phase 9B] Fresh numeric Prestige starts at zero without a stage and survives restart")
+    @DisplayName("Fresh numeric Prestige starts at zero without a stage and survives restart")
     void initializesNumericPrestigeWithoutImportingStageState() throws Exception {
         UUID playerId = UUID.randomUUID();
         Path legacyDatabase = temporaryDirectory.resolve("maddprestige.db");
@@ -84,9 +84,9 @@ class SqlitePlayerInitializationStoreTest {
         SqliteFoundation sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite, new FileBackupService(database,
                 temporaryDirectory.resolve("numeric-backups"), CLOCK), CLOCK)
-                .migrate(SqliteMigrations.phaseNineB());
-        ConfigRevisionId revision = new ConfigRevisionId("phase9b_numeric_revision");
-        new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("phase9b numeric"));
+                .migrate(SqliteMigrations.current());
+        ConfigRevisionId revision = new ConfigRevisionId("numeric_prestige_revision");
+        new SqliteConfigRevisionRepository(sqlite).insert(revision, RevisionHasher.hashText("numeric-prestige numeric"));
         ScopeId scopeId = new ScopeId("prestige_numeric_scope");
 
         new SqlitePlayerInitializationStore(sqlite).initializePrestige(

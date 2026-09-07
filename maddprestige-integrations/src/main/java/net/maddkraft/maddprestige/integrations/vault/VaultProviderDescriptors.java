@@ -3,6 +3,7 @@ package net.maddkraft.maddprestige.integrations.vault;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import net.maddkraft.maddprestige.core.compatibility.ProviderMetadataVersions;
 import net.maddkraft.maddprestige.api.id.ProviderId;
 import net.maddkraft.maddprestige.api.provider.CapabilityDescriptor;
 import net.maddkraft.maddprestige.api.provider.DependencyDescriptor;
@@ -18,7 +19,7 @@ final class VaultProviderDescriptors {
     }
 
     static ProviderDescriptor descriptor(ProviderId id, String category, String implementationVersion) {
-        return new ProviderDescriptor(id, OWNER, "phase5", implementationVersion,
+        return new ProviderDescriptor(id, OWNER, ProviderMetadataVersions.STABLE_API, implementationVersion,
                 List.of(new DependencyDescriptor("Vault", "[1.7,3)", Optional.empty())),
                 List.of(new CapabilityDescriptor(id.value(), category,
                         "Vault economy " + category + " capability", Map.of("thread", "server"))));

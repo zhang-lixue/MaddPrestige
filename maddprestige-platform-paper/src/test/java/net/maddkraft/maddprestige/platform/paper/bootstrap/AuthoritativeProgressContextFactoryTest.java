@@ -13,8 +13,8 @@ import net.maddkraft.maddprestige.api.id.ScopeId;
 import net.maddkraft.maddprestige.api.id.SeasonId;
 import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
-import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfigurationSnapshot;
+import net.maddkraft.maddprestige.core.config.lifecycle.ActiveLifecycleConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.LifecycleConfigurationSnapshot;
 import net.maddkraft.maddprestige.core.prestige.PlayerPrestigeState;
 import net.maddkraft.maddprestige.core.requirement.MeasurementScope;
 import net.maddkraft.maddprestige.core.season.ActiveSeasonContext;
@@ -64,7 +64,7 @@ class AuthoritativeProgressContextFactoryTest {
         AuthoritativeProgressContextFactory factory = new AuthoritativeProgressContextFactory(
                 ignored -> Optional.of(prestige), seasons);
 
-        var context = factory.prestige(playerId, prestige, activePhaseFour());
+        var context = factory.prestige(playerId, prestige, activeLifecycle());
 
         assertEquals(7, context.scalingIndex());
         assertEquals(ExactDecimal.ZERO, context.catchUpPosition());
@@ -99,11 +99,11 @@ class AuthoritativeProgressContextFactoryTest {
         return active;
     }
 
-    private static ActivePhaseFourConfiguration activePhaseFour() {
-        PhaseFourConfigurationSnapshot snapshot = mock(PhaseFourConfigurationSnapshot.class);
+    private static ActiveLifecycleConfiguration activeLifecycle() {
+        LifecycleConfigurationSnapshot snapshot = mock(LifecycleConfigurationSnapshot.class);
         when(snapshot.revisionId()).thenReturn(REVISION);
-        ActivePhaseFourConfiguration active = mock(ActivePhaseFourConfiguration.class);
-        when(active.phaseFour()).thenReturn(snapshot);
+        ActiveLifecycleConfiguration active = mock(ActiveLifecycleConfiguration.class);
+        when(active.lifecycle()).thenReturn(snapshot);
         return active;
     }
 }

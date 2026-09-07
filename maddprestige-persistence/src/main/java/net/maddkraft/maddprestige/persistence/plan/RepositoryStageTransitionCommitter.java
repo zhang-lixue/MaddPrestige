@@ -14,7 +14,7 @@ import net.maddkraft.maddprestige.persistence.StalePlayerStageStateException;
 import net.maddkraft.maddprestige.persistence.StageHistoryRecord;
 
 /**
- * Production optimistic-CAS committer backed by the accepted Phase 2 player-stage repository. It compares the
+ * Production optimistic-CAS committer backed by the accepted stage progression player-stage repository. It compares the
  * observed source-row provenance separately from the active operation revision written on successful advancement.
  */
 public final class RepositoryStageTransitionCommitter implements StageTransitionCommitter {

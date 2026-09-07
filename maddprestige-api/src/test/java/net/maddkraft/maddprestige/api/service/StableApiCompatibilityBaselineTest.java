@@ -24,7 +24,7 @@ class StableApiCompatibilityBaselineTest {
     private static final String BASELINE_SHA256 = "357646DE87CE5B06883B8678CCB3A45D655E5F08A7219B63BDEDDA4B68402C4E";
 
     @Test
-    @DisplayName("[8F] The 46-type Bukkit-free Stable 2.x surface matches its frozen binary signature")
+    @DisplayName("The 46-type Bukkit-free Stable 2.x surface matches its frozen binary signature")
     void stableApiMatchesFrozenSignature() throws Exception {
         List<? extends Class<?>> stableTypes = stableTypes();
         assertEquals(46, stableTypes.size(), "Stable additions or removals require compatibility-baseline review");

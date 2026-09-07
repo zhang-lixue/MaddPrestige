@@ -15,7 +15,7 @@ import java.util.function.Supplier;
 import net.maddkraft.maddprestige.api.provider.ActivationState;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
 import net.maddkraft.maddprestige.core.config.ActiveConfiguration;
 import net.maddkraft.maddprestige.core.provider.ProviderRegistry;
 
@@ -37,7 +37,7 @@ public final class DoctorService {
     }
 
     public CompletionStage<DoctorReport> inspect(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.DOCTOR);
+        subject.require(AdministrationPermissions.DOCTOR);
         ArrayList<DiagnosticFinding> immediate = new ArrayList<>();
         immediate.add(activeFinding());
         providers.snapshots().forEach(snapshot -> immediate.add(providerFinding(snapshot)));
@@ -76,7 +76,7 @@ public final class DoctorService {
         return new DiagnosticFinding("doctor.not_checked." + segment, DiagnosticSeverity.DEFERRED,
                 "diagnostic-coverage", "doctor.coverage." + segment,
                 "The " + segment.replace('-', ' ') + " domain was not checked by this runtime composition.",
-                "Connect the Phase 6-owned probe when that subsystem is applicable; do not treat this report as "
+                "Connect the owned health probe when that subsystem is applicable; do not treat this report as "
                         + "broadly healthy until then.");
     }
 

@@ -30,7 +30,7 @@ import org.junit.jupiter.api.Test;
 
 class StableServiceContractTest {
     @Test
-    @DisplayName("[A65][8B] Stable facade is annotated and canonical external provider IDs are bounded")
+    @DisplayName("[A65] Stable facade is annotated and canonical external provider IDs are bounded")
     void stableFacadeAndProviderIdsAreExplicit() {
         assertTrue(MaddPrestigeService.class.getPackage().isAnnotationPresent(Stable.class));
         assertEquals("example_plugin:progress", new ProviderId("example_plugin:progress").value());
@@ -41,7 +41,7 @@ class StableServiceContractTest {
     }
 
     @Test
-    @DisplayName("[A65][8B] Stable error payloads reject unbounded and non-canonical data")
+    @DisplayName("[A65] Stable error payloads reject unbounded and non-canonical data")
     void serviceErrorsAreBounded() {
         assertThrows(IllegalArgumentException.class, () -> new ServiceError("Invalid Code", "message", Map.of()));
         assertThrows(IllegalArgumentException.class, () -> new ServiceError("valid.code", "x".repeat(1025),

@@ -14,7 +14,7 @@ import org.junit.jupiter.api.Test;
 
 class PrestigeBalanceProjectionTest {
     @Test
-    @DisplayName("[Phase 9F-A] Canonical balance projection includes exact cost and monetary reward")
+    @DisplayName("Canonical balance projection includes exact cost and monetary reward")
     void projectsExactPostPrestigeBalance() {
         PrestigeBalanceProjection projection = PrestigeBalanceProjection.project(
                 money("8"), List.of(money("5")), List.of(money("1")));
@@ -24,7 +24,7 @@ class PrestigeBalanceProjectionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A] Canonical zero balance remains an exact available value")
+    @DisplayName("Canonical zero balance remains an exact available value")
     void preservesExactZeroBalance() {
         PrestigeBalanceProjection projection = PrestigeBalanceProjection.project(
                 money("0"), List.of(), List.of());
@@ -34,7 +34,7 @@ class PrestigeBalanceProjectionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Canonical blocked balance uses the greater truthful requirement or cost shortfall")
+    @DisplayName("Canonical blocked balance uses the greater truthful requirement or cost shortfall")
     void derivesCanonicalBlockedBalanceShortfall() {
         ExplanationNode requirement = balanceRequirement("1", "8", "GREATER_OR_EQUAL",
                 ExplanationStatus.UNSATISFIED);
@@ -48,7 +48,7 @@ class PrestigeBalanceProjectionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-D] Paired guided Money requirement and cost expose one truthful shortfall")
+    @DisplayName("Paired guided Money requirement and cost expose one truthful shortfall")
     void derivesPairedGuidedMoneyShortfall() {
         ExplanationNode requirement = balanceRequirement("1", "4", "GREATER_OR_EQUAL",
                 ExplanationStatus.UNSATISFIED);
@@ -62,7 +62,7 @@ class PrestigeBalanceProjectionTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Canonical blocked balance declines to invent unsupported requirement shortfalls")
+    @DisplayName("Canonical blocked balance declines to invent unsupported requirement shortfalls")
     void rejectsUnsupportedRequirementShortfall() {
         ExplanationNode requirement = balanceRequirement("1", "8", "LESS_OR_EQUAL",
                 ExplanationStatus.UNSATISFIED);

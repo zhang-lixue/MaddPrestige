@@ -47,7 +47,7 @@ class StageTransitionLeaseRecoveryTest {
         Path database = temporaryDirectory.resolve("lease-recovery.db");
         sqlite = new SqliteFoundation(database);
         new MigrationRunner(sqlite, new FileBackupService(database, temporaryDirectory.resolve("backups"), CLOCK),
-                CLOCK).migrate(SqliteMigrations.phaseSix());
+                CLOCK).migrate(SqliteMigrations.throughVersionTen());
         new SqliteConfigRevisionRepository(sqlite).insert(REVISION, RevisionHasher.hashText("lease recovery"));
         operations = new SqliteOperationRepository(sqlite);
         fence = new SqliteStageReferenceMigrationStore(sqlite);

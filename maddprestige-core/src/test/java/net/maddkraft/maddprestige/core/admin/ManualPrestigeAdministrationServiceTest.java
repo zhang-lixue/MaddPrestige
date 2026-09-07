@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test;
 class ManualPrestigeAdministrationServiceTest {
     private static final UUID PLAYER = UUID.fromString("00000000-0000-3000-8000-000000000001");
     private static final UUID STAFF = UUID.fromString("11111111-1111-4111-8111-111111111111");
-    private static final ConfigRevisionId REVISION = new ConfigRevisionId("phase9f-c1");
+    private static final ConfigRevisionId REVISION = new ConfigRevisionId("prestige-administration");
     private static final Instant NOW = Instant.parse("2026-09-03T12:00:00Z");
 
     @Test
@@ -30,8 +30,8 @@ class ManualPrestigeAdministrationServiceTest {
         MemoryStore store = new MemoryStore(state(6, 9));
         ManualPrestigeAdministrationService service = service(store, new AtomicReference<>(REVISION),
                 new AtomicInteger());
-        PermissionSubject staff = staff(PhaseSixPermissions.PLAYER_VIEW,
-                PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        PermissionSubject staff = staff(AdministrationPermissions.PLAYER_VIEW,
+                AdministrationPermissions.PLAYER_PRESTIGE_SET);
 
         ManualPrestigeAdjustmentReview review = service.reviewSetInput(staff, PLAYER, "8")
                 .toCompletableFuture().join();
@@ -53,8 +53,8 @@ class ManualPrestigeAdministrationServiceTest {
         MemoryStore store = new MemoryStore(state(6, 2));
         ManualPrestigeAdministrationService service = service(store, new AtomicReference<>(REVISION),
                 new AtomicInteger());
-        PermissionSubject resetter = staff(PhaseSixPermissions.PLAYER_VIEW,
-                PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        PermissionSubject resetter = staff(AdministrationPermissions.PLAYER_VIEW,
+                AdministrationPermissions.PLAYER_PRESTIGE_RESET);
 
         ManualPrestigeAdjustmentReview review = service.reviewReset(resetter, PLAYER)
                 .toCompletableFuture().join();
@@ -73,9 +73,9 @@ class ManualPrestigeAdministrationServiceTest {
         MemoryStore store = new MemoryStore(state(6, 4));
         AtomicReference<ConfigRevisionId> revision = new AtomicReference<>(REVISION);
         ManualPrestigeAdministrationService service = service(store, revision, new AtomicInteger());
-        PermissionSubject setter = staff(PhaseSixPermissions.PLAYER_VIEW,
-                PhaseSixPermissions.PLAYER_PRESTIGE_SET);
-        PermissionSubject editor = staff(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT);
+        PermissionSubject setter = staff(AdministrationPermissions.PLAYER_VIEW,
+                AdministrationPermissions.PLAYER_PRESTIGE_SET);
+        PermissionSubject editor = staff(AdministrationPermissions.PLAYER_PRESTIGE_EDIT);
 
         assertThrows(IllegalArgumentException.class, () -> service.set(editor, PLAYER, 4, 0,
                 "command", "Zero belongs to Reset Prestige"));
@@ -93,7 +93,7 @@ class ManualPrestigeAdministrationServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.validateSetInput(setter, "11", REVISION));
 
         ConfigRevisionId staleInputRevision = REVISION;
-        revision.set(new ConfigRevisionId("phase9f-c1-input-replaced"));
+        revision.set(new ConfigRevisionId("prestige-administration-input-replaced"));
         assertThrows(IllegalStateException.class,
                 () -> service.validateSetInput(setter, "8", staleInputRevision));
         revision.set(REVISION);
@@ -105,7 +105,7 @@ class ManualPrestigeAdministrationServiceTest {
 
         ManualPrestigeAdjustmentReview staleRevision = service.reviewSet(setter, PLAYER, 8)
                 .toCompletableFuture().join();
-        revision.set(new ConfigRevisionId("phase9f-c1-new"));
+        revision.set(new ConfigRevisionId("prestige-administration-new"));
         assertThrows(IllegalStateException.class, () -> service.confirm(setter, staleRevision,
                 "staff-gui", "Stale config"));
 
@@ -124,8 +124,8 @@ class ManualPrestigeAdministrationServiceTest {
         AtomicInteger initializations = new AtomicInteger();
         ManualPrestigeAdministrationService service = service(store, new AtomicReference<>(REVISION),
                 initializations);
-        PermissionSubject setter = staff(PhaseSixPermissions.PLAYER_VIEW,
-                PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        PermissionSubject setter = staff(AdministrationPermissions.PLAYER_VIEW,
+                AdministrationPermissions.PLAYER_PRESTIGE_SET);
 
         ManualPrestigeTargetPage first = service.targets(setter, PLAYER, 0, 7).toCompletableFuture().join();
         ManualPrestigeTargetPage second = service.targets(setter, PLAYER, 1, 7).toCompletableFuture().join();

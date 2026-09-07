@@ -99,7 +99,7 @@ public final class AtomicConfigurationFileStore implements ConfigurationSnapshot
             validateDocumentName(document.getKey());
             Path path = inside(temporary.resolve(document.getKey()));
             if (!path.getParent().equals(temporary)) {
-                throw new PersistenceException("Nested configuration document paths are not enabled in Phase 6");
+                throw new PersistenceException("Nested configuration document paths are not supported");
             }
             writeForced(path, document.getValue());
         }

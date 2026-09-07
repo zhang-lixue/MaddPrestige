@@ -138,14 +138,14 @@ public final class OperationConfirmationService implements AutoCloseable {
                     "Generate a fresh preview under the current revision.");
         }
         if (confirmation.plan() instanceof RankUpPlan rankPlan) {
-            requireExecution(subject, rankPlan.playerId(), PhaseSixPermissions.RANK_UP);
+            requireExecution(subject, rankPlan.playerId(), AdministrationPermissions.RANK_UP);
             consume(id, confirmation);
             throw new AdministrationException("rankup.compatibility_only",
                     "Rank-up confirmations are compatibility-only and cannot execute.",
                     "Use the numeric Prestige operation; active progression is Prestige N to N + 1.");
         }
         PrestigePlan approved = (PrestigePlan) confirmation.plan();
-        requireExecution(subject, approved.playerId(), PhaseSixPermissions.PRESTIGE);
+        requireExecution(subject, approved.playerId(), AdministrationPermissions.PRESTIGE);
         consume(id, confirmation);
         return previews.authorizePrestige(subject, approved.playerId())
                 .handle((fresh, failure) -> requireEquivalentFreshPlan(confirmation, approved, fresh, failure))
@@ -224,7 +224,7 @@ public final class OperationConfirmationService implements AutoCloseable {
         if (subject.actor().uuid().filter(playerId::equals).isPresent()) {
             subject.require(selfPermission);
         } else {
-            subject.require(PhaseSixPermissions.EXECUTE);
+            subject.require(AdministrationPermissions.EXECUTE);
         }
     }
 

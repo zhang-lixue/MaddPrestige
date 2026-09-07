@@ -188,7 +188,7 @@ public final class RankReconciliationCoordinator {
             AuditOutcome outcome) {
         audit.append(new AuditRecord(UUID.randomUUID(), actor, Optional.of(playerId), Optional.empty(),
                 Optional.of(configuration.revisionId()), "rank.reconciliation", Optional.empty(),
-                stageId.map(id -> new AuditValue(id.value(), false)), "phase2-reconciliation", status.name(), outcome,
+                stageId.map(id -> new AuditValue(id.value(), false)), "rank-reconciliation", status.name(), outcome,
                 outcome == AuditOutcome.SUCCEEDED ? Optional.empty() : Optional.of(detail), UUID.randomUUID(),
                 clock.instant()));
     }

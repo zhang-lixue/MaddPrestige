@@ -1,6 +1,6 @@
 package net.maddkraft.maddprestige.core.admin.diagnostic;
 
-/** Phase 6 Doctor coverage domains; absence is reported instead of implied healthy. */
+/** administration Doctor coverage domains; absence is reported instead of implied healthy. */
 public enum DiagnosticDomain {
     ACTIVE_CONFIGURATION("active-configuration"),
     SCHEMA_VERSION("schema-version"),

@@ -81,7 +81,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2 correction] Guided configuration levels render through the strict argument allowlist")
+    @DisplayName("Guided configuration levels render through the strict argument allowlist")
     void guidedConfigurationLevelArgumentIsNarrowlyAllowed() {
         var level = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "gui.action.staff.prestige_level", "level", 6);
@@ -92,7 +92,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-D] Configuration preview renders its document count through the strict allowlist")
+    @DisplayName("Configuration preview renders its document count through the strict allowlist")
     void configurationPreviewDocumentCountIsNarrowlyAllowed() {
         var summary = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "command.config.preview_summary",
@@ -106,7 +106,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9G] Doctor summary renders its bounded diagnostic counts through the strict allowlist")
+    @DisplayName("Doctor summary renders its bounded diagnostic counts through the strict allowlist")
     void doctorSummaryCountsAreNarrowlyAllowed() {
         var summary = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "command.doctor.summary",
@@ -118,7 +118,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Guided Money and Reward reviews render concise gameplay values")
+    @DisplayName("Guided Money and Reward reviews render concise gameplay values")
     void guidedConfigurationReviewsRenderConciseGameplayValues() {
         assertEquals("Active Configuration", plain(messages.render(
                 "gui.item.staff.configuration.detail.title")));
@@ -209,12 +209,12 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[A68][OR8D-01] Command, GUI, and Phase 7 semantic prose is selected by catalog key")
+    @DisplayName("[A68][OR8D-01] Command, GUI, and runtime semantic prose is selected by catalog key")
     void selectedCatalogControlsRepresentativeSemanticPresentation() throws Exception {
         select("zz_ZZ", """
                 command.status.configuration: "KOMENDA <revision>"
                 gui.title.progress: "GUI POSTEP"
-                phase7.usage: "FAZA SIEDEM"
+                command.runtime.usage: "FAZA SIEDEM"
                 """);
         assertTrue(messages.reload().successful());
 
@@ -225,7 +225,7 @@ class PaperMessageServiceTest {
                 net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                         "command.status.configuration", "revision", "r9")));
         assertEquals("KOMENDA r9", plain(
-                net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+                net.maddkraft.maddprestige.platform.paper.admin.PaperAdministrationCommandAdapter
                         .renderResponse(response, messages).getFirst()));
         assertEquals("GUI POSTEP", plain(messages.render(
                 net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of("gui.title.progress"))));
@@ -236,11 +236,11 @@ class PaperMessageServiceTest {
         assertEquals("GUI POSTEP", plain(
                 net.maddkraft.maddprestige.platform.paper.admin.PaperGuiInventory.renderTitle(view, messages)));
         assertEquals("FAZA SIEDEM", plain(messages.render(
-                net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of("phase7.usage"))));
+                net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of("command.runtime.usage"))));
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Canonical history Details action uses an exact injection-safe command target")
+    @DisplayName("Canonical history Details action uses an exact injection-safe command target")
     void historyEntryRendersClickableStableDetailTarget() {
         String entry = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
         var reference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
@@ -250,7 +250,7 @@ class PaperMessageServiceTest {
         var response = net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
                 "history.summary", List.of(reference));
 
-        Component rendered = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+        Component rendered = net.maddkraft.maddprestige.platform.paper.admin.PaperAdministrationCommandAdapter
                 .renderResponse(response, messages).getFirst();
 
         assertTrue(plain(rendered).contains("2 → 3  Recovered"));
@@ -262,19 +262,19 @@ class PaperMessageServiceTest {
         var unsafe = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "command.history.entry.completed", "before", 1, "after", 2,
                 "status", "Completed", "value", "now", "player", "bad player", "id", entry);
-        Component safelyUnlinked = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+        Component safelyUnlinked = net.maddkraft.maddprestige.platform.paper.admin.PaperAdministrationCommandAdapter
                 .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
                         "history.summary", List.of(unsafe)), messages).getFirst();
         assertEquals(null, safelyUnlinked.clickEvent());
     }
 
     @Test
-    @DisplayName("[Phase 9F-B UX] History pages expose only safe available Previous and Next actions")
+    @DisplayName("History pages expose only safe available Previous and Next actions")
     void historyPaginationRendersSafeDirectionalActions() {
         var firstReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "command.history.page", "current", 1, "total", 2, "player", "FixturePlayer",
                 "previous", "", "next", 2);
-        Component first = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+        Component first = net.maddkraft.maddprestige.platform.paper.admin.PaperAdministrationCommandAdapter
                 .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
                         "history.summary", List.of(firstReference)), messages).getFirst();
 
@@ -288,7 +288,7 @@ class PaperMessageServiceTest {
         var lastReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "command.history.page", "current", 2, "total", 2, "player", "FixturePlayer",
                 "previous", 1, "next", "");
-        Component last = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+        Component last = net.maddkraft.maddprestige.platform.paper.admin.PaperAdministrationCommandAdapter
                 .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
                         "history.summary", List.of(lastReference)), messages).getFirst();
 
@@ -302,14 +302,14 @@ class PaperMessageServiceTest {
         var unsafeReference = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "command.history.page", "current", 1, "total", 2, "player", "bad player",
                 "previous", "", "next", 2);
-        Component unsafe = net.maddkraft.maddprestige.platform.paper.admin.PaperPhaseSixCommandAdapter
+        Component unsafe = net.maddkraft.maddprestige.platform.paper.admin.PaperAdministrationCommandAdapter
                 .renderResponse(net.maddkraft.maddprestige.core.admin.command.CommandResponse.success(
                         "history.summary", List.of(unsafeReference)), messages).getFirst();
         assertEquals("Page 1 / 2", plain(unsafe));
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Player requirement count omits evaluation terminology")
+    @DisplayName("Player requirement count omits evaluation terminology")
     void playerRequirementProgressArgumentsRender() {
         var progress = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "gui.item.requirements.progress.incomplete", "progress", 1, "total", 2);
@@ -319,7 +319,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C1] Player root and Set/Reset action labels remain concise and distinct")
+    @DisplayName("Player root and Set/Reset action labels remain concise and distinct")
     void staffPrestigeAdjustmentPresentationRenders() {
         assertEquals("FixturePlayer", plain(messages.render("gui.title.staff.player", Map.of("player", "FixturePlayer"))));
         assertEquals("FixturePlayer Set Prestige", plain(messages.render(
@@ -335,7 +335,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A correction] Preview balance accepts and renders the projected canonical value")
+    @DisplayName("Preview balance accepts and renders the projected canonical value")
     void previewBalanceProjectionArgumentsRender() {
         var projection = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "gui.item.balance.projected", "current", "$7", "projected", "$1");
@@ -344,7 +344,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-B] Blocked balance shortfall is concise and warning-colored")
+    @DisplayName("Blocked balance shortfall is concise and warning-colored")
     void blockedBalanceShortfallRenders() {
         var shortfall = net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "gui.item.balance.missing", "missing", "$7");
@@ -358,7 +358,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A owner UX] Preview state actions are concise, bold, and semantically colored")
+    @DisplayName("Preview state actions are concise, bold, and semantically colored")
     void eligiblePlayerGuiPresentationUsesGameplayHierarchy() {
         Component ready = messages.render(net.maddkraft.maddprestige.core.admin.presentation.MessageReference.of(
                 "gui.item.requirements.progress.complete", "progress", 2, "total", 2));
@@ -401,7 +401,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-C2] Requirement editor tooltips use concise staff-facing language")
+    @DisplayName("Requirement editor tooltips use concise staff-facing language")
     void requirementEditorTooltipsAreConcise() {
         assertEquals("Current: $6", plain(messages.render(
                 "gui.item.staff.config_requirements.money.value", Map.of("value", "6"))));
@@ -419,7 +419,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-D] GUI fallback copy stays concise and functional headings stay consistent")
+    @DisplayName("GUI fallback copy stays concise and functional headings stay consistent")
     void finalGuiPolishUsesConciseCatalogOwnedPresentation() {
         assertEquals("Configuration editing is unavailable.", plain(messages.render(
                 "gui.staff.configuration_administration_unavailable")));
@@ -448,7 +448,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[Phase 9F-A owner UX] Player GUI close control uses a concise label")
+    @DisplayName("Player GUI close control uses a concise label")
     void playerGuiCloseLabelIsConcise() {
         assertEquals("Close", plain(messages.render("gui.action.close")));
     }
@@ -521,7 +521,7 @@ class PaperMessageServiceTest {
                 .anyMatch(value -> value.contains("restore") && value.contains("migration")));
 
         var validation = new net.maddkraft.maddprestige.api.validation.ValidationFinding(
-                "phase3.provider.unavailable",
+                "progression.configuration.provider.unavailable",
                 net.maddkraft.maddprestige.api.validation.ValidationSeverity.ERROR,
                 "providers.vault", "VALIDATION_SENTINEL", "CONSEQUENCE_SENTINEL", "REMEDIATION_SENTINEL");
         List<String> validationOutput = render(
@@ -1060,7 +1060,7 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[A76][OR8F-A76-01] Requirement input diagnostics render exact owner-facing semantics")
+    @DisplayName("[A76] Requirement input diagnostics render exact owner-facing semantics")
     void requirementInputDiagnosticsRenderExactOwnerFacingSemantics() {
         List<String> target = administrationLines("setup.requirement.target.invalid",
                 "target", "one-minute", "type", "DURATION", "provider", "paper_statistics",
@@ -1262,7 +1262,7 @@ class PaperMessageServiceTest {
     @Test
     @DisplayName("[A68][OR8D-07] Every schema explanation identity has bundled catalog coverage")
     void configurationDescriptionCatalogIsComplete() {
-        var schema = net.maddkraft.maddprestige.core.schema.PhaseSixSchema.create();
+        var schema = net.maddkraft.maddprestige.core.schema.ActiveConfigurationSchema.create();
         schema.nodes().forEach(node -> assertTrue(messages.requiredKeys().contains(String.join(".",
                 "command", "config", "description", node.id().value())), node.id().value()));
     }
@@ -1277,7 +1277,8 @@ class PaperMessageServiceTest {
         }
         List<String> violations = new ArrayList<>();
         try (var paths = Files.walk(source)) {
-            for (Path path : paths.filter(value -> value.toString().endsWith(".java")).toList()) {
+            for (Path path : paths.filter(value -> value.toString().endsWith(".java"))
+                        .filter(value -> !value.getFileName().toString().equals("LegacyLocaleKeys.java")).toList()) {
                 String text = Files.readString(path, StandardCharsets.UTF_8);
                 if (text.contains("sendMessage(Component.text(")
                         || text.contains("displayName(Component.text(")
@@ -1310,19 +1311,20 @@ class PaperMessageServiceTest {
     }
 
     @Test
-    @DisplayName("[A68][OR8D-01] Every public command, GUI, and Phase 7 key has bundled catalog coverage")
+    @DisplayName("[A68][OR8D-01] Every public command and GUI key has bundled catalog coverage")
     void publicPresentationKeyInventoryIsCompleteAndHasNoGenericWrappers() throws Exception {
         Path root = Path.of("").toAbsolutePath();
         while (root != null && !Files.isDirectory(root.resolve("maddprestige-core/src/main/java"))) {
             root = root.getParent();
         }
         assertTrue(root != null, "repository root");
-        Pattern reference = Pattern.compile("\\\"((?:command|gui|phase7)\\.[a-z0-9_.-]+)\\\"");
+        Pattern reference = Pattern.compile("\\\"((?:command|gui)\\.[a-z0-9_.-]+)\\\"");
         java.util.TreeSet<String> referenced = new java.util.TreeSet<>();
         for (Path source : List.of(root.resolve("maddprestige-core/src/main/java/net/maddkraft/maddprestige/core/admin"),
                 root.resolve("maddprestige-platform-paper/src/main/java/net/maddkraft/maddprestige/platform/paper"))) {
             try (var paths = Files.walk(source)) {
-                for (Path path : paths.filter(value -> value.toString().endsWith(".java")).toList()) {
+                for (Path path : paths.filter(value -> value.toString().endsWith(".java"))
+                        .filter(value -> !value.getFileName().toString().equals("LegacyLocaleKeys.java")).toList()) {
                     var matcher = reference.matcher(Files.readString(path, StandardCharsets.UTF_8));
                     while (matcher.find()) {
                         if (!matcher.group(1).endsWith(".")) {
@@ -1339,7 +1341,7 @@ class PaperMessageServiceTest {
         });
         assertTrue(java.util.Collections.disjoint(messages.requiredKeys(), Set.of(
                 "command.line", "gui.inventory.title", "gui.inventory.action", "gui.action.result",
-                "phase7.line")));
+                "command.runtime.line")));
     }
 
     @Test

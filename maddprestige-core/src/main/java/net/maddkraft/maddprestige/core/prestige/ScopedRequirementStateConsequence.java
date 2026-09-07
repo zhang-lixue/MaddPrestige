@@ -1,7 +1,7 @@
 package net.maddkraft.maddprestige.core.prestige;
 
 import java.util.Objects;
-import net.maddkraft.maddprestige.core.config.phase4.ResetDisposition;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetDisposition;
 
 /** Structured scope-level consequence shared by simulation and persistence. */
 public record ScopedRequirementStateConsequence(

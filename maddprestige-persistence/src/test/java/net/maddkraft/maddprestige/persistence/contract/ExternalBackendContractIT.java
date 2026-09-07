@@ -26,9 +26,9 @@ class ExternalBackendContractIT {
         String driver = required("mp.backend.driver");
         Class.forName(driver);
         try (var connection = DriverManager.getConnection(url, user, password); var statement = connection.createStatement()) {
-            statement.execute("DROP TABLE IF EXISTS mp_phase1_contract_probe");
+            statement.execute("DROP TABLE IF EXISTS mp_external_contract_probe");
             statement.execute("""
-                    CREATE TABLE mp_phase1_contract_probe (
+                    CREATE TABLE mp_external_contract_probe (
                         probe_id VARCHAR(64) PRIMARY KEY,
                         amount_text VARCHAR(512) NOT NULL,
                         operation_type VARCHAR(64) NOT NULL,
@@ -43,7 +43,7 @@ class ExternalBackendContractIT {
     @AfterEach
     void removeContractTable() throws Exception {
         try (var connection = DriverManager.getConnection(url, user, password); var statement = connection.createStatement()) {
-            statement.execute("DROP TABLE IF EXISTS mp_phase1_contract_probe");
+            statement.execute("DROP TABLE IF EXISTS mp_external_contract_probe");
         }
     }
 
@@ -55,7 +55,7 @@ class ExternalBackendContractIT {
         insert("one", exact, target, "same-key");
         try (var connection = DriverManager.getConnection(url, user, password);
                 var statement = connection.prepareStatement(
-                        "SELECT amount_text FROM mp_phase1_contract_probe WHERE probe_id = ?")) {
+                        "SELECT amount_text FROM mp_external_contract_probe WHERE probe_id = ?")) {
             statement.setString(1, "one");
             try (var row = statement.executeQuery()) {
                 row.next();
@@ -66,7 +66,7 @@ class ExternalBackendContractIT {
     }
 
     private void insert(String id, String amount, String target, String key) throws SQLException {
-        String sql = "INSERT INTO mp_phase1_contract_probe "
+        String sql = "INSERT INTO mp_external_contract_probe "
                 + "(probe_id, amount_text, operation_type, target_uuid, idempotency_key) VALUES (?, ?, ?, ?, ?)";
         try (var connection = DriverManager.getConnection(url, user, password);
                 var statement = connection.prepareStatement(sql)) {

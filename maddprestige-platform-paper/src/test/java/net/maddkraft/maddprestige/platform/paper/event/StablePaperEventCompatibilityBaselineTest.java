@@ -26,7 +26,7 @@ class StablePaperEventCompatibilityBaselineTest {
             .toList();
 
     @Test
-    @DisplayName("[8F] The six-type Stable Paper event 2.x surface matches its frozen binary signature")
+    @DisplayName("The six-type Stable Paper event 2.x surface matches its frozen binary signature")
     void stablePaperEventsMatchFrozenSignature() {
         assertEquals(6, EVENTS.size());
         ArrayList<String> signatures = new ArrayList<>();

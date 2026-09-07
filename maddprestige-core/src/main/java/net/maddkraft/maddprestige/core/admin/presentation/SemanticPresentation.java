@@ -15,6 +15,7 @@ import net.maddkraft.maddprestige.core.admin.config.ConfigurationExplanation;
 import net.maddkraft.maddprestige.core.admin.diagnostic.DiagnosticFinding;
 import net.maddkraft.maddprestige.core.admin.diagnostic.WhyReport;
 import net.maddkraft.maddprestige.core.authorization.AuthorizationBlocker;
+import net.maddkraft.maddprestige.core.compatibility.LegacyDiagnosticCodes;
 
 /**
  * Converts stable domain identities and typed facts into locale-neutral public messages. Stored English diagnostic
@@ -47,21 +48,23 @@ public final class SemanticPresentation {
 
     public static List<MessageReference> validationFinding(ValidationFinding finding) {
         Objects.requireNonNull(finding, "validation finding");
-        Keys keys = validationKeys(validationCategory(finding.code()));
+        String code = LegacyDiagnosticCodes.canonicalize(finding.code());
+        Keys keys = validationKeys(validationCategory(code));
         return List.of(message(keys.summary(), "status", finding.severity(), "path", finding.path(),
-                "code", finding.code(), "reason", finding.explanation()),
+                "code", code, "reason", finding.explanation()),
                 message(keys.remediation(), "status", finding.severity(),
-                        "path", finding.path(), "code", finding.code(), "reason", finding.explanation()));
+                        "path", finding.path(), "code", code, "reason", finding.explanation()));
     }
 
     public static MessageReference validationFindingSummary(ValidationFinding finding) {
         Objects.requireNonNull(finding, "validation finding");
-        if (finding.code().contains("scaling.")) {
+        String code = LegacyDiagnosticCodes.canonicalize(finding.code());
+        if (code.contains("scaling.")) {
             return message("command.validation.finding.scaling", "status", finding.severity(),
-                    "path", finding.path(), "code", finding.code(), "reason", finding.explanation());
+                    "path", finding.path(), "code", code, "reason", finding.explanation());
         }
         return message("command.validation.finding", "status", finding.severity(), "path", finding.path(),
-                "code", finding.code());
+                "code", code);
     }
 
     public static List<MessageReference> why(WhyReport report) {
@@ -467,8 +470,7 @@ public final class SemanticPresentation {
         if (code.contains("scaling.")) {
             return "scaling";
         }
-        if (code.contains("provider") || code.startsWith("phase3.provider")
-                || code.startsWith("phase4.provider") || code.startsWith("phase5.")) {
+        if (code.contains("provider") || code.startsWith("integration.configuration.")) {
             return "provider";
         }
         if (code.startsWith("stage.") || code.contains("rank_projection")) {
@@ -489,7 +491,7 @@ public final class SemanticPresentation {
         if (code.startsWith("legacy") || code.contains("migration") || code.contains("remap")) {
             return "migration";
         }
-        if (code.startsWith("integration") || code.startsWith("phase5")) {
+        if (code.startsWith("integration")) {
             return "integration";
         }
         if (code.startsWith("currency")) {

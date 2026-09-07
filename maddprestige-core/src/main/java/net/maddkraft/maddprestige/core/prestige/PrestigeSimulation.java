@@ -13,7 +13,7 @@ import net.maddkraft.maddprestige.api.id.StageId;
 import net.maddkraft.maddprestige.api.reward.PlannedReward;
 import net.maddkraft.maddprestige.core.requirement.BoundRequirementEvaluation;
 
-/** Exact immutable confirmation payload consumed unchanged by future Phase 6 UI. */
+/** Exact immutable confirmation payload consumed unchanged by future administration UI. */
 public record PrestigeSimulation(
         UUID playerId,
         StageId sourceStage,

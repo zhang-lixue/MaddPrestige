@@ -27,10 +27,10 @@ import net.maddkraft.maddprestige.api.validation.ValidationSeverity;
 import net.maddkraft.maddprestige.api.value.ExactDecimal;
 import net.maddkraft.maddprestige.core.admin.AdministrationException;
 import net.maddkraft.maddprestige.core.admin.PermissionSubject;
-import net.maddkraft.maddprestige.core.admin.PhaseSixPermissions;
-import net.maddkraft.maddprestige.core.config.phase3.PhaseThreeConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.ActivePhaseFourConfiguration;
-import net.maddkraft.maddprestige.core.config.phase4.PhaseFourConfiguration;
+import net.maddkraft.maddprestige.core.admin.AdministrationPermissions;
+import net.maddkraft.maddprestige.core.config.progression.ProgressionConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.ActiveLifecycleConfiguration;
+import net.maddkraft.maddprestige.core.config.lifecycle.LifecycleConfiguration;
 import net.maddkraft.maddprestige.core.requirement.RequirementDefinition;
 import net.maddkraft.maddprestige.core.requirement.RequirementGroup;
 import net.maddkraft.maddprestige.core.requirement.RequirementLeaf;
@@ -59,7 +59,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     private static final Pattern PLAIN_COUNT = Pattern.compile("[0-9]+");
     private static final Duration REVIEW_LIFETIME = Duration.ofMinutes(5);
     private final ConfigurationAdministrationService administration;
-    private final Supplier<Optional<ActivePhaseFourConfiguration>> active;
+    private final Supplier<Optional<ActiveLifecycleConfiguration>> active;
     private final Clock clock;
     private final Map<UUID, MoneyReviewAuthority> moneyReviews = new ConcurrentHashMap<>();
     private final Map<UUID, RewardReviewAuthority> rewardReviews = new ConcurrentHashMap<>();
@@ -69,7 +69,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     public CanonicalGuidedConfigurationAdministration(
             ConfigurationAdministrationService administration,
-            Supplier<Optional<ActivePhaseFourConfiguration>> active,
+            Supplier<Optional<ActiveLifecycleConfiguration>> active,
             Clock clock) {
         this.administration = Objects.requireNonNull(administration, "configuration administration");
         this.active = Objects.requireNonNull(active, "active configuration");
@@ -78,12 +78,12 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     @Override
     public PrestigeLevelPage prestigeLevels(PermissionSubject subject, int pageIndex, int pageSize) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
         if (pageIndex < 0 || pageSize < 1 || pageSize > 45) {
             throw new IllegalArgumentException("Level page and size are outside the visual editor bounds");
         }
-        ActivePhaseFourConfiguration snapshot = active();
-        long maximum = snapshot.phaseFour().configuration().prestige().limit().maximum()
+        ActiveLifecycleConfiguration snapshot = active();
+        long maximum = snapshot.lifecycle().configuration().prestige().limit().maximum()
                 .orElse(MAX_SELECTABLE_LEVEL);
         maximum = Math.min(maximum, MAX_SELECTABLE_LEVEL);
         long first = Math.addExact(Math.multiplyExact((long) pageIndex, pageSize), 1);
@@ -102,10 +102,10 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     @Override
     public PrestigeLevelConfigurationView prestigeLevel(PermissionSubject subject, long prestigeLevel) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
-        ActivePhaseFourConfiguration snapshot = active();
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
-        PhaseFourConfiguration phaseFour = snapshot.phaseFour().configuration();
+        LifecycleConfiguration lifecycle = snapshot.lifecycle().configuration();
         String moneyRequirement = "";
         String moneyCost = "";
         String scaling = "Complex configuration";
@@ -139,8 +139,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             }
         }
         return new PrestigeLevelConfigurationView(revision(snapshot), prestigeLevel,
-                phaseFour.prestige().enabled(), moneyRequirement, moneyCost,
-                phaseFour.prestige().rewardIds().size(), rewardAmount, scaling,
+                lifecycle.prestige().enabled(), moneyRequirement, moneyCost,
+                lifecycle.prestige().rewardIds().size(), rewardAmount, scaling,
                 moneyAvailable, moneyEditable, rewardAvailable, rewardEditable);
     }
 
@@ -176,7 +176,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     @Override
     public GuidedNumericConfigurationInput moneyInput(PermissionSubject subject, long prestigeLevel) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         MoneyBinding binding = moneyBinding(snapshot, prestigeLevel);
         if (!binding.editable()) {
@@ -300,7 +300,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     @Override
     public GuidedNumericConfigurationInput rewardInput(PermissionSubject subject, long prestigeLevel) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         RewardBinding binding = rewardBinding(snapshot, prestigeLevel);
         if (!binding.editable()) {
@@ -392,8 +392,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     @Override
     public GuidedRequirementConfigurationView requirements(PermissionSubject subject, long prestigeLevel) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
-        ActivePhaseFourConfiguration snapshot = active();
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         RequirementNode root = requirementRoot(snapshot);
         List<RequirementDefinition> definitions = leaves(root);
@@ -425,7 +425,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             PermissionSubject subject,
             long prestigeLevel) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         TotalSkillLevelBinding binding = totalSkillLevelBinding(snapshot, prestigeLevel);
         return new GuidedNumericConfigurationInput(revision(snapshot), prestigeLevel, binding.currentTarget());
@@ -505,8 +505,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     @Override
     public GuidedScalingConfigurationView scaling(PermissionSubject subject, long prestigeLevel) {
-        subject.require(PhaseSixPermissions.CONFIG_VIEW);
-        ActivePhaseFourConfiguration snapshot = active();
+        subject.require(AdministrationPermissions.CONFIG_VIEW);
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         return scalingBinding(subject, snapshot, prestigeLevel).view();
     }
@@ -517,7 +517,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             long prestigeLevel,
             GuidedScalingParameter parameter) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         ScalingBinding binding = scalingBinding(subject, snapshot, prestigeLevel);
         requireEditableScaling(binding, parameter);
@@ -607,7 +607,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             PermissionSubject subject,
             long prestigeLevel) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireLevel(snapshot, prestigeLevel);
         ScalingBinding binding = scalingBinding(subject, snapshot, prestigeLevel);
         requireManageableScalingOverride(binding);
@@ -650,7 +650,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             long prestigeLevel,
             ConfigRevisionId expectedRevision) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireExpectedRevision(snapshot, expectedRevision);
         requireLevel(snapshot, prestigeLevel);
         ScalingBinding binding = scalingBinding(subject, snapshot, prestigeLevel);
@@ -663,7 +663,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     private CompletionStage<GuidedScalingOverrideReview> prepareScalingOverrideReview(
             PermissionSubject subject,
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             ScalingBinding binding,
             UUID draftId,
             Optional<String> newOverride) {
@@ -731,10 +731,10 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                 review.newOverride()));
     }
 
-    private MoneyBinding moneyBinding(ActivePhaseFourConfiguration snapshot, long prestigeLevel) {
-        PhaseThreeConfiguration phaseThree = snapshot.priorPhases().phaseThree().configuration();
-        PhaseFourConfiguration phaseFour = snapshot.phaseFour().configuration();
-        RequirementNode root = phaseFour.prestige().requirementTreeId().map(phaseThree.trees()::get)
+    private MoneyBinding moneyBinding(ActiveLifecycleConfiguration snapshot, long prestigeLevel) {
+        ProgressionConfiguration progression = snapshot.prerequisites().progression().configuration();
+        LifecycleConfiguration lifecycle = snapshot.lifecycle().configuration();
+        RequirementNode root = lifecycle.prestige().requirementTreeId().map(progression.trees()::get)
                 .orElseThrow(() -> new AdministrationException("config.gui.money.unavailable",
                         "The active Prestige configuration has no guided requirement tree.",
                         "Inspect the active configuration before editing Money."));
@@ -744,7 +744,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                 .filter(value -> value.providerId().value().equals(VAULT_BALANCE_PROVIDER))
                 .filter(value -> value.metricId().value().equals("balance"))
                 .toList();
-        List<CostDefinition> costs = phaseFour.prestige().costIds().stream().map(phaseThree.costs()::get)
+        List<CostDefinition> costs = lifecycle.prestige().costIds().stream().map(progression.costs()::get)
                 .filter(Objects::nonNull)
                 .filter(value -> value.amount().type() == MetricValueType.CURRENCY_AMOUNT)
                 .filter(value -> value.providerId().value().equals(VAULT_ECONOMY_COST_PROVIDER))
@@ -757,9 +757,9 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
         CostDefinition cost = costs.getFirst();
         MetricValue effectiveRequirement = new TargetTransformer().transform(requirement.target(),
                 requirement.scaling(), requirement.catchUp(), prestigeLevel - 1, ExactDecimal.ZERO).target().lower();
-        CostDefinition effectiveCost = phaseFour.valueScaling().scale(cost, prestigeLevel);
+        CostDefinition effectiveCost = lifecycle.valueScaling().scale(cost, prestigeLevel);
         int segment = requirementSegment(requirement, prestigeLevel);
-        var costScaling = phaseFour.valueScaling().costs().get(cost.id());
+        var costScaling = lifecycle.valueScaling().costs().get(cost.id());
         boolean existingPair = costScaling != null
                 && requirement.target().lower().asNumber().compareTo(cost.amount().asNumber()) == 0
                 && requirement.scaling().segments().equals(costScaling.segments());
@@ -773,7 +773,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     }
 
     private Optional<MoneyBinding> optionalMoneyBinding(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             long prestigeLevel) {
         try {
             return Optional.of(moneyBinding(snapshot, prestigeLevel));
@@ -786,16 +786,16 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
         }
     }
 
-    private RequirementNode requirementRoot(ActivePhaseFourConfiguration snapshot) {
-        PhaseThreeConfiguration phaseThree = snapshot.priorPhases().phaseThree().configuration();
-        return snapshot.phaseFour().configuration().prestige().requirementTreeId().map(phaseThree.trees()::get)
+    private RequirementNode requirementRoot(ActiveLifecycleConfiguration snapshot) {
+        ProgressionConfiguration progression = snapshot.prerequisites().progression().configuration();
+        return snapshot.lifecycle().configuration().prestige().requirementTreeId().map(progression.trees()::get)
                 .orElseThrow(() -> new AdministrationException("config.gui.requirements.unavailable",
                         "The active Prestige configuration has no guided requirement tree.",
                         "Inspect the active configuration before editing Requirements."));
     }
 
     private TotalSkillLevelBinding totalSkillLevelBinding(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             long prestigeLevel) {
         RequirementNode root = requirementRoot(snapshot);
         List<RequirementDefinition> matches = leaves(root).stream()
@@ -853,7 +853,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     private ScalingBinding scalingBinding(
             PermissionSubject subject,
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             long prestigeLevel) {
         MoneyBinding money = moneyBinding(snapshot, prestigeLevel);
         if (!money.editable()) {
@@ -887,7 +887,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
 
     private boolean explicitScalingParameter(
             PermissionSubject subject,
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             RequirementDefinition requirement,
             int segmentIndex,
             GuidedScalingParameter parameter) {
@@ -941,14 +941,14 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
         return fields;
     }
 
-    private RewardBinding rewardBinding(ActivePhaseFourConfiguration snapshot, long prestigeLevel) {
-        PhaseThreeConfiguration phaseThree = snapshot.priorPhases().phaseThree().configuration();
-        PhaseFourConfiguration phaseFour = snapshot.phaseFour().configuration();
-        if (phaseFour.prestige().rewardIds().size() != 1) {
+    private RewardBinding rewardBinding(ActiveLifecycleConfiguration snapshot, long prestigeLevel) {
+        ProgressionConfiguration progression = snapshot.prerequisites().progression().configuration();
+        LifecycleConfiguration lifecycle = snapshot.lifecycle().configuration();
+        if (lifecycle.prestige().rewardIds().size() != 1) {
             throw unsupportedRewardEditor();
         }
         RewardDefinition reward = Optional.ofNullable(
-                phaseThree.rewards().get(phaseFour.prestige().rewardIds().getFirst()))
+                progression.rewards().get(lifecycle.prestige().rewardIds().getFirst()))
                 .orElseThrow(() -> new AdministrationException("config.gui.reward.unavailable",
                         "The active Prestige configuration has no available guided Reward.",
                         "Inspect the active configuration before editing Rewards."));
@@ -957,8 +957,8 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
                 || !reward.type().equals(VAULT_ECONOMY_REWARD_TYPE)) {
             throw unsupportedRewardEditor();
         }
-        RewardDefinition effective = phaseFour.valueScaling().scale(reward, prestigeLevel);
-        boolean editable = !phaseFour.valueScaling().rewards().containsKey(reward.id());
+        RewardDefinition effective = lifecycle.valueScaling().scale(reward, prestigeLevel);
+        boolean editable = !lifecycle.valueScaling().rewards().containsKey(reward.id());
         return new RewardBinding(reward, canonical(effective.value().asNumber()), editable);
     }
 
@@ -1094,7 +1094,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             String newAmount,
             ConfigRevisionId expectedRevision) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireExpectedRevision(snapshot, expectedRevision);
         requireLevel(snapshot, prestigeLevel);
         MoneyBinding binding = moneyBinding(snapshot, prestigeLevel);
@@ -1112,7 +1112,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             String newAmount,
             ConfigRevisionId expectedRevision) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireExpectedRevision(snapshot, expectedRevision);
         requireLevel(snapshot, prestigeLevel);
         RewardBinding binding = rewardBinding(snapshot, prestigeLevel);
@@ -1128,7 +1128,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             String newTarget,
             ConfigRevisionId expectedRevision) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireExpectedRevision(snapshot, expectedRevision);
         requireLevel(snapshot, prestigeLevel);
         return new TotalSkillLevelInputValidation(snapshot, totalSkillLevelBinding(snapshot, prestigeLevel),
@@ -1142,7 +1142,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             String newValue,
             ConfigRevisionId expectedRevision) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireExpectedRevision(snapshot, expectedRevision);
         requireLevel(snapshot, prestigeLevel);
         ScalingBinding binding = scalingBinding(subject, snapshot, prestigeLevel);
@@ -1156,7 +1156,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
             String newValue,
             ConfigRevisionId expectedRevision) {
         requireMutationPermissions(subject);
-        ActivePhaseFourConfiguration snapshot = active();
+        ActiveLifecycleConfiguration snapshot = active();
         requireExpectedRevision(snapshot, expectedRevision);
         requireLevel(snapshot, prestigeLevel);
         ScalingBinding binding = scalingBinding(subject, snapshot, prestigeLevel);
@@ -1232,7 +1232,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     }
 
     private static void requireExpectedRevision(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             ConfigRevisionId expectedRevision) {
         if (!revision(snapshot).equals(Objects.requireNonNull(expectedRevision, "expected revision"))) {
             throw stale();
@@ -1240,25 +1240,25 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     }
 
     private static void requireMutationPermissions(PermissionSubject subject) {
-        subject.require(PhaseSixPermissions.CONFIG_EDIT);
-        subject.require(PhaseSixPermissions.CONFIG_APPLY);
+        subject.require(AdministrationPermissions.CONFIG_EDIT);
+        subject.require(AdministrationPermissions.CONFIG_APPLY);
     }
 
-    private static void requireLevel(ActivePhaseFourConfiguration snapshot, long prestigeLevel) {
+    private static void requireLevel(ActiveLifecycleConfiguration snapshot, long prestigeLevel) {
         if (prestigeLevel < 1 || prestigeLevel > MAX_SELECTABLE_LEVEL
-                || snapshot.phaseFour().configuration().prestige().limit().maximum().isPresent()
-                && prestigeLevel > snapshot.phaseFour().configuration().prestige().limit().maximum().getAsLong()) {
+                || snapshot.lifecycle().configuration().prestige().limit().maximum().isPresent()
+                && prestigeLevel > snapshot.lifecycle().configuration().prestige().limit().maximum().getAsLong()) {
             throw new AdministrationException("config.gui.level.invalid",
                     "The selected Prestige level is outside the configured range.",
                     "Return to Prestige Levels and select an available level.");
         }
     }
 
-    private static ConfigRevisionId revision(ActivePhaseFourConfiguration snapshot) {
-        return snapshot.phaseFour().revisionId();
+    private static ConfigRevisionId revision(ActiveLifecycleConfiguration snapshot) {
+        return snapshot.lifecycle().revisionId();
     }
 
-    private ActivePhaseFourConfiguration active() {
+    private ActiveLifecycleConfiguration active() {
         return active.get().orElseThrow(this::inactive);
     }
 
@@ -1459,14 +1459,14 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     }
 
     private record MoneyInputValidation(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             MoneyBinding binding,
             String normalizedAmount,
             String multiplier) {
     }
 
     private record RewardInputValidation(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             RewardBinding binding,
             String normalizedAmount) {
     }
@@ -1475,7 +1475,7 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     }
 
     private record TotalSkillLevelInputValidation(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             TotalSkillLevelBinding binding,
             String normalizedTarget) {
     }
@@ -1488,13 +1488,13 @@ public final class CanonicalGuidedConfigurationAdministration implements GuidedC
     }
 
     private record ScalingInputValidation(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             ScalingBinding binding,
             String normalizedValue) {
     }
 
     private record ScalingOverrideInputValidation(
-            ActivePhaseFourConfiguration snapshot,
+            ActiveLifecycleConfiguration snapshot,
             ScalingBinding binding,
             String normalizedValue) {
     }

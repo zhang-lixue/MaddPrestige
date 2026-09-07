@@ -46,7 +46,7 @@ class V1CharacterizationTest {
     }
 
     @Test
-    @DisplayName("[Phase1-hard-12] Frozen V1 release JAR checksum remains byte-identical")
+    @DisplayName("Frozen V1 release JAR checksum remains byte-identical")
     void verifiesReleaseChecksum() throws Exception {
         String expected = "1de0b772ef11de8dd1f70dfda71e65cb307cce5d47eeba4af26205eda36a3a08";
         assertEquals(expected, sha256(ROOT.resolve("dist/MaddPrestige-1.2.0.jar")));

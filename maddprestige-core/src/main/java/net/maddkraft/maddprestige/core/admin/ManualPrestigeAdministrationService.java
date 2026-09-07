@@ -67,7 +67,7 @@ public final class ManualPrestigeAdministrationService {
             long lifetimePrestige,
             String sourceSurface,
             String reason) {
-        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_EDIT);
+        subject.require(AdministrationPermissions.PLAYER_PRESTIGE_EDIT);
         validateSetTarget(currentPrestige);
         ManualPrestigeAdjustment adjustment = new ManualPrestigeAdjustment(UUID.randomUUID(),
                 ManualPrestigeAdjustmentKind.SET, playerId, expectedStateRevision,
@@ -79,7 +79,7 @@ public final class ManualPrestigeAdministrationService {
     }
 
     public CompletionStage<PlayerPrestigeState> inspect(PermissionSubject subject, UUID playerId) {
-        subject.require(PhaseSixPermissions.PLAYER_VIEW);
+        subject.require(AdministrationPermissions.PLAYER_VIEW);
         return CompletableFuture.supplyAsync(() -> state(playerId), worker);
     }
 
@@ -87,7 +87,7 @@ public final class ManualPrestigeAdministrationService {
             PermissionSubject subject,
             UUID playerId,
             long targetPrestige) {
-        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        subject.require(AdministrationPermissions.PLAYER_PRESTIGE_SET);
         validateSetTarget(targetPrestige);
         return review(subject, playerId, targetPrestige, ManualPrestigeAdjustmentKind.SET);
     }
@@ -107,7 +107,7 @@ public final class ManualPrestigeAdministrationService {
             PermissionSubject subject,
             String input,
             ConfigRevisionId expectedRevision) {
-        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        subject.require(AdministrationPermissions.PLAYER_PRESTIGE_SET);
         String candidate = Objects.requireNonNull(input, "Prestige input");
         ConfigRevisionId expected = Objects.requireNonNull(expectedRevision, "expected revision");
         if (!activeRevision.get().equals(expected)) {
@@ -153,7 +153,7 @@ public final class ManualPrestigeAdministrationService {
     public CompletionStage<ManualPrestigeAdjustmentReview> reviewReset(
             PermissionSubject subject,
             UUID playerId) {
-        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_RESET);
+        subject.require(AdministrationPermissions.PLAYER_PRESTIGE_RESET);
         return review(subject, playerId, currentPolicy().resetTarget(), ManualPrestigeAdjustmentKind.RESET);
     }
 
@@ -162,7 +162,7 @@ public final class ManualPrestigeAdministrationService {
             UUID playerId,
             int page,
             int pageSize) {
-        subject.require(PhaseSixPermissions.PLAYER_PRESTIGE_SET);
+        subject.require(AdministrationPermissions.PLAYER_PRESTIGE_SET);
         if (page < 0 || pageSize < 1 || pageSize > 7) {
             throw new IllegalArgumentException("Prestige target page is outside supported bounds");
         }

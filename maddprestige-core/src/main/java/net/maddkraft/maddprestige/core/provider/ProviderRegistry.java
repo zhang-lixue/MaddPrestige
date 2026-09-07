@@ -15,6 +15,7 @@ import net.maddkraft.maddprestige.api.provider.ProviderHealth;
 import net.maddkraft.maddprestige.api.provider.ProviderHealthState;
 import net.maddkraft.maddprestige.api.provider.ProviderLifecycle;
 import net.maddkraft.maddprestige.api.provider.ProviderSnapshot;
+import net.maddkraft.maddprestige.core.compatibility.LegacyProviderIdentifiers;
 
 public final class ProviderRegistry {
     private final Map<ProviderId, RegisteredProvider> providers = new LinkedHashMap<>();
@@ -49,6 +50,10 @@ public final class ProviderRegistry {
             throw new SecurityException("Provider descriptor owner is not the attested owner");
         }
         ProviderId id = descriptor.id();
+        if (LegacyProviderIdentifiers.isLegacy(id)) {
+            throw new IllegalArgumentException(
+                    "Legacy provider identifiers cannot be registered: " + id.value());
+        }
         ProviderRegistration registration;
         synchronized (this) {
             if (providers.containsKey(id)) {
@@ -102,12 +107,13 @@ public final class ProviderRegistry {
     }
 
     public synchronized Optional<ProviderSnapshot> find(ProviderId id) {
-        return Optional.ofNullable(providers.get(id)).map(RegisteredProvider::snapshot);
+        return Optional.ofNullable(providers.get(LegacyProviderIdentifiers.canonicalize(id)))
+                .map(RegisteredProvider::snapshot);
     }
 
     public synchronized Optional<Provider> provider(ProviderId id) {
-        Objects.requireNonNull(id, "provider ID");
-        return Optional.ofNullable(providers.get(id)).map(RegisteredProvider::provider);
+        return Optional.ofNullable(providers.get(LegacyProviderIdentifiers.canonicalize(id)))
+                .map(RegisteredProvider::provider);
     }
 
     public synchronized Collection<ProviderSnapshot> snapshots() {
@@ -116,7 +122,7 @@ public final class ProviderRegistry {
 
     /** Refreshes callback-derived health outside the monitor, then atomically caches it if still current. */
     public Optional<ProviderHealth> refreshHealth(ProviderId id) {
-        Objects.requireNonNull(id, "provider ID");
+        id = LegacyProviderIdentifiers.canonicalize(id);
         RegisteredProvider observed;
         synchronized (this) {
             observed = providers.get(id);

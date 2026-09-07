@@ -6,7 +6,7 @@ import java.util.Optional;
 import net.maddkraft.maddprestige.api.id.ConfigRevisionId;
 import net.maddkraft.maddprestige.api.id.ScopeId;
 import net.maddkraft.maddprestige.api.id.SeasonId;
-import net.maddkraft.maddprestige.core.config.phase4.ResetDisposition;
+import net.maddkraft.maddprestige.core.config.lifecycle.ResetDisposition;
 
 public record SeasonRecord(
         SeasonId id,
