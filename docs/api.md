@@ -1,11 +1,11 @@
 # MaddPrestige API and provider SDK
 
-MaddPrestige `2.0.0-rc.1` records owner-frozen compatibility baseline `2.x-stable-1`: 46 Bukkit-free Stable SDK types
+MaddPrestige `2.0.0-rc.2` uses owner-frozen compatibility baseline `2.x-stable-1`: 46 Bukkit-free Stable SDK types
 and six Stable Paper event types. This is the accepted `2.x-stable-1` baseline. Use only documented Stable types and
 compile against the exact candidate API JAR. Stable changes are
 blocked mechanically and require backwards-compatible extension review or a later major-version baseline.
 
-The Maven coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.1`. Experimental, Internal/Should Not Be Public,
+The Maven coordinate is `net.maddkraft:maddprestige-api:2.0.0-rc.2`. Experimental, Internal/Should Not Be Public,
 and Legacy/Pending Removal types are excluded from the 2.x compatibility guarantee.
 
 ## Reading and mutating progression

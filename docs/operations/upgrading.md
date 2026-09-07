@@ -1,6 +1,6 @@
 # Upgrading and rolling back MaddPrestige
 
-These instructions apply to the `2.0.0-rc.1` candidate on the qualified Java 25 / Paper 26.1.2 build 74 platform.
+These instructions apply to the `2.0.0-rc.2` candidate on the qualified Java 25 / Paper 26.1.2 build 74 platform.
 They prepare a safe release path and are not authorization to migrate the live MaddKraft server.
 
 ## Before any candidate upgrade

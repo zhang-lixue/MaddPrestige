@@ -40,7 +40,7 @@ You only need the plugins used by your configuration. Check the
 ## Installation and Quick Start
 
 1. Download MaddPrestige from the
-   [latest release](https://github.com/zhang-lixue/MaddPrestige/releases/tag/v2.0.0-rc.1).
+   [latest release](https://github.com/zhang-lixue/MaddPrestige/releases/tag/v2.0.0-rc.2).
 2. Put it in your server as `plugins/MaddPrestige.jar`.
 3. Start the server.
 4. Configure your Prestige progression.
@@ -119,9 +119,9 @@ On Windows, use `mvnw.cmd --no-transfer-progress clean verify`. The plugin JAR i
 
 ## Current Release
 
-The 2.0.0-rc.1 release is the current release candidate. Test it on a copy of your server before using it in
-production. Its already-published `MaddPrestige-2.0.0-rc.1.jar` asset keeps that historical name; future releases use
-`MaddPrestige.jar`.
+The 2.0.0-rc.2 release is the current release candidate. Test it on a copy of your server before using it in
+production. Download `MaddPrestige.jar`; the already-published RC1 asset keeps its historical
+`MaddPrestige-2.0.0-rc.1.jar` name.
 
 ## Known Limitations
 
