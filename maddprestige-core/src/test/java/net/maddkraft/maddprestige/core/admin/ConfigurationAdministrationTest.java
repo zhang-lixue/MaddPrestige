@@ -2042,8 +2042,22 @@ class ConfigurationAdministrationTest {
     @Test
     @DisplayName("Concurrent configuration confirmation consumes one server authority exactly once")
     void concurrentConfigurationAcknowledgementHasOneWinner() {
+        int repetitions = Math.max(1, Integer.getInteger(
+                "maddprestige.test.configurationAcknowledgementRepetitions", 1));
+        Map<String, Integer> loserOutcomes = new LinkedHashMap<>();
+        for (int repetition = 0; repetition < repetitions; repetition++) {
+            String loser = concurrentConfigurationAcknowledgementLoser();
+            loserOutcomes.merge(loser, 1, Integer::sum);
+        }
+        if (repetitions > 1) {
+            System.out.printf("Configuration acknowledgement loser outcomes after %d repetitions: %s%n",
+                    repetitions, loserOutcomes);
+        }
+    }
+
+    private static String concurrentConfigurationAcknowledgementLoser() {
         Fixture fixture = new Fixture();
-        fixture.applyInitial(defaultDocuments());
+        StoredConfigurationRevision initial = fixture.applyInitial(defaultDocuments());
         UUID draft = fixture.service.beginDraft(OWNER, "gui");
         fixture.service.addStage(OWNER, draft, new StageId("member"), "Member", Optional.empty(), Optional.empty());
         fixture.service.preview(OWNER, draft).toCompletableFuture().join();
@@ -2059,10 +2073,19 @@ class ConfigurationAdministrationTest {
             List<String> results = List.of(first.join(), second.join());
 
             assertEquals(1, results.stream().filter("success"::equals).count(), results::toString);
-            assertEquals(1, results.stream().filter("config.acknowledgement.already_used"::equals).count(),
-                    results::toString);
+            List<String> rejected = results.stream().filter(result -> !"success".equals(result)).toList();
+            assertEquals(1, rejected.size(), results::toString);
+            String loser = rejected.getFirst();
+            assertTrue(Set.of("config.acknowledgement.already_used", "config.acknowledgement.stale")
+                    .contains(loser), results::toString);
+
+            var active = fixture.canonical.active().orElseThrow();
+            List<StoredConfigurationRevision> history = fixture.history.recent(10);
+            assertNotEquals(initial.id(), active.revisionId());
+            assertEquals(List.of(active.revisionId(), initial.id()),
+                    history.stream().map(StoredConfigurationRevision::id).toList());
+            return loser;
         }
-        assertEquals(2, fixture.history.recent(10).size());
     }
 
     @Test
