@@ -22,7 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ReleasePackageIT {
-    private static final String VERSION = "2.0.0-rc.1";
+    private static final String VERSION = "2.0.0-rc.2";
     private static final Set<String> REQUIRED = Set.of(
             "plugin.yml",
             "config.yml",

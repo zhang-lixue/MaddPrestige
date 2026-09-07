@@ -85,7 +85,7 @@ class PlaceholderApiCompatibilityPolicyTest {
         BukkitScheduler bukkitScheduler = mock(BukkitScheduler.class);
         when(owner.getServer()).thenReturn(server);
         when(owner.getLogger()).thenReturn(Logger.getLogger("placeholderapi-policy-test"));
-        when(owner.getPluginMeta().getVersion()).thenReturn("2.0.0-rc.1");
+        when(owner.getPluginMeta().getVersion()).thenReturn("2.0.0-rc.2");
         when(server.getPluginManager()).thenReturn(pluginManager);
         when(server.getScheduler()).thenReturn(bukkitScheduler);
         when(bukkitScheduler.runTaskTimer(eq(owner), any(Runnable.class), eq(1L), eq(20L)))

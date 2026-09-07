@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.0.0-rc.2
+
+RC2 focuses on packaging, compatibility cleanup, and public-release polish following RC1.
+
+- Standardized the plugin download and server filename as `MaddPrestige.jar`.
+- Added the MIT license to the project and packaged plugin.
+- Cleaned up the repository and documentation for public use.
+- Kept the same V2 player and staff Prestige experience.
+- Added cleaner provider and diagnostic names for new configurations while preserving legacy identifiers.
+- Preserved historical migration compatibility and hardened release qualification.
+
 ## 2.0.0-rc.1
 
 - Replaced stage/rank progression with provider-driven numeric Prestige and exact `P -> P + 1` execution.
