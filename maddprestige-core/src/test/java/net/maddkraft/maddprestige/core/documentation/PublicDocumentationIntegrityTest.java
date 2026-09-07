@@ -225,6 +225,8 @@ class PublicDocumentationIntegrityTest {
         String installation = Files.readString(root.resolve("docs/getting-started.md"), StandardCharsets.UTF_8);
         String upgrade = Files.readString(root.resolve("docs/operations/upgrading.md"), StandardCharsets.UTF_8);
         String api = Files.readString(root.resolve("docs/api.md"), StandardCharsets.UTF_8);
+        assertTrue(readme.contains("plugins/MaddPrestige.jar"));
+        assertTrue(readme.contains("maddprestige-distribution/target/MaddPrestige.jar"));
         assertTrue(readme.contains("MaddPrestige-2.0.0-rc.1.jar"));
         assertTrue(readme.contains("release candidate"));
         assertTrue(readme.contains("2.0.0-rc.1 release"));

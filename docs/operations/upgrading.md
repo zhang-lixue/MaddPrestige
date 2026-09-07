@@ -19,7 +19,7 @@ plugin-data directory.
 ## Upgrading a supported V2 candidate
 
 1. Remove the old MaddPrestige plugin JAR from the disposable server's `plugins/` directory. Do not load two versions.
-2. Install `MaddPrestige-2.0.0-rc.1.jar` and verify its published SHA-256 before startup.
+2. Install `MaddPrestige.jar` and verify its published SHA-256 before startup.
 3. Keep the copied plugin-data directory unchanged and start the exact qualified Paper/Java platform.
 4. Wait for `Done`. A supported schema prefix migrates forward only after history/checksum validation, coordinated
    backup, independent integrity/configuration checks, and disposable restore rehearsal.

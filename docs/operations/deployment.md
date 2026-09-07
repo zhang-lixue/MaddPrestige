@@ -2,6 +2,12 @@
 
 This is an operator checklist, not deployment authorization.
 
+## Release artifact
+
+Build releases with `./mvnw --no-transfer-progress clean verify`, then attach
+`maddprestige-distribution/target/MaddPrestige.jar` to the versioned GitHub release. Keep release tags and titles
+versioned; the public plugin filename stays stable.
+
 ## Pre-deploy
 
 1. Stop Paper and verify no process owns the server directory.

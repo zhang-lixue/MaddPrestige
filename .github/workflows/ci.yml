@@ -62,8 +62,7 @@ jobs:
       - name: Compare two clean distribution builds
         shell: bash
         run: |
-          version=$(bash ./mvnw --batch-mode --no-transfer-progress help:evaluate -Dexpression=project.version -q -DforceStdout)
-          artifact="maddprestige-distribution/target/MaddPrestige-${version}.jar"
+          artifact="maddprestige-distribution/target/MaddPrestige.jar"
           bash ./mvnw --batch-mode --no-transfer-progress clean verify
           cp "$artifact" /tmp/MaddPrestige-first.jar
           cp target/bom.json /tmp/MaddPrestige-first-bom.json
