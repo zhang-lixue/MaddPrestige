@@ -119,7 +119,7 @@ On Windows, use `mvnw.cmd --no-transfer-progress clean verify`. The plugin JAR i
 
 ## Current Release
 
-MaddPrestige 2.0.0 is the current stable release. Test it on a copy of your server before using it in
+MaddPrestige 2.0.1 is the current stable release. Test it on a copy of your server before using it in
 production. Download `MaddPrestige.jar`; the already-published RC1 asset keeps its historical
 `MaddPrestige-2.0.0-rc.1.jar` name.
 

@@ -5,7 +5,7 @@
 - Java 25
 - Paper 26.1.2 build 74 stable
 - LuckPerms 5.5.71 only when the active configuration references its optional rewards/conditions
-- MaddPrestige `2.0.0` and its published checksum
+- MaddPrestige `2.0.1` and its published checksum
 
 These are the qualified versions, not a promise of compatibility with every later build. SQLite is embedded in the
 MaddPrestige distribution. Do not add an external JDBC plugin or configure MySQL/MariaDB.

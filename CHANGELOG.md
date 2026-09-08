@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1
+
+- Improved SQLite reliability under concurrent currency updates.
+- Reduced the chance of `SQLITE_BUSY` failures during brief writer contention.
+- No changes to Prestige progression, configuration, or public APIs.
+
 ## 2.0.0
 
 First stable V2 release.
