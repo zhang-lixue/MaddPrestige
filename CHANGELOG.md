@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.0.0
+
+First stable V2 release.
+
+- Added configurable numeric Prestige progression with requirements, costs, rewards, scaling, and per-level overrides.
+- Added Player GUI progression tracking and safe Prestige previews.
+- Added the Staff Dashboard, player Set/Reset tools, and history/audit views.
+- Added guided editing for common configuration, including typed numeric input.
+- Integrated Vault, mcMMO, LuckPerms, PlaceholderAPI, and custom providers.
+- Added the stable Java API/provider SDK plus restart recovery and exactly-once operation protection.
+- Uses SQLite persistence and ships publicly as `MaddPrestige.jar` under the MIT License.
+
 ## 2.0.0-rc.2
 
 RC2 focuses on packaging, compatibility cleanup, and public-release polish following RC1.
