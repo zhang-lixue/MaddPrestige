@@ -1,4 +1,4 @@
-MaddPrestige 2.0.0 license and third-party notices
+MaddPrestige 2.0.1 license and third-party notices
 
 MaddPrestige project license
 

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ReleasePackageIT {
-    private static final String VERSION = "2.0.0";
+    private static final String VERSION = "2.0.1";
     private static final Set<String> REQUIRED = Set.of(
             "plugin.yml",
             "config.yml",
@@ -141,7 +141,7 @@ class ReleasePackageIT {
                 } else if (name.startsWith("net/maddkraft/") && name.endsWith(".class")) {
                     String constants = new String(bytes(archive, name), StandardCharsets.ISO_8859_1);
                     assertFalse(constants.contains("public documentation candidate"), () -> "stale development banner in " + name);
-                    assertFalse(constants.contains("2.0.0-SNAPSHOT"), () -> "stale snapshot identity in " + name);
+                    assertFalse(constants.contains("-SNAPSHOT"), () -> "stale snapshot identity in " + name);
                 }
             }
         }

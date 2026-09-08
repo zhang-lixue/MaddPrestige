@@ -2076,7 +2076,8 @@ class ConfigurationAdministrationTest {
             List<String> rejected = results.stream().filter(result -> !"success".equals(result)).toList();
             assertEquals(1, rejected.size(), results::toString);
             String loser = rejected.getFirst();
-            assertTrue(Set.of("config.acknowledgement.already_used", "config.acknowledgement.stale")
+            assertTrue(Set.of("config.acknowledgement.already_used", "config.acknowledgement.stale",
+                    "config.draft.unknown")
                     .contains(loser), results::toString);
 
             var active = fixture.canonical.active().orElseThrow();
@@ -2084,6 +2085,7 @@ class ConfigurationAdministrationTest {
             assertNotEquals(initial.id(), active.revisionId());
             assertEquals(List.of(active.revisionId(), initial.id()),
                     history.stream().map(StoredConfigurationRevision::id).toList());
+            assertEquals(List.of(), fixture.service.ownedDraftIds(OWNER));
             return loser;
         }
     }

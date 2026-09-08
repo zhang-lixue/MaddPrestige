@@ -1,6 +1,6 @@
 # Upgrading and rolling back MaddPrestige
 
-These instructions apply to MaddPrestige `2.0.0` on the qualified Java 25 / Paper 26.1.2 build 74 platform.
+These instructions apply to MaddPrestige `2.0.1` on the qualified Java 25 / Paper 26.1.2 build 74 platform.
 They prepare a safe release path and are not authorization to migrate the live MaddKraft server.
 
 ## Before any upgrade
@@ -53,7 +53,7 @@ be abandoned:
 
 For a migration-gated database backup, keep its `.sqlite` artifact and matching manifest together. A manifest/hash,
 integrity, schema/history, active-configuration, and restore-rehearsal PASS is required; filename existence alone is not
-proof of a usable backup. There is no public on-demand online-backup command in 2.0.0.
+proof of a usable backup. There is no public on-demand online-backup command in 2.0.1.
 
 See [Installation](../getting-started.md), [Migrations, backups, and recovery](recovery.md), and
 [Diagnostics and troubleshooting](troubleshooting.md).
