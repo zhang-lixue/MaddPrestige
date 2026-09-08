@@ -44,7 +44,7 @@ class QualificationPackageIntegrityTest {
             assertFalse(text.isBlank(), document);
             combined += text;
         }
-        assertTrue(combined.contains("release candidate"));
+        assertTrue(combined.contains("stable release"));
         assertTrue(combined.contains("Production data, permissions, balance, and services were not changed"));
         assertTrue(combined.contains("Populated pre-numeric V2 schema upgrade and activation: passed"));
         assertTrue(combined.contains("V1 player/configuration data is not automatically imported"));

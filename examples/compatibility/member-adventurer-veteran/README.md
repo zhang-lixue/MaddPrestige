@@ -1,6 +1,6 @@
 # Historical stage-compatibility example
 
-This release-candidate example is retained as accepted compatibility evidence; it is not the authoritative numeric Prestige Prestige
+This compatibility example is retained as accepted compatibility evidence; it is not the authoritative numeric Prestige Prestige
 model. Numeric Prestige does not require this ladder or LuckPerms. The profile uses Paper's persisted
 `PLAY_ONE_MINUTE` statistic and LuckPerms group projection. It has no costs, rewards, optional integrations, or
 external SDK provider requirements.

@@ -22,7 +22,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 class ReleasePackageIT {
-    private static final String VERSION = "2.0.0-rc.2";
+    private static final String VERSION = "2.0.0";
     private static final Set<String> REQUIRED = Set.of(
             "plugin.yml",
             "config.yml",
@@ -116,7 +116,7 @@ class ReleasePackageIT {
             try (InputStream stream = archive.getInputStream(archive.getEntry("META-INF/MANIFEST.MF"))) {
                 Attributes attributes = new Manifest(stream).getMainAttributes();
                 assertEquals(VERSION, attributes.getValue("Implementation-Version"));
-                assertEquals("release-candidate", attributes.getValue("MaddPrestige-Release-Channel"));
+                assertEquals("stable", attributes.getValue("MaddPrestige-Release-Channel"));
                 assertEquals("2.x-stable-1", attributes.getValue("MaddPrestige-Compatibility-Baseline"));
             }
 

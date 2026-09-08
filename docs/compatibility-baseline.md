@@ -53,7 +53,7 @@ types. Existing stable source/binary contracts remain available even where stage
 fail closed because numeric Prestige is the sole active progression model. Experimental types are not part of that
 guarantee.
 
-Public consumers should depend on `net.maddkraft:maddprestige-api:2.0.0-rc.2` and follow the
+Public consumers should depend on `net.maddkraft:maddprestige-api:2.0.0` and follow the
 [API guide](api.md). Paper listeners should use the documented [event contracts](events.md).
 
 ## Ownership guarantees

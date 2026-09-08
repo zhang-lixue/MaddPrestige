@@ -1,9 +1,9 @@
 # Upgrading and rolling back MaddPrestige
 
-These instructions apply to the `2.0.0-rc.2` candidate on the qualified Java 25 / Paper 26.1.2 build 74 platform.
+These instructions apply to MaddPrestige `2.0.0` on the qualified Java 25 / Paper 26.1.2 build 74 platform.
 They prepare a safe release path and are not authorization to migrate the live MaddKraft server.
 
-## Before any candidate upgrade
+## Before any upgrade
 
 1. Stop Paper cleanly. Confirm no Java/Paper process still owns the server directory.
 2. Preserve a read-only copy of the complete `plugins/MaddPrestige/` directory and the installed MaddPrestige JAR.
@@ -16,7 +16,7 @@ Do not copy only a live SQLite main file. MaddPrestige's migration gate creates 
 manifest pairs when a schema migration is required, but a host-level safety copy still requires a cleanly stopped full
 plugin-data directory.
 
-## Upgrading a supported V2 candidate
+## Upgrading a supported V2 release
 
 1. Remove the old MaddPrestige plugin JAR from the disposable server's `plugins/` directory. Do not load two versions.
 2. Install `MaddPrestige.jar` and verify its published SHA-256 before startup.
@@ -42,7 +42,7 @@ state before initializing numeric authority. Production remains a separate expli
 ## Rollback and recovery
 
 MaddPrestige database migrations are forward-only. An older binary must not be pointed at a database/schema/config
-revision produced by a newer candidate unless that exact combination is documented as supported. If the upgrade must
+revision produced by a newer release unless that exact combination is documented as supported. If the upgrade must
 be abandoned:
 
 1. Stop Paper and preserve the failed rehearsal directory unchanged for diagnosis.
@@ -53,7 +53,7 @@ be abandoned:
 
 For a migration-gated database backup, keep its `.sqlite` artifact and matching manifest together. A manifest/hash,
 integrity, schema/history, active-configuration, and restore-rehearsal PASS is required; filename existence alone is not
-proof of a usable backup. There is no public on-demand online-backup command in this candidate.
+proof of a usable backup. There is no public on-demand online-backup command in 2.0.0.
 
 See [Installation](../getting-started.md), [Migrations, backups, and recovery](recovery.md), and
 [Diagnostics and troubleshooting](troubleshooting.md).

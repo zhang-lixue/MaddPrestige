@@ -218,7 +218,7 @@ class PublicDocumentationIntegrityTest {
         for (String pom : currentPoms) {
             String text = Files.readString(root.resolve(pom), StandardCharsets.UTF_8);
             assertFalse(text.contains("2.0.0-SNAPSHOT"), pom);
-            assertTrue(text.contains("2.0.0-rc.2"), pom);
+            assertTrue(text.contains("<version>2.0.0</version>"), pom);
         }
 
         String readme = Files.readString(root.resolve("README.md"), StandardCharsets.UTF_8);
@@ -228,14 +228,14 @@ class PublicDocumentationIntegrityTest {
         assertTrue(readme.contains("plugins/MaddPrestige.jar"));
         assertTrue(readme.contains("maddprestige-distribution/target/MaddPrestige.jar"));
         assertTrue(readme.contains("MaddPrestige-2.0.0-rc.1.jar"));
-        assertTrue(readme.contains("release candidate"));
-        assertTrue(readme.contains("2.0.0-rc.2 release"));
+        assertTrue(readme.contains("current stable release"));
+        assertTrue(readme.contains("MaddPrestige 2.0.0"));
         assertTrue(installation.contains("Paper 26.1.2 build 74"));
         assertTrue(installation.contains("LuckPerms 5.5.71"));
         assertTrue(upgrade.contains("forward-only"));
         assertTrue(upgrade.contains("fresh V2 player state starts at Prestige 0"));
         assertTrue(api.contains("2.x-stable-1"));
-        assertTrue(api.contains("net.maddkraft:maddprestige-api:2.0.0-rc.2"));
+        assertTrue(api.contains("net.maddkraft:maddprestige-api:2.0.0"));
 
         String quickStart = Files.readString(root.resolve("docs/QUICK_START.md"), StandardCharsets.UTF_8);
         assertTrue(quickStart.contains("/maddprestige setup prestige enabled"));
